@@ -1,0 +1,20 @@
+{
+  "areas": [
+    "EXPORT",
+    "MALA PACZKA",
+    "ROZBIOR"
+  ],
+  "types": [
+    "terminal",
+    "drukarka",
+    "komputer",
+    "bizerba",
+    "maszyna",
+    "inne"
+  ],
+  "groups": [],
+  "sshUser": "",
+  "vncLocalPort": 5900,
+  "vncRemotePort": 5900,
+  "vncViewerPath": ""
+}

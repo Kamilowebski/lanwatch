@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel urządzeń</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#158266">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Panel urządzeń">
+  <link rel="stylesheet" href="/static/style.css">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("devicePanelTheme");
+        var theme = saved || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        if (theme === "dark") {
+          document.documentElement.classList.add("theme-dark");
+        }
+      } catch (error) {
+        /* ignore storage errors */
+      }
+    })();
+  </script>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <h1>Panel urządzeń</h1>
+      <button id="themeToggleButton" class="themeToggle" type="button" title="Przełącz motyw">🌙</button>
+    </header>
+
+    <section class="topControls">
+      <div class="searchBox">
+        <input id="searchInput" type="search" placeholder="Szukaj: nazwa, IP, obszar, typ, słowo kluczowe">
+      </div>
+      
+      <div class="quickConnect">
+        <input id="quickConnectTarget" type="text" placeholder="IP lub nazwa do połączenia">
+        <select id="quickConnectType">
+          <option value="ssh">SSH</option>
+          <option value="vnc">VNC</option>
+        </select>
+        <button id="quickConnectButton" class="primary">Połącz</button>
+      </div>
+    </section>
+
+    <div class="mainLayout">
+      <section class="deviceListContainer">
+        <div class="deviceControls">
+          <select id="typeFilter">
+            <option value="">Wszystkie typy</option>
+          </select>
+          <select id="areaFilter">
+            <option value="">Wszystkie obszary</option>
+          </select>
+          <select id="sortSelect">
+            <option value="name">Sortuj: nazwa</option>
+            <option value="area">Sortuj: obszar</option>
+            <option value="type">Sortuj: typ</option>
+            <option value="ip">Sortuj: IP</option>
+            <option value="status">Sortuj: status</option>
+          </select>
+          <button id="pingAllButton" class="primary">Ping widoczne</button>
+          <button id="refreshButton" title="Wczytaj ponownie">⟳</button>
+        </div>
+        <div id="deviceList" class="deviceList"></div>
+        <div id="pagination" class="pagination"></div>
+      </section>
+
+      <aside class="sidePanel">
+        <div class="tabsHeader">
+          <button class="tabButton active" data-tab="filters">Filtry</button>
+          <button class="tabButton" data-tab="add">Dodaj</button>
+          <button class="tabButton" data-tab="config">Konfiguracja</button>
+          <button class="tabButton" data-tab="watchdog">Watchdog</button>
+        </div>
+
+        <!-- TAB: FILTRY -->
+        <div class="tabContent active" id="tab-filters">
+          <h3>Filtry zaawansowane</h3>
+          <label>
+            Status
+            <select id="statusFilter">
+              <option value="">Dowolny</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+              <option value="unknown">Nieznany</option>
+            </select>
+          </label>
+          <label>
+            Adresowanie
+            <select id="addressModeFilter">
+              <option value="">Dowolne</option>
+              <option value="dhcp">DHCP / po nazwie</option>
+              <option value="static">Stałe IP</option>
+            </select>
+          </label>
+          <label>
+            Słowo kluczowe
+            <input id="keywordFilter" placeholder="np. etykiety">
+          </label>
+          <label>
+            Grupa / maszyna
+            <select id="groupFilter">
+              <option value="">Wszystkie</option>
+            </select>
+          </label>
+          <label class="autoPingToggle" title="Pinguje tylko widoczne urządzenia, w tle">
+            <input type="checkbox" id="autoPingToggle">
+            Auto-ping widocznych
+          </label>
+          <select id="autoPingInterval">
+            <option value="60000">1 min</option>
+            <option value="300000" selected>5 min</option>
+            <option value="900000">15 min</option>
+          </select>
+          <button id="clearFiltersButton" type="button">Wyczyść filtry</button>
+        </div>
+
+        <!-- TAB: DODAJ URZĄDZENIE -->
+        <div class="tabContent" id="tab-add">
+          <h3>Dodaj nowe urządzenie</h3>
+          <div id="addDeviceForm"></div>
+        </div>
+
+        <!-- TAB: KONFIGURACJA -->
+        <div class="tabContent" id="tab-config">
+          <h3>Konfiguracja</h3>
+          <div id="configForm"></div>
+        </div>
+
+        <!-- TAB: WATCHDOG -->
+        <div class="tabContent" id="tab-watchdog">
+          <h3>Monitorowanie urządzeń</h3>
+          <div class="watchdogControls">
+            <input id="watchdogAddTarget" type="text" placeholder="IP lub nazwa">
+            <button id="watchdogAddButton">Dodaj do monitora</button>
+          </div>
+          <div id="watchdogList"></div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="summary" id="summary"></section>
+
+    <section class="bulkActions hidden" id="bulkActionsBar">
+      <span id="bulkCount" class="bulkCount"></span>
+      <button id="selectAllFilteredButton" type="button">Zaznacz wszystkie widoczne</button>
+      <button id="clearSelectionButton" type="button">Odznacz wszystko</button>
+      <div class="bulkActionGroup">
+        <select id="bulkAreaSelect">
+          <option value="">Zmień obszar na…</option>
+        </select>
+        <button id="bulkAreaApply" type="button">Zastosuj</button>
+      </div>
+      <div class="bulkActionGroup">
+        <select id="bulkGroupSelect">
+          <option value="">Zmień grupę na…</option>
+        </select>
+        <button id="bulkGroupApply" type="button">Zastosuj</button>
+      </div>
+      <div class="bulkActionGroup">
+        <select id="bulkTypeSelect">
+          <option value="">Zmień typ na…</option>
+        </select>
+        <button id="bulkTypeApply" type="button">Zastosuj</button>
+      </div>
+      <button id="bulkDeleteButton" type="button" class="danger">Usuń zaznaczone</button>
+    </section>
+
+    <section class="editor collapsed" id="editorPanel">
+      <div class="editorHeader">
+        <div>
+          <h2 id="editorTitle">Dodaj urządzenie</h2>
+          <p>Zmiany zapisują się do pliku dopiero po wpisaniu hasła i kliknięciu zapisu.</p>
+        </div>
+        <button id="closeEditorButton" type="button">Schowaj</button>
+      </div>
+      <form id="deviceForm">
+        <input type="hidden" id="editName">
+        <div class="formGrid">
+          <label>
+            Nazwa
+            <input id="deviceName" required placeholder="T104-0192">
+          </label>
+          <label>
+            Adresowanie
+            <select id="deviceAddressMode">
+              <option value="dhcp">DHCP / po nazwie</option>
+              <option value="static">Stałe IP</option>
+            </select>
+          </label>
+          <label>
+            IP
+            <input id="deviceIp" placeholder="Opcjonalnie, np. 192.168.1.192">
+          </label>
+          <label>
+            Typ
+            <select id="deviceType"></select>
+          </label>
+          <label>
+            Obszar
+            <select id="deviceArea"></select>
+          </label>
+          <label>
+            Grupa / maszyna
+            <select id="deviceGroup">
+              <option value="">— brak —</option>
+            </select>
+          </label>
+          <label>
+            Słowa kluczowe
+            <input id="deviceKeywords" placeholder="terminal, etykiety, linia 1">
+          </label>
+          <label id="numeratorField" class="hidden">
+            Numerator
+            <input id="deviceNumerator" placeholder="np. numerator wagi">
+          </label>
+          <label>
+            System ID
+            <input id="deviceSystemId" placeholder="opcjonalnie">
+          </label>
+          <label>
+            Użytkownik VNC
+            <input id="deviceVncUsername" placeholder="np. pi (dla Raspberry) - opcjonalnie">
+          </label>
+          <label>
+            Notatka
+            <input id="deviceNote" placeholder="Opis lub lokalizacja">
+          </label>
+        </div>
+        <div class="formActions">
+          <button type="submit" class="primary">Dodaj / aktualizuj</button>
+          <button id="saveButton" type="button">Zapisz zmiany</button>
+          <button type="button" id="deleteEditButton" class="danger hidden">Usuń edytowane</button>
+          <button type="button" id="clearFormButton">Wyczyść</button>
+          <button type="button" id="forgetPasswordButton" class="linkButton">Zmień hasło zapisu</button>
+          <span id="editHint" class="muted"></span>
+        </div>
+      </form>
+      <div class="dictionary">
+        <div>
+          <h3>Typy</h3>
+          <div class="inlineAdd">
+            <input id="newTypeInput" placeholder="np. skaner">
+            <button id="addTypeButton" type="button">Dodaj typ</button>
+          </div>
+          <div id="typeChips" class="chips"></div>
+        </div>
+        <div>
+          <h3>Obszary</h3>
+          <div class="inlineAdd">
+            <input id="newAreaInput" placeholder="np. LINIA 1">
+            <button id="addAreaButton" type="button">Dodaj obszar</button>
+          </div>
+          <div id="areaChips" class="chips"></div>
+        </div>
+        <div>
+          <h3>Grupy / maszyny</h3>
+          <p class="muted">Łączy ze sobą powiązane urządzenia (np. wszystkie głowice i ekran jednej maszyny), niezależnie od typu i obszaru.</p>
+          <div class="inlineAdd">
+            <input id="newGroupInput" placeholder="np. GLMI_EVO_7">
+            <button id="addGroupButton" type="button">Dodaj grupę</button>
+          </div>
+          <div id="groupChips" class="chips"></div>
+        </div>
+      </div>
+      <div class="tunnelSettings">
+        <h3>Zdalny dostęp: SSH i VNC</h3>
+        <p class="muted">Przyciski „SSH" i „VNC" pojawiają się po rozwinięciu dowolnego urządzenia (kliknij wiersz). „SSH" otwiera nowe okno konsoli z poleceniem SSH — hasło wpisujesz ręcznie. „VNC" dla typu „terminal" łączy się przez tunel (localhost:&lt;lokalny port&gt;, wymaga wcześniej otwartego SSH), dla pozostałych typów łączy się bezpośrednio po IP (zdalny port).</p>
+        <div class="tunnelGrid">
+          <label>
+            Domyślny użytkownik SSH
+            <input id="sshUserInput" placeholder="np. operator">
+          </label>
+          <label>
+            Lokalny port VNC (tunel SSH)
+            <input id="vncLocalPortInput" type="number" min="1" max="65535" placeholder="5900">
+          </label>
+          <label>
+            Zdalny port VNC
+            <input id="vncRemotePortInput" type="number" min="1" max="65535" placeholder="5900">
+          </label>
+          <label>
+            Ścieżka do vncviewer.exe (opcjonalnie)
+            <input id="vncViewerPathInput" placeholder="wykrywane automatycznie, jeśli puste">
+          </label>
+        </div>
+        <button id="saveTunnelSettingsButton" type="button">Zapisz ustawienia tunelu</button>
+      </div>
+      <div class="scannerSettings">
+        <h3>Skaner sieci</h3>
+        <p class="muted">Sprawdza, które adresy w podanym zakresie odpowiadają na ping, i pokazuje te, których nie ma jeszcze w bazie urządzeń. Maksymalnie 256 adresów naraz, w jednej podsieci.</p>
+        <div class="scannerGrid">
+          <input id="scanRangeInput" placeholder="192.168.1.1-192.168.1.254">
+          <button id="startScanButton" type="button" class="primary">Skanuj</button>
+        </div>
+        <div id="scanStatus" class="muted"></div>
+        <div id="scanResults"></div>
+      </div>
+      <div class="extraFeatures">
+        <h3>Funkcje dodatkowe</h3>
+        <label class="toggleLabel">
+          <input type="checkbox" id="bulkModeToggle">
+          Zaznaczanie wielu urządzeń (akcje grupowe: zmiana obszaru/grupy/typu, usuwanie)
+        </label>
+      </div>
+      <div class="sessionHistory">
+        <div class="sessionHistoryHeader">
+          <h3>Historia działań (ta karta przeglądarki)</h3>
+          <button id="clearHistoryButton" type="button" class="linkButton">Wyczyść historię</button>
+        </div>
+        <p class="muted">Lista akcji wykonanych w tej karcie od jej otwarcia — zapisów, tuneli SSH/VNC, skanów. Znika po zamknięciu karty.</p>
+        <ul id="sessionHistoryList" class="historyList"></ul>
+      </div>
+    </section>
+
+    <section class="tableWrap">
+      <table id="devicesTable">
+        <thead>
+          <tr>
+            <th class="selectCell"><input type="checkbox" id="selectAllCheckbox" title="Zaznacz/odznacz widoczne na stronie"></th>
+            <th>Nazwa</th>
+            <th>IP</th>
+            <th>Lokacja</th>
+            <th>Akcje</th>
+          </tr>
+        </thead>
+        <tbody id="devicesBody"></tbody>
+      </table>
+    </section>
+
+    <section class="pagination">
+      <label>
+        Na stronie
+        <select id="pageSizeSelect">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="all">Wszystkie</option>
+        </select>
+      </label>
+      <div class="pageControls">
+        <button id="prevPageButton" type="button">Poprzednia</button>
+        <span id="pageInfo"></span>
+        <button id="nextPageButton" type="button">Następna</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="passwordModal" class="modalOverlay hidden">
+    <div class="modalBox">
+      <h3>Hasło administratora</h3>
+      <p class="muted">Wymagane do zapisu zmian w pliku na dysku. Zostanie zapamiętane w tej karcie przeglądarki do jej zamknięcia.</p>
+      <form id="passwordForm">
+        <input id="passwordModalInput" type="password" placeholder="Hasło" autocomplete="current-password">
+        <div class="modalActions">
+          <button type="button" id="passwordModalCancel">Anuluj</button>
+          <button type="submit" class="primary">Potwierdź</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toastContainer"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

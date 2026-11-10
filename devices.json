@@ -1,0 +1,63 @@
+[
+  {
+    "name": "T104-0192",
+    "ip": "192.168.1.192",
+    "keywords": ["terminal", "export", "starachowice"],
+    "area": "EXPORT",
+    "note": "Testowy terminal Starachowice nr 0192",
+    "type": "terminal",
+    "areaCode": "104",
+    "site": "Starachowice",
+    "number": "0192",
+    "addressMode": "dhcp",
+    "systemId": "",
+    "group": "",
+    "vncUsername": ""
+  },
+  {
+    "name": "T104-0193",
+    "ip": "192.168.1.193",
+    "keywords": ["terminal", "mala paczka", "starachowice"],
+    "area": "MALA PACZKA",
+    "note": "Testowy terminal Starachowice nr 0193",
+    "type": "terminal",
+    "areaCode": "104",
+    "site": "Starachowice",
+    "number": "0193",
+    "addressMode": "dhcp",
+    "systemId": "",
+    "group": "",
+    "vncUsername": ""
+  },
+  {
+    "name": "B104-0007",
+    "ip": "192.168.1.207",
+    "keywords": ["bizerba", "waga", "etykiety"],
+    "area": "ROZBIOR",
+    "note": "Testowa Bizerba",
+    "type": "bizerba",
+    "areaCode": "104",
+    "site": "Starachowice",
+    "number": "0007",
+    "addressMode": "static",
+    "numerator": "",
+    "systemId": "",
+    "group": "",
+    "vncUsername": ""
+  },
+  {
+    "name": "P104-0021",
+    "ip": "192.168.1.221",
+    "keywords": ["drukarka", "etykiety", "magazyn"],
+    "area": "EXPORT",
+    "note": "Testowa drukarka etykiet",
+    "type": "drukarka",
+    "areaCode": "104",
+    "site": "Starachowice",
+    "number": "0021",
+    "addressMode": "dhcp",
+    "systemId": "",
+    "group": "",
+    "vncUsername": ""
+  }
+]
