@@ -1,0 +1,1473 @@
+let devices = [];
+let devicesVersion = null;
+let config = { areas: ["EXPORT", "MALA PACZKA", "ROZBIOR"], types: ["terminal", "drukarka", "komputer", "bizerba", "inne"] };
+let statuses = {};
+let currentPage = 1;
+let expandedDevices = new Set();
+let selectedDevices = new Set();
+let bulkModeEnabled = false;
+let currentPageNames = [];
+
+const body = document.querySelector("#devicesBody");
+const searchInput = document.querySelector("#searchInput");
+const typeFilter = document.querySelector("#typeFilter");
+const areaFilter = document.querySelector("#areaFilter");
+const groupFilter = document.querySelector("#groupFilter");
+const sortSelect = document.querySelector("#sortSelect");
+const toggleAdvancedButton = document.querySelector("#toggleAdvancedButton");
+const advancedPanel = document.querySelector("#advancedPanel");
+const statusFilter = document.querySelector("#statusFilter");
+const addressModeFilter = document.querySelector("#addressModeFilter");
+const keywordFilter = document.querySelector("#keywordFilter");
+const clearFiltersButton = document.querySelector("#clearFiltersButton");
+const summary = document.querySelector("#summary");
+const pingAllButton = document.querySelector("#pingAllButton");
+const openAddButton = document.querySelector("#openAddButton");
+const saveButton = document.querySelector("#saveButton");
+const forgetPasswordButton = document.querySelector("#forgetPasswordButton");
+const editorPanel = document.querySelector("#editorPanel");
+const editorTitle = document.querySelector("#editorTitle");
+const closeEditorButton = document.querySelector("#closeEditorButton");
+const deviceForm = document.querySelector("#deviceForm");
+const editName = document.querySelector("#editName");
+const deviceName = document.querySelector("#deviceName");
+const deviceIp = document.querySelector("#deviceIp");
+const deviceAddressMode = document.querySelector("#deviceAddressMode");
+const deviceType = document.querySelector("#deviceType");
+const deviceArea = document.querySelector("#deviceArea");
+const deviceGroup = document.querySelector("#deviceGroup");
+const deviceKeywords = document.querySelector("#deviceKeywords");
+const deviceNote = document.querySelector("#deviceNote");
+const numeratorField = document.querySelector("#numeratorField");
+const deviceNumerator = document.querySelector("#deviceNumerator");
+const deviceSystemId = document.querySelector("#deviceSystemId");
+const deviceVncUsername = document.querySelector("#deviceVncUsername");
+const deleteEditButton = document.querySelector("#deleteEditButton");
+const clearFormButton = document.querySelector("#clearFormButton");
+const editHint = document.querySelector("#editHint");
+const newTypeInput = document.querySelector("#newTypeInput");
+const addTypeButton = document.querySelector("#addTypeButton");
+const typeChips = document.querySelector("#typeChips");
+const newAreaInput = document.querySelector("#newAreaInput");
+const addAreaButton = document.querySelector("#addAreaButton");
+const areaChips = document.querySelector("#areaChips");
+const newGroupInput = document.querySelector("#newGroupInput");
+const addGroupButton = document.querySelector("#addGroupButton");
+const groupChips = document.querySelector("#groupChips");
+const pageSizeSelect = document.querySelector("#pageSizeSelect");
+const refreshButton = document.querySelector("#refreshButton");
+const autoPingToggle = document.querySelector("#autoPingToggle");
+const autoPingInterval = document.querySelector("#autoPingInterval");
+const prevPageButton = document.querySelector("#prevPageButton");
+const nextPageButton = document.querySelector("#nextPageButton");
+const pageInfo = document.querySelector("#pageInfo");
+const selectAllCheckbox = document.querySelector("#selectAllCheckbox");
+const bulkModeToggle = document.querySelector("#bulkModeToggle");
+const devicesTable = document.querySelector("#devicesTable");
+const bulkActionsBar = document.querySelector("#bulkActionsBar");
+const bulkCount = document.querySelector("#bulkCount");
+const selectAllFilteredButton = document.querySelector("#selectAllFilteredButton");
+const clearSelectionButton = document.querySelector("#clearSelectionButton");
+const bulkAreaSelect = document.querySelector("#bulkAreaSelect");
+const bulkAreaApply = document.querySelector("#bulkAreaApply");
+const bulkGroupSelect = document.querySelector("#bulkGroupSelect");
+const bulkGroupApply = document.querySelector("#bulkGroupApply");
+const bulkTypeSelect = document.querySelector("#bulkTypeSelect");
+const bulkTypeApply = document.querySelector("#bulkTypeApply");
+const bulkDeleteButton = document.querySelector("#bulkDeleteButton");
+const themeToggleButton = document.querySelector("#themeToggleButton");
+const toastContainer = document.querySelector("#toastContainer");
+const sessionHistoryList = document.querySelector("#sessionHistoryList");
+const clearHistoryButton = document.querySelector("#clearHistoryButton");
+
+function showToast(message, type = "info", duration = 4000) {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add("toastOut");
+    setTimeout(() => toast.remove(), 200);
+  }, duration);
+
+  addHistoryEntry(message, type);
+}
+
+const MAX_HISTORY_ENTRIES = 50;
+let sessionHistory = [];
+
+function loadSessionHistory() {
+  try {
+    sessionHistory = JSON.parse(sessionStorage.getItem("devicePanelHistory") || "[]");
+  } catch (error) {
+    sessionHistory = [];
+  }
+  renderSessionHistory();
+}
+
+function addHistoryEntry(message, type = "info") {
+  const time = new Date().toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  sessionHistory.unshift({ time, message, type });
+  if (sessionHistory.length > MAX_HISTORY_ENTRIES) {
+    sessionHistory.length = MAX_HISTORY_ENTRIES;
+  }
+  try {
+    sessionStorage.setItem("devicePanelHistory", JSON.stringify(sessionHistory));
+  } catch (error) {
+    /* ignore storage errors */
+  }
+  renderSessionHistory();
+}
+
+function renderSessionHistory() {
+  if (!sessionHistoryList) {
+    return;
+  }
+  if (sessionHistory.length === 0) {
+    sessionHistoryList.innerHTML = '<li class="historyItem empty">Brak działań w tej sesji.</li>';
+    return;
+  }
+  sessionHistoryList.innerHTML = sessionHistory.map((entry) => `
+    <li class="historyItem ${escapeHtml(entry.type || "info")}">
+      <span class="historyTime">${escapeHtml(entry.time)}</span>
+      <span class="historyMessage">${escapeHtml(entry.message)}</span>
+    </li>
+  `).join("");
+}
+const sshUserInput = document.querySelector("#sshUserInput");
+const vncLocalPortInput = document.querySelector("#vncLocalPortInput");
+const vncRemotePortInput = document.querySelector("#vncRemotePortInput");
+const vncViewerPathInput = document.querySelector("#vncViewerPathInput");
+const saveTunnelSettingsButton = document.querySelector("#saveTunnelSettingsButton");
+const scanRangeInput = document.querySelector("#scanRangeInput");
+const startScanButton = document.querySelector("#startScanButton");
+const scanStatus = document.querySelector("#scanStatus");
+const scanResults = document.querySelector("#scanResults");
+
+let resolvedIpCache = {};
+try {
+  resolvedIpCache = JSON.parse(localStorage.getItem("dhcpResolvedIps") || "{}");
+} catch (error) {
+  resolvedIpCache = {};
+}
+
+function saveResolvedIpCache() {
+  try {
+    localStorage.setItem("dhcpResolvedIps", JSON.stringify(resolvedIpCache));
+  } catch (error) {
+    /* ignore storage errors (np. tryb prywatny) */
+  }
+}
+
+function rememberResolvedIp(name, resolvedIp) {
+  if (!resolvedIp || resolvedIpCache[name] === resolvedIp) {
+    return;
+  }
+  resolvedIpCache[name] = resolvedIp;
+  saveResolvedIpCache();
+}
+
+function pingTargetFor(device) {
+  return device.addressMode === "dhcp" ? device.name : (device.ip || device.name);
+}
+
+function applyTheme(theme) {
+  document.documentElement.classList.toggle("theme-dark", theme === "dark");
+  if (themeToggleButton) {
+    themeToggleButton.textContent = theme === "dark" ? "☀️" : "🌙";
+    themeToggleButton.title = theme === "dark" ? "Przełącz na jasny motyw" : "Przełącz na ciemny motyw";
+  }
+}
+
+function initTheme() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem("devicePanelTheme");
+  } catch (error) {
+    saved = null;
+  }
+  const theme = saved || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  applyTheme(theme);
+}
+
+if (themeToggleButton) {
+  themeToggleButton.addEventListener("click", () => {
+    const isDark = document.documentElement.classList.contains("theme-dark");
+    const nextTheme = isDark ? "light" : "dark";
+    applyTheme(nextTheme);
+    try {
+      localStorage.setItem("devicePanelTheme", nextTheme);
+    } catch (error) {
+      /* ignore storage errors */
+    }
+  });
+}
+
+initTheme();
+
+const passwordModal = document.querySelector("#passwordModal");
+const passwordForm = document.querySelector("#passwordForm");
+const passwordModalInput = document.querySelector("#passwordModalInput");
+const passwordModalCancel = document.querySelector("#passwordModalCancel");
+
+function getStoredPassword() {
+  try {
+    return sessionStorage.getItem("devicePanelAdminPassword") || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function storePassword(value) {
+  try {
+    sessionStorage.setItem("devicePanelAdminPassword", value);
+  } catch (error) {
+    /* ignore storage errors */
+  }
+}
+
+function clearStoredPassword() {
+  try {
+    sessionStorage.removeItem("devicePanelAdminPassword");
+  } catch (error) {
+    /* ignore storage errors */
+  }
+}
+
+let passwordPromiseResolve = null;
+
+function closePasswordModal() {
+  passwordModal.classList.add("hidden");
+  passwordModalInput.value = "";
+}
+
+function requestPasswordFromModal() {
+  return new Promise((resolve) => {
+    passwordPromiseResolve = resolve;
+    passwordModal.classList.remove("hidden");
+    passwordModalInput.focus();
+  });
+}
+
+passwordForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const value = passwordModalInput.value;
+  closePasswordModal();
+  if (passwordPromiseResolve) {
+    if (value) {
+      storePassword(value);
+    }
+    passwordPromiseResolve(value || null);
+    passwordPromiseResolve = null;
+  }
+});
+
+passwordModalCancel.addEventListener("click", () => {
+  closePasswordModal();
+  if (passwordPromiseResolve) {
+    passwordPromiseResolve(null);
+    passwordPromiseResolve = null;
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !passwordModal.classList.contains("hidden")) {
+    closePasswordModal();
+    if (passwordPromiseResolve) {
+      passwordPromiseResolve(null);
+      passwordPromiseResolve = null;
+    }
+  }
+});
+
+async function getAdminPassword() {
+  const stored = getStoredPassword();
+  if (stored) {
+    return stored;
+  }
+  return requestPasswordFromModal();
+}
+
+forgetPasswordButton.addEventListener("click", () => {
+  clearStoredPassword();
+  editHint.textContent = "Hasło wyczyszczone — przy następnym zapisie zostanie zapytane ponownie.";
+});
+
+async function loadDevices() {
+  const [devicesResponse, configResponse] = await Promise.all([
+    fetch("/api/devices"),
+    fetch("/api/config"),
+  ]);
+  devices = await devicesResponse.json();
+  devicesVersion = devicesResponse.headers.get("X-Devices-Version");
+  config = await configResponse.json();
+  sshUserInput.value = config.sshUser || "";
+  vncLocalPortInput.value = config.vncLocalPort || 5900;
+  vncRemotePortInput.value = config.vncRemotePort || 5900;
+  vncViewerPathInput.value = config.vncViewerPath || "";
+  fillFilters();
+  fillFormOptions();
+  renderDictionaries();
+  render();
+}
+
+function uniq(values) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "pl"));
+}
+
+function fillFilters() {
+  const types = uniq([...config.types, ...devices.map((device) => device.type)]);
+  const areas = uniq([...config.areas, ...devices.map((device) => device.area)]);
+  const groups = uniq([...config.groups, ...devices.map((device) => device.group)]);
+
+  typeFilter.innerHTML = '<option value="">Wszystkie typy</option>' +
+    types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+
+  areaFilter.innerHTML = '<option value="">Wszystkie obszary</option>' +
+    areas.map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
+
+  groupFilter.innerHTML = '<option value="">Wszystkie</option>' +
+    groups.map((group) => `<option value="${escapeHtml(group)}">${escapeHtml(group)}</option>`).join("");
+}
+
+function fillFormOptions() {
+  const types = uniq([...config.types, ...devices.map((device) => device.type)]);
+  const areas = uniq([...config.areas, ...devices.map((device) => device.area)]);
+  const groups = uniq([...config.groups, ...devices.map((device) => device.group)]);
+
+  deviceType.innerHTML = types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+  deviceArea.innerHTML = areas.map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
+  deviceGroup.innerHTML = '<option value="">— brak —</option>' +
+    groups.map((group) => `<option value="${escapeHtml(group)}">${escapeHtml(group)}</option>`).join("");
+}
+
+function getFilteredDevices() {
+  const query = searchInput.value.trim().toLowerCase();
+  const type = typeFilter.value;
+  const area = areaFilter.value;
+  const group = groupFilter.value;
+  const status = statusFilter.value;
+  const addressMode = addressModeFilter.value;
+  const keyword = keywordFilter.value.trim().toLowerCase();
+
+  const filtered = devices.filter((device) => {
+    const currentStatus = statuses[device.name]?.online === true ? "online" : statuses[device.name]?.online === false ? "offline" : "unknown";
+    const keywords = device.keywords || [];
+    const haystack = [
+      device.name,
+      device.ip,
+      device.addressMode,
+      device.type,
+      device.site,
+      device.area,
+      device.areaCode,
+      device.number,
+      device.note,
+      device.systemId,
+      device.group,
+      resolvedIpCache[device.name] || "",
+      ...(device.keywords || []),
+    ].join(" ").toLowerCase();
+
+    return (!query || haystack.includes(query)) &&
+      (!type || device.type === type) &&
+      (!area || device.area === area) &&
+      (!group || device.group === group) &&
+      (!status || currentStatus === status) &&
+      (!addressMode || device.addressMode === addressMode) &&
+      (!keyword || keywords.some((word) => word.toLowerCase().includes(keyword)));
+  });
+
+  return sortDevices(filtered);
+}
+
+function sortDevices(items) {
+  const key = sortSelect.value;
+  const statusRank = { online: 0, offline: 1, unknown: 2 };
+
+  return [...items].sort((a, b) => {
+    if (key === "status") {
+      const statusA = statuses[a.name]?.online === true ? "online" : statuses[a.name]?.online === false ? "offline" : "unknown";
+      const statusB = statuses[b.name]?.online === true ? "online" : statuses[b.name]?.online === false ? "offline" : "unknown";
+      return statusRank[statusA] - statusRank[statusB] || compareText(a.name, b.name);
+    }
+
+    return compareText(a[key] || "", b[key] || "") || compareText(a.name, b.name);
+  });
+}
+
+function compareText(a, b) {
+  return String(a).localeCompare(String(b), "pl", { numeric: true, sensitivity: "base" });
+}
+
+function render() {
+  const filtered = getFilteredDevices();
+  const pageData = paginate(filtered);
+  const online = filtered.filter((device) => statuses[device.name]?.online === true).length;
+  const offline = filtered.filter((device) => statuses[device.name]?.online === false).length;
+
+  summary.innerHTML = [
+    metric(filtered.length, "Widoczne urządzenia"),
+    metric(online, "Online"),
+    metric(offline, "Offline"),
+    metric(devices.length, "Wszystkie w pliku"),
+  ].join("");
+
+  pingAllButton.textContent = `Ping widoczne (${filtered.length})`;
+  body.innerHTML = pageData.items.map((device) => row(device)).join("");
+  renderPagination(pageData, filtered.length);
+
+  currentPageNames = pageData.items.map((device) => device.name);
+  selectAllCheckbox.checked = currentPageNames.length > 0 && currentPageNames.every((name) => selectedDevices.has(name));
+  updateBulkBar();
+}
+
+function metric(value, label) {
+  return `<div class="metric"><strong>${value}</strong><span>${label}</span></div>`;
+}
+
+function paginate(items) {
+  const selectedSize = pageSizeSelect.value;
+  if (selectedSize === "all") {
+    currentPage = 1;
+    return { items, page: 1, totalPages: 1, pageSize: items.length || 1 };
+  }
+
+  const pageSize = Number(selectedSize);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  currentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const start = (currentPage - 1) * pageSize;
+  return {
+    items: items.slice(start, start + pageSize),
+    page: currentPage,
+    totalPages,
+    pageSize,
+  };
+}
+
+function renderPagination(pageData, totalItems) {
+  const selectedSize = pageSizeSelect.value;
+  const showingAll = selectedSize === "all";
+  const from = totalItems === 0 ? 0 : (pageData.page - 1) * pageData.pageSize + 1;
+  const to = showingAll ? totalItems : Math.min(totalItems, pageData.page * pageData.pageSize);
+
+  pageInfo.textContent = `${from}-${to} z ${totalItems} | strona ${pageData.page} / ${pageData.totalPages}`;
+  prevPageButton.disabled = showingAll || pageData.page <= 1;
+  nextPageButton.disabled = showingAll || pageData.page >= pageData.totalPages;
+}
+
+function resetPageAndRender() {
+  currentPage = 1;
+  render();
+}
+
+function updateBulkBar() {
+  if (!bulkModeEnabled) {
+    bulkActionsBar.classList.add("hidden");
+    return;
+  }
+  const count = selectedDevices.size;
+  bulkActionsBar.classList.toggle("hidden", count === 0);
+  if (count > 0) {
+    bulkCount.textContent = `Zaznaczono: ${count}`;
+    const areas = uniq([...config.areas, ...devices.map((device) => device.area)]);
+    const groups = uniq([...config.groups, ...devices.map((device) => device.group)]);
+    const types = uniq([...config.types, ...devices.map((device) => device.type)]);
+    bulkAreaSelect.innerHTML = '<option value="">Zmień obszar na…</option>' +
+      areas.map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
+    bulkGroupSelect.innerHTML = '<option value="">Zmień grupę na…</option><option value="__clear__">— usuń grupę —</option>' +
+      groups.map((group) => `<option value="${escapeHtml(group)}">${escapeHtml(group)}</option>`).join("");
+    bulkTypeSelect.innerHTML = '<option value="">Zmień typ na…</option>' +
+      types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+  }
+}
+
+async function applyBulkField(field, value) {
+  if (selectedDevices.size === 0) {
+    return;
+  }
+  const count = selectedDevices.size;
+  devices = devices.map((device) => {
+    if (!selectedDevices.has(device.name)) {
+      return device;
+    }
+    return { ...device, [field]: value };
+  });
+  render();
+  addHistoryEntry(`Akcja grupowa: zmieniono "${field}" na "${value || "(puste)"}" dla ${count} urządzeń.`, "info");
+  await saveDevices();
+}
+
+async function bulkDeleteSelected() {
+  if (selectedDevices.size === 0) {
+    return;
+  }
+  if (!confirm(`Usunąć ${selectedDevices.size} zaznaczonych urządzeń? Tej operacji nie da się cofnąć w panelu (ale kopia zapasowa istnieje od ostatniego startu programu).`)) {
+    return;
+  }
+  const count = selectedDevices.size;
+  devices = devices.filter((device) => !selectedDevices.has(device.name));
+  selectedDevices.clear();
+  render();
+  addHistoryEntry(`Akcja grupowa: usunięto ${count} urządzeń.`, "info");
+  await saveDevices();
+}
+
+function row(device) {
+  const status = statuses[device.name] || {};
+  const statusClass = status.checking ? "checking" : status.online === true ? "online" : status.online === false ? "offline" : "";
+  const statusText = status.checking ? "Sprawdzam" : status.online === true ? `Online${status.latencyMs ? ` ${status.latencyMs} ms` : ""}` : status.online === false ? "Offline" : "Nieznany";
+  const target = pingTargetFor(device);
+  const knownDhcpIp = status.resolvedIp || resolvedIpCache[device.name];
+  const ipText = device.ip || (knownDhcpIp ? `${knownDhcpIp} (DHCP)` : "DHCP / po nazwie");
+  const modeText = device.addressMode === "static" ? "Stałe IP" : "DHCP";
+  const expanded = expandedDevices.has(device.name);
+  const isSelected = selectedDevices.has(device.name);
+
+  const mainRow = `
+    <tr class="deviceRow" data-toggle="${escapeHtml(device.name)}">
+      <td class="selectCell">
+        <input type="checkbox" class="rowCheckbox" data-select="${escapeHtml(device.name)}" ${isSelected ? "checked" : ""}>
+      </td>
+      <td>
+        <span class="expandArrow ${expanded ? "open" : ""}">▸</span>
+        <span class="status ${statusClass}"><span class="dot"></span></span>
+        <strong>${escapeHtml(device.name)}</strong>
+      </td>
+      <td><code>${escapeHtml(ipText)}</code></td>
+      <td>${escapeHtml(device.area || "")}</td>
+      <td class="rowActions">
+        <button data-ping-target="${escapeHtml(target)}" data-ping-name="${escapeHtml(device.name)}">Ping</button>
+      </td>
+    </tr>
+  `;
+
+  if (!expanded) {
+    return mainRow;
+  }
+
+  const detailFields = [
+    ["Status", statusText],
+    ["Typ", device.type || "inne"],
+    ["Adresowanie", modeText],
+    ["Grupa / maszyna", device.group || ""],
+  ];
+
+  if (device.type === "bizerba") {
+    detailFields.push(["Numerator", device.numerator || ""]);
+  }
+
+  detailFields.push(["System ID", device.systemId || ""]);
+  detailFields.push(["Użytkownik VNC", device.vncUsername || ""]);
+  detailFields.push(["Notatka", device.note || ""]);
+
+  const keywordsHtml = (device.keywords || []).map((word) => `<span class="tag">${escapeHtml(word)}</span>`).join("") || "<span class=\"muted\">brak</span>";
+
+  const relatedDevices = device.group
+    ? devices.filter((other) => other.group === device.group && other.name !== device.name)
+    : [];
+
+  const relatedHtml = relatedDevices.length > 0 ? `
+    <div class="relatedDevices">
+      <span class="detailLabel">Powiązane urządzenia (${escapeHtml(device.group)})</span>
+      <div class="relatedChips">
+        ${relatedDevices.map((related) => `<button class="relatedChip" data-jump-to="${escapeHtml(related.name)}">${escapeHtml(related.name)}</button>`).join("")}
+      </div>
+    </div>
+  ` : "";
+
+  const detailRow = `
+    <tr class="deviceDetail">
+      <td colspan="5">
+        <div class="detailActions">
+          <button data-ssh="${escapeHtml(device.name)}">SSH</button>
+          <button data-vnc="${escapeHtml(device.name)}">VNC</button>
+          <a class="httpsButton" href="https://${escapeHtml(target)}" target="_blank" rel="noopener noreferrer">HTTPS</a>
+          <button data-edit="${escapeHtml(device.name)}">Edytuj</button>
+        </div>
+        ${relatedHtml}
+        <div class="detailGrid">
+          ${detailFields.map(([label, value]) => `
+            <div class="detailItem">
+              <span class="detailLabel">${escapeHtml(label)}</span>
+              <span class="detailValue">${escapeHtml(value || "—")}</span>
+            </div>
+          `).join("")}
+          <div class="detailItem detailKeywords">
+            <span class="detailLabel">Słowa kluczowe</span>
+            <span class="detailValue">${keywordsHtml}</span>
+          </div>
+        </div>
+      </td>
+    </tr>
+  `;
+
+  return mainRow + detailRow;
+}
+
+async function pingDevice(device) {
+  const target = pingTargetFor(device);
+  statuses[device.name] = { checking: true };
+  render();
+
+  try {
+    const response = await fetch(`/api/ping?target=${encodeURIComponent(target)}`);
+    statuses[device.name] = await response.json();
+    if (statuses[device.name].resolvedIp) {
+      rememberResolvedIp(device.name, statuses[device.name].resolvedIp);
+    }
+  } catch (error) {
+    statuses[device.name] = { online: false, error: error.message };
+  }
+
+  render();
+}
+
+async function pingTarget(target, name) {
+  const device = devices.find((item) => item.name === name);
+  const effectiveTarget = device ? pingTargetFor(device) : target;
+  statuses[name] = { checking: true };
+  render();
+
+  try {
+    const response = await fetch(`/api/ping?target=${encodeURIComponent(effectiveTarget)}`);
+    statuses[name] = await response.json();
+    if (statuses[name].resolvedIp) {
+      rememberResolvedIp(name, statuses[name].resolvedIp);
+    }
+  } catch (error) {
+    statuses[name] = { online: false, error: error.message };
+  }
+
+  render();
+}
+
+async function startSshTunnel(name) {
+  const password = await getAdminPassword();
+  if (!password) {
+    return;
+  }
+
+  const response = await fetch("/api/ssh-tunnel", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": password,
+    },
+    body: JSON.stringify({ name }),
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      clearStoredPassword();
+    }
+    showToast(result.error || "Nie udało się uruchomić tunelu SSH.", "error", 6000);
+    return;
+  }
+
+  showToast(result.message || "Uruchomiono SSH.", "success");
+}
+
+async function openVncDirect(name) {
+  const password = await getAdminPassword();
+  if (!password) {
+    return;
+  }
+
+  const response = await fetch("/api/vnc-direct", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": password,
+    },
+    body: JSON.stringify({ name }),
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      clearStoredPassword();
+    }
+    showToast(result.error || "Nie udało się otworzyć VNC.", "error", 6000);
+    return;
+  }
+
+  showToast(result.message || "Uruchomiono VNC.", "success");
+}
+
+async function saveTunnelSettings() {
+  const password = await getAdminPassword();
+  if (!password) {
+    return;
+  }
+
+  const updatedConfig = {
+    ...config,
+    sshUser: sshUserInput.value.trim(),
+    vncLocalPort: Number(vncLocalPortInput.value) || 5900,
+    vncRemotePort: Number(vncRemotePortInput.value) || 5900,
+    vncViewerPath: vncViewerPathInput.value.trim(),
+  };
+
+  const response = await fetch("/api/config", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": password,
+    },
+    body: JSON.stringify({ config: updatedConfig }),
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      clearStoredPassword();
+    }
+    addHistoryEntry(result.error || "Nie udało się zapisać ustawień tunelu.", "error");
+    alert(result.error || "Nie udało się zapisać ustawień tunelu.");
+    return;
+  }
+
+  config = { ...config, ...result.config };
+  sshUserInput.value = config.sshUser || "";
+  vncLocalPortInput.value = config.vncLocalPort || 5900;
+  vncRemotePortInput.value = config.vncRemotePort || 5900;
+  vncViewerPathInput.value = config.vncViewerPath || "";
+  addHistoryEntry("Zapisano ustawienia tunelu SSH.", "success");
+  alert("Zapisano ustawienia tunelu SSH.");
+}
+
+async function startNetworkScan() {
+  const range = scanRangeInput.value.trim();
+  if (!range) {
+    scanStatus.textContent = "Wpisz zakres, np. 192.168.1.1-192.168.1.254.";
+    return;
+  }
+
+  const password = await getAdminPassword();
+  if (!password) {
+    return;
+  }
+
+  startScanButton.disabled = true;
+  scanResults.innerHTML = "";
+  scanStatus.textContent = "Skanowanie w toku, to może potrwać do kilkunastu-kilkudziesięciu sekund…";
+
+  try {
+    const response = await fetch("/api/network-scan", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Password": password,
+      },
+      body: JSON.stringify({ range, knownDhcpIps: Object.values(resolvedIpCache) }),
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        clearStoredPassword();
+      }
+      scanStatus.textContent = result.error || "Nie udało się przeskanować sieci.";
+      return;
+    }
+
+    renderScanResults(result);
+  } catch (error) {
+    scanStatus.textContent = `Błąd skanowania: ${error.message}`;
+  } finally {
+    startScanButton.disabled = false;
+  }
+}
+
+let lastScanResults = {};
+
+function renderScanResults(result) {
+  lastScanResults = {};
+  result.online.forEach((item) => {
+    lastScanResults[item.ip] = item;
+  });
+
+  const newFound = result.online.filter((item) => !item.inDatabase);
+  const known = result.online.filter((item) => item.inDatabase);
+
+  scanStatus.textContent = `Sprawdzono ${result.scanned} adresów, online: ${result.online.length} ` +
+    `(nowych, spoza bazy: ${newFound.length}).`;
+
+  addHistoryEntry(
+    `Skan sieci: sprawdzono ${result.scanned} adresów, online ${result.online.length} (nowych: ${newFound.length}).`,
+    "info"
+  );
+
+  if (result.online.length === 0) {
+    scanResults.innerHTML = "";
+    return;
+  }
+
+  const rows = [...newFound, ...known].map((item) => {
+    const latency = item.latencyMs ? `${item.latencyMs} ms` : "";
+    const hostnameText = item.hostname ? `— ${item.hostname}` : "";
+    if (item.inDatabase) {
+      return `
+        <div class="scanResultRow inDatabase">
+          <span><span class="scanIp">${escapeHtml(item.ip)}</span> <span class="muted">${escapeHtml(hostnameText)} już w bazie ${escapeHtml(latency)}</span></span>
+        </div>
+      `;
+    }
+    return `
+      <div class="scanResultRow">
+        <span><span class="scanIp">${escapeHtml(item.ip)}</span> <span class="muted">${escapeHtml(hostnameText)} ${escapeHtml(latency)}</span></span>
+        <button data-scan-add="${escapeHtml(item.ip)}">Dodaj do bazy</button>
+      </div>
+    `;
+  });
+
+  scanResults.innerHTML = rows.join("");
+}
+
+function prefillFromScan(ip) {
+  const scanItem = lastScanResults[ip];
+  clearForm();
+  deviceIp.value = ip;
+  deviceAddressMode.value = "static";
+  if (scanItem && scanItem.hostname) {
+    deviceName.value = scanItem.hostname.toUpperCase();
+  }
+  editorPanel.classList.remove("collapsed");
+  editorTitle.textContent = `Nowe urządzenie — ${ip}`;
+  editHint.textContent = scanItem && scanItem.hostname
+    ? `Znalezione skanerem pod adresem ${ip} (nazwa hosta: ${scanItem.hostname}). Sprawdź/popraw nazwę i pozostałe dane, potem zapisz.`
+    : `Znalezione skanerem pod adresem ${ip}. Uzupełnij nazwę i pozostałe dane, potem zapisz.`;
+  deviceName.focus();
+}
+
+function jumpToDevice(name) {
+  clearFiltersQuiet();
+  searchInput.value = name;
+  expandedDevices.add(name);
+  resetPageAndRender();
+
+  requestAnimationFrame(() => {
+    let selector;
+    try {
+      selector = `[data-toggle="${CSS.escape(name)}"]`;
+    } catch (error) {
+      selector = null;
+    }
+    const targetRow = selector ? document.querySelector(selector) : null;
+    if (targetRow) {
+      targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  });
+}
+
+function clearFiltersQuiet() {
+  typeFilter.value = "";
+  areaFilter.value = "";
+  groupFilter.value = "";
+  statusFilter.value = "";
+  addressModeFilter.value = "";
+  keywordFilter.value = "";
+}
+
+async function pingDevicesConcurrently(deviceList, concurrency = 5) {
+  let index = 0;
+
+  async function worker() {
+    while (index < deviceList.length) {
+      const current = deviceList[index++];
+      await pingDevice(current);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, deviceList.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+}
+
+async function pingAll() {
+  const filtered = getFilteredDevices();
+  if (filtered.length === 0) {
+    alert("Brak urządzeń w aktualnym wyszukiwaniu.");
+    return;
+  }
+
+  await pingDevicesConcurrently(filtered, 5);
+}
+
+function readFormDevice() {
+  const device = {
+    name: deviceName.value.trim().toUpperCase(),
+    ip: deviceIp.value.trim(),
+    addressMode: deviceAddressMode.value,
+    type: deviceType.value,
+    area: deviceArea.value,
+    group: deviceGroup.value,
+    keywords: deviceKeywords.value.split(",").map((word) => word.trim()).filter(Boolean),
+    note: deviceNote.value.trim(),
+    systemId: deviceSystemId.value.trim(),
+    vncUsername: deviceVncUsername.value.trim(),
+  };
+
+  if (device.type === "bizerba") {
+    device.numerator = deviceNumerator.value.trim();
+  }
+
+  return device;
+}
+
+function submitForm(event) {
+  event.preventDefault();
+  const newDevice = readFormDevice();
+  const oldName = editName.value;
+  const duplicate = devices.some((device) => device.name === newDevice.name && device.name !== oldName);
+
+  if (duplicate) {
+    alert("Urządzenie o takiej nazwie już istnieje.");
+    return;
+  }
+
+  if (newDevice.addressMode === "static" && !newDevice.ip) {
+    alert("Stałe IP wymaga wpisania adresu IP.");
+    deviceIp.focus();
+    return;
+  }
+
+  const wasNew = !oldName;
+
+  if (oldName) {
+    devices = devices.map((device) => device.name === oldName ? newDevice : device);
+  } else {
+    devices = [...devices, newDevice];
+  }
+
+  fillFilters();
+  fillFormOptions();
+  render();
+
+  if (wasNew) {
+    const keepArea = newDevice.area;
+    clearForm();
+    deviceArea.value = keepArea;
+    editHint.textContent = `Dodano ${newDevice.name}. Kliknij "Zapisz zmiany", aby zapisać plik.`;
+    deviceName.focus();
+  } else {
+    editName.value = newDevice.name;
+    deleteEditButton.classList.remove("hidden");
+    editorTitle.textContent = `Edytuj ${newDevice.name}`;
+    editHint.textContent = `Zmieniono ${newDevice.name}. Kliknij "Zapisz zmiany", aby zapisać plik.`;
+  }
+}
+
+function openEditor(mode = "add") {
+  editorPanel.classList.remove("collapsed");
+  if (mode === "add") {
+    clearForm();
+    editorTitle.textContent = "Dodaj urządzenie";
+    deviceName.focus();
+  }
+}
+
+function closeEditor() {
+  editorPanel.classList.add("collapsed");
+}
+
+function editDevice(name) {
+  const device = devices.find((item) => item.name === name);
+  if (!device) {
+    return;
+  }
+
+  editName.value = device.name;
+  deviceName.value = device.name;
+  deviceIp.value = device.ip;
+  deviceAddressMode.value = device.addressMode || (device.type === "bizerba" ? "static" : "dhcp");
+  deviceType.value = device.type || "inne";
+  deviceArea.value = device.area || config.areas[0] || "";
+  deviceGroup.value = device.group || "";
+  deviceKeywords.value = (device.keywords || []).join(", ");
+  deviceNote.value = device.note || "";
+  deviceSystemId.value = device.systemId || "";
+  deviceVncUsername.value = device.vncUsername || "";
+  deviceNumerator.value = device.numerator || "";
+  toggleNumeratorField();
+  editorTitle.textContent = `Edytuj ${device.name}`;
+  editHint.textContent = `Edytujesz ${device.name}. Zapis do pliku wymaga hasła.`;
+  deleteEditButton.classList.remove("hidden");
+  editorPanel.classList.remove("collapsed");
+  deviceName.focus();
+}
+
+function deleteEditedDevice() {
+  const name = editName.value;
+  if (!name) {
+    alert("Najpierw wybierz urządzenie do edycji.");
+    return;
+  }
+
+  if (!confirm(`Usunąć ${name}?`)) {
+    return;
+  }
+
+  devices = devices.filter((device) => device.name !== name);
+  clearForm();
+  saveDevices();
+}
+
+async function saveDevices() {
+  const password = await getAdminPassword();
+  if (!password) {
+    return;
+  }
+
+  const response = await fetch("/api/devices", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": password,
+    },
+    body: JSON.stringify({ devices, version: devicesVersion }),
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      clearStoredPassword();
+    }
+    if (response.status === 409) {
+      addHistoryEntry("Konflikt zapisu — ktoś inny zapisał zmiany w międzyczasie.", "error");
+      alert(result.error || "Ktoś inny zapisał zmiany w międzyczasie. Odśwież i wprowadź zmiany ponownie.");
+      await loadDevices();
+      return;
+    }
+    addHistoryEntry(result.error || "Nie udało się zapisać urządzeń.", "error");
+    alert(result.error || "Nie udało się zapisać.");
+    return;
+  }
+
+  devicesVersion = response.headers.get("X-Devices-Version") || devicesVersion;
+
+  const configResponse = await fetch("/api/config", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Admin-Password": password,
+    },
+    body: JSON.stringify({ config }),
+  });
+  const configResult = await configResponse.json();
+  if (!configResponse.ok) {
+    if (configResponse.status === 403) {
+      clearStoredPassword();
+    }
+    addHistoryEntry(configResult.error || "Urządzenia zapisane, ale nie udało się zapisać konfiguracji.", "error");
+    alert(configResult.error || "Urządzenia zapisane, ale nie udało się zapisać typów i obszarów.");
+    return;
+  }
+
+  await loadDevices();
+  addHistoryEntry(`Zapisano ${result.count} urządzeń.`, "success");
+  alert(`Zapisano ${result.count} urządzeń oraz typy i obszary.`);
+}
+
+function clearForm() {
+  editName.value = "";
+  deviceForm.reset();
+  deviceAddressMode.value = "dhcp";
+  deviceType.value = config.types[0] || "inne";
+  deviceArea.value = config.areas[0] || "";
+  deviceGroup.value = "";
+  editorTitle.textContent = "Dodaj urządzenie";
+  deleteEditButton.classList.add("hidden");
+  editHint.textContent = "";
+  toggleNumeratorField();
+}
+
+function renderDictionaries() {
+  typeChips.innerHTML = config.types.map((type) => dictionaryChip(type, "type")).join("");
+  areaChips.innerHTML = config.areas.map((area) => dictionaryChip(area, "area")).join("");
+  groupChips.innerHTML = config.groups.map((group) => dictionaryChip(group, "group")).join("");
+}
+
+function dictionaryChip(value, kind) {
+  return `<span class="dictChip">${escapeHtml(value)} <button type="button" data-remove-${kind}="${escapeHtml(value)}">×</button></span>`;
+}
+
+function addDictionaryValue(kind) {
+  const input = kind === "type" ? newTypeInput : kind === "area" ? newAreaInput : newGroupInput;
+  const value = input.value.trim();
+  if (!value) {
+    return;
+  }
+
+  const key = kind === "type" ? "types" : kind === "area" ? "areas" : "groups";
+  config[key] = uniq([...config[key], value]);
+  input.value = "";
+  fillFilters();
+  fillFormOptions();
+  renderDictionaries();
+  render();
+}
+
+function removeDictionaryValue(kind, value) {
+  const key = kind === "type" ? "types" : kind === "area" ? "areas" : "groups";
+  const inUse = devices.some((device) => {
+    if (kind === "type") return device.type === value;
+    if (kind === "area") return device.area === value;
+    return device.group === value;
+  });
+  if (inUse) {
+    alert("Nie można usunąć pozycji używanej przez urządzenia.");
+    return;
+  }
+
+  config[key] = config[key].filter((item) => item !== value);
+  fillFilters();
+  fillFormOptions();
+  renderDictionaries();
+  render();
+}
+
+function clearFilters() {
+  searchInput.value = "";
+  typeFilter.value = "";
+  areaFilter.value = "";
+  groupFilter.value = "";
+  statusFilter.value = "";
+  addressModeFilter.value = "";
+  keywordFilter.value = "";
+  sortSelect.value = "name";
+  fillFilters();
+  resetPageAndRender();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+document.addEventListener("click", (event) => {
+  const toggleRow = event.target.closest(".deviceRow");
+  if (toggleRow && !event.target.closest(".rowActions") && !event.target.closest(".selectCell")) {
+    const name = toggleRow.dataset.toggle;
+    if (expandedDevices.has(name)) {
+      expandedDevices.delete(name);
+    } else {
+      expandedDevices.add(name);
+    }
+    render();
+  }
+
+  const pingTargetValue = event.target.dataset.pingTarget;
+  const pingNameValue = event.target.dataset.pingName;
+  const editNameValue = event.target.dataset.edit;
+  const sshValue = event.target.dataset.ssh;
+  const vncValue = event.target.dataset.vnc;
+  const scanAddValue = event.target.dataset.scanAdd;
+  const jumpToValue = event.target.dataset.jumpTo;
+  const removeTypeValue = event.target.dataset.removeType;
+  const removeAreaValue = event.target.dataset.removeArea;
+  const removeGroupValue = event.target.dataset.removeGroup;
+
+  if (pingTargetValue && pingNameValue) {
+    pingTarget(pingTargetValue, pingNameValue);
+  }
+
+  if (editNameValue) {
+    editDevice(editNameValue);
+  }
+
+  if (sshValue) {
+    startSshTunnel(sshValue);
+  }
+
+  if (vncValue) {
+    openVncDirect(vncValue);
+  }
+
+  if (scanAddValue) {
+    prefillFromScan(scanAddValue);
+  }
+
+  if (jumpToValue) {
+    jumpToDevice(jumpToValue);
+  }
+
+  if (removeTypeValue) {
+    removeDictionaryValue("type", removeTypeValue);
+  }
+
+  if (removeAreaValue) {
+    removeDictionaryValue("area", removeAreaValue);
+  }
+
+  if (removeGroupValue) {
+    removeDictionaryValue("group", removeGroupValue);
+  }
+});
+
+searchInput.addEventListener("input", resetPageAndRender);
+typeFilter.addEventListener("change", resetPageAndRender);
+sortSelect.addEventListener("change", resetPageAndRender);
+statusFilter.addEventListener("change", resetPageAndRender);
+addressModeFilter.addEventListener("change", resetPageAndRender);
+keywordFilter.addEventListener("input", resetPageAndRender);
+toggleAdvancedButton.addEventListener("click", () => advancedPanel.classList.toggle("collapsed"));
+clearFiltersButton.addEventListener("click", clearFilters);
+areaFilter.addEventListener("change", () => {
+  resetPageAndRender();
+});
+groupFilter.addEventListener("change", () => {
+  resetPageAndRender();
+});
+pageSizeSelect.addEventListener("change", resetPageAndRender);
+prevPageButton.addEventListener("click", () => {
+  currentPage -= 1;
+  render();
+});
+nextPageButton.addEventListener("click", () => {
+  currentPage += 1;
+  render();
+});
+deviceForm.addEventListener("submit", submitForm);
+openAddButton.addEventListener("click", () => {
+  if (editorPanel.classList.contains("collapsed")) {
+    openEditor("add");
+  } else {
+    closeEditor();
+  }
+});
+closeEditorButton.addEventListener("click", closeEditor);
+deleteEditButton.addEventListener("click", deleteEditedDevice);
+clearFormButton.addEventListener("click", clearForm);
+pingAllButton.addEventListener("click", pingAll);
+saveButton.addEventListener("click", saveDevices);
+addTypeButton.addEventListener("click", () => addDictionaryValue("type"));
+addAreaButton.addEventListener("click", () => addDictionaryValue("area"));
+addGroupButton.addEventListener("click", () => addDictionaryValue("group"));
+newTypeInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addDictionaryValue("type");
+  }
+});
+newAreaInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addDictionaryValue("area");
+  }
+});
+newGroupInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    addDictionaryValue("group");
+  }
+});
+deviceType.addEventListener("change", () => {
+  if (deviceType.value === "bizerba") {
+    deviceAddressMode.value = "static";
+  }
+  toggleNumeratorField();
+});
+
+function toggleNumeratorField() {
+  const isBizerba = deviceType.value === "bizerba";
+  numeratorField.classList.toggle("hidden", !isBizerba);
+  if (!isBizerba) {
+    deviceNumerator.value = "";
+  }
+}
+saveTunnelSettingsButton.addEventListener("click", saveTunnelSettings);
+startScanButton.addEventListener("click", startNetworkScan);
+scanRangeInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    startNetworkScan();
+  }
+});
+
+refreshButton.addEventListener("click", () => loadDevices());
+
+let autoPingTimer = null;
+let autoPingRunning = false;
+
+function loadAutoPingPreference() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem("devicePanelAutoPing") || "null");
+  } catch (error) {
+    saved = null;
+  }
+  autoPingToggle.checked = Boolean(saved && saved.enabled);
+  if (saved && saved.interval) {
+    autoPingInterval.value = saved.interval;
+  }
+}
+
+function saveAutoPingPreference() {
+  try {
+    localStorage.setItem("devicePanelAutoPing", JSON.stringify({
+      enabled: autoPingToggle.checked,
+      interval: autoPingInterval.value,
+    }));
+  } catch (error) {
+    /* ignore storage errors */
+  }
+}
+
+async function runAutoPing() {
+  if (autoPingRunning) {
+    return;
+  }
+  const filtered = getFilteredDevices();
+  if (filtered.length === 0) {
+    return;
+  }
+  autoPingRunning = true;
+  try {
+    await pingDevicesConcurrently(filtered, 5);
+  } finally {
+    autoPingRunning = false;
+  }
+}
+
+function restartAutoPingTimer() {
+  if (autoPingTimer) {
+    clearInterval(autoPingTimer);
+    autoPingTimer = null;
+  }
+  if (autoPingToggle.checked) {
+    const intervalMs = Number(autoPingInterval.value) || 300000;
+    autoPingTimer = setInterval(runAutoPing, intervalMs);
+  }
+}
+
+autoPingToggle.addEventListener("change", () => {
+  saveAutoPingPreference();
+  restartAutoPingTimer();
+});
+
+autoPingInterval.addEventListener("change", () => {
+  saveAutoPingPreference();
+  restartAutoPingTimer();
+});
+
+document.addEventListener("change", (event) => {
+  const selectName = event.target.dataset.select;
+  if (selectName) {
+    if (event.target.checked) {
+      selectedDevices.add(selectName);
+    } else {
+      selectedDevices.delete(selectName);
+    }
+    updateBulkBar();
+    selectAllCheckbox.checked = currentPageNames.length > 0 && currentPageNames.every((name) => selectedDevices.has(name));
+    return;
+  }
+
+  if (event.target === selectAllCheckbox) {
+    if (selectAllCheckbox.checked) {
+      currentPageNames.forEach((name) => selectedDevices.add(name));
+    } else {
+      currentPageNames.forEach((name) => selectedDevices.delete(name));
+    }
+    render();
+  }
+});
+
+selectAllFilteredButton.addEventListener("click", () => {
+  getFilteredDevices().forEach((device) => selectedDevices.add(device.name));
+  render();
+});
+
+clearSelectionButton.addEventListener("click", () => {
+  selectedDevices.clear();
+  render();
+});
+
+bulkAreaApply.addEventListener("click", () => {
+  const value = bulkAreaSelect.value;
+  if (!value) {
+    showToast("Wybierz obszar z listy.", "error");
+    return;
+  }
+  applyBulkField("area", value);
+});
+
+bulkGroupApply.addEventListener("click", () => {
+  const value = bulkGroupSelect.value;
+  if (!value) {
+    showToast("Wybierz grupę z listy (albo „— usuń grupę —”).", "error");
+    return;
+  }
+  applyBulkField("group", value === "__clear__" ? "" : value);
+});
+
+bulkTypeApply.addEventListener("click", () => {
+  const value = bulkTypeSelect.value;
+  if (!value) {
+    showToast("Wybierz typ z listy.", "error");
+    return;
+  }
+  applyBulkField("type", value);
+});
+
+bulkDeleteButton.addEventListener("click", bulkDeleteSelected);
+
+function applyBulkModeVisibility() {
+  devicesTable.classList.toggle("hideSelectColumn", !bulkModeEnabled);
+  if (!bulkModeEnabled) {
+    selectedDevices.clear();
+  }
+  updateBulkBar();
+}
+
+function loadBulkModePreference() {
+  try {
+    bulkModeEnabled = localStorage.getItem("devicePanelBulkMode") === "1";
+  } catch (error) {
+    bulkModeEnabled = false;
+  }
+  bulkModeToggle.checked = bulkModeEnabled;
+  applyBulkModeVisibility();
+}
+
+bulkModeToggle.addEventListener("change", () => {
+  bulkModeEnabled = bulkModeToggle.checked;
+  try {
+    localStorage.setItem("devicePanelBulkMode", bulkModeEnabled ? "1" : "0");
+  } catch (error) {
+    /* ignore storage errors */
+  }
+  applyBulkModeVisibility();
+  render();
+});
+
+clearHistoryButton.addEventListener("click", () => {
+  sessionHistory = [];
+  try {
+    sessionStorage.removeItem("devicePanelHistory");
+  } catch (error) {
+    /* ignore storage errors */
+  }
+  renderSessionHistory();
+});
+
+loadSessionHistory();
+loadBulkModePreference();
+loadAutoPingPreference();
+restartAutoPingTimer();
+
+loadDevices();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* brak service workera nie przeszkadza w normalnym dzialaniu panelu */
+    });
+  });
+}
