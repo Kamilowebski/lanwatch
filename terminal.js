@@ -1,8 +1,7 @@
 const { spawn } = require("node:child_process");
+const path = require("node:path");
 const { resolvePrivateAddress } = require("./ping");
 
-const COMMAND_TIMEOUT_MS = 30_000;
-const MAX_OUTPUT_LENGTH = 32_768;
 const SSH_HOST_KEY_OPTIONS = [
   "-F", "none",
   "-o", "BatchMode=yes",
@@ -11,22 +10,25 @@ const SSH_HOST_KEY_OPTIONS = [
   "-o", "ServerAliveInterval=30",
   "-o", "ServerAliveCountMax=3",
 ];
-let activeTunnel = null;
-let tunnelStartPending = false;
-const activeCommands = new Set();
-let lastTunnelState = { status: "stopped", deviceId: null, username: "", message: "" };
 
 function sshExecutable() {
-  return process.platform === "win32" ? "ssh.exe" : "ssh";
+  return "ssh.exe";
 }
 
-function validateTerminal(device) {
+function validateTerminal(device, sshUser) {
   if (!device || device.category.toLocaleLowerCase("pl") !== "terminal") {
     throw Object.assign(new Error("Funkcje SSH są dostępne tylko dla kategorii Terminal."), { status: 400 });
   }
-  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(device.sshUser || "")) {
-    throw Object.assign(new Error("Ustaw prawidłową nazwę użytkownika SSH w danych terminala."), { status: 400 });
+  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(sshUser || "")) {
+    throw Object.assign(new Error("Ustaw globalną nazwę użytkownika SSH w Ustawieniach."), { status: 400 });
   }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/.test(device.hostName || "")) {
+    throw Object.assign(new Error("Nazwa hosta nie może być użyta jako cel połączenia SSH."), { status: 400 });
+  }
+}
+
+function quotePowerShell(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
 }
 
 async function getPrivateTarget(device) {
@@ -37,189 +39,110 @@ async function getPrivateTarget(device) {
   }
 }
 
-function commonSshArguments(device, target) {
+function vncTunnelArguments(device, target, sshUser) {
   return [
+    "-L", "5900:localhost:5900",
     ...SSH_HOST_KEY_OPTIONS,
-    "-l", device.sshUser,
-    target,
+    "-v",
+    "-N",
+    "-o", "ExitOnForwardFailure=yes",
+    "-o", `HostName=${target}`,
+    "-o", `HostKeyAlias=${device.hostName}`,
+    `${sshUser}@${device.hostName}`,
   ];
 }
 
-function appendOutput(current, chunk) {
-  const remaining = MAX_OUTPUT_LENGTH - current.length;
-  if (remaining <= 0) return current;
-  const text = chunk.toString("utf8");
-  return current + text.slice(0, remaining);
+function powerShellScript(args) {
+  const command = `ssh ${args.join(" ")}`;
+  const invocation = [sshExecutable(), ...args].map(quotePowerShell).join(" ");
+  return [
+    `Write-Host ${quotePowerShell(command)}`,
+    `& ${invocation}`,
+    "$sshExitCode = $LASTEXITCODE",
+    "if ($sshExitCode -ne 0) {",
+    "    Write-Host ('SSH zakończył się kodem ' + $sshExitCode)",
+    "    Read-Host 'Naciśnij Enter, aby zamknąć okno' | Out-Null",
+    "}",
+  ].join("\r\n");
 }
 
-async function runSshCommand(device, command) {
-  validateTerminal(device);
-  if (
-    typeof command !== "string" ||
-    !command.trim() ||
-    command.length > 2000 ||
-    /[\r\n\0]/.test(command)
-  ) {
-    throw Object.assign(new Error("Podaj jedno polecenie SSH (maksymalnie 2000 znaków, bez nowych linii)."), { status: 400 });
+function powerShellExecutable() {
+  const windowsDirectory = process.env.SystemRoot || process.env.WINDIR;
+  if (!windowsDirectory) {
+    throw Object.assign(new Error("Nie można ustalić lokalizacji Windows PowerShell."), { status: 503 });
   }
-  if (activeCommands.has(device.id)) {
-    throw Object.assign(new Error("Polecenie SSH dla tego terminala jest już wykonywane."), { status: 409 });
-  }
-  activeCommands.add(device.id);
-  try {
-    const target = await getPrivateTarget(device);
-    const args = [...commonSshArguments(device, target), command.trim()];
-    return await new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
-      let outputTruncated = false;
-      let totalOutputLength = 0;
-      let timedOut = false;
-      let timeout;
-      let child;
-      const finish = (error, result) => {
-        clearTimeout(timeout);
-        if (error) reject(error);
-        else resolve(result);
-      };
-
-      try {
-        child = spawn(sshExecutable(), args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-      } catch (error) {
-        finish(Object.assign(new Error(`Nie udało się uruchomić OpenSSH: ${error.message}`), { status: 503 }));
-        return;
-      }
-
-      child.stdout.on("data", (chunk) => {
-        const text = chunk.toString("utf8");
-        const remaining = MAX_OUTPUT_LENGTH - totalOutputLength;
-        if (text.length > remaining) outputTruncated = true;
-        const appended = text.slice(0, Math.max(0, remaining));
-        stdout += appended;
-        totalOutputLength += appended.length;
-      });
-      child.stderr.on("data", (chunk) => {
-        const text = chunk.toString("utf8");
-        const remaining = MAX_OUTPUT_LENGTH - totalOutputLength;
-        if (text.length > remaining) outputTruncated = true;
-        const appended = text.slice(0, Math.max(0, remaining));
-        stderr += appended;
-        totalOutputLength += appended.length;
-      });
-      child.on("error", (error) => {
-        finish(Object.assign(new Error(`Nie udało się uruchomić OpenSSH: ${error.message}`), { status: 503 }));
-      });
-      child.on("close", (exitCode) => {
-        finish(null, { exitCode, stdout, stderr, timedOut, outputTruncated });
-      });
-      timeout = setTimeout(() => {
-        timedOut = true;
-        child.kill();
-      }, COMMAND_TIMEOUT_MS);
-    });
-  } finally {
-    activeCommands.delete(device.id);
-  }
+  return path.join(windowsDirectory, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
 }
 
-function publicTunnelState(state) {
-  return {
-    status: state.status,
-    deviceId: state.deviceId,
-    username: state.username,
-    message: state.message,
-    address: state.status === "active" ? "127.0.0.1:5900" : "",
-  };
+function powerShellLauncherScript(script, executable) {
+  const encodedScript = Buffer.from(script, "utf16le").toString("base64");
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    `$windowArguments = @('-NoLogo', '-NoProfile', '-NoExit', '-EncodedCommand', '${encodedScript}')`,
+    "try {",
+    `    Start-Process -FilePath ${quotePowerShell(executable)} -ArgumentList $windowArguments -WindowStyle Normal -ErrorAction Stop | Out-Null`,
+    "    exit 0",
+    "} catch {",
+    "    [Console]::Error.WriteLine($_.Exception.Message)",
+    "    exit 1",
+    "}",
+  ].join("\r\n");
 }
 
-async function startVncTunnel(device) {
-  validateTerminal(device);
-  if (activeTunnel && activeTunnel.child.exitCode === null) {
-    if (activeTunnel.deviceId === device.id) return publicTunnelState(activeTunnel);
-    throw Object.assign(new Error("Zamknij najpierw aktywny tunel VNC do innego terminala."), { status: 409 });
-  }
-  if (tunnelStartPending) {
-    throw Object.assign(new Error("Uruchamianie tunelu VNC jest już w toku."), { status: 409 });
-  }
-
-  tunnelStartPending = true;
-  try {
-    const target = await getPrivateTarget(device);
-    const args = [
-      ...SSH_HOST_KEY_OPTIONS,
-      "-v",
-      "-N",
-      "-o", "ExitOnForwardFailure=yes",
-      "-L", "127.0.0.1:5900:127.0.0.1:5900",
-      ...commonSshArguments(device, target),
-    ];
+function launchPowerShellWindow(script) {
+  const executable = powerShellExecutable();
+  const launcherScript = powerShellLauncherScript(script, executable);
+  return new Promise((resolve, reject) => {
     let child;
+    let stderr = "";
     try {
-      child = spawn(sshExecutable(), args, { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
+      child = spawn(
+        executable,
+        ["-NoLogo", "-NoProfile", "-Command", launcherScript],
+        { stdio: ["ignore", "ignore", "pipe"], windowsHide: true },
+      );
     } catch (error) {
-      throw Object.assign(new Error(`Nie udało się uruchomić OpenSSH: ${error.message}`), { status: 503 });
+      reject(Object.assign(new Error(`Nie udało się otworzyć PowerShell: ${error.message}`), { status: 503 }));
+      return;
     }
 
-    const state = {
-      child,
-      deviceId: device.id,
-      username: device.sshUser,
-      status: "starting",
-      message: "",
-    };
-    activeTunnel = state;
-    lastTunnelState = state;
-    tunnelStartPending = false;
     child.stderr.on("data", (chunk) => {
-      if (state.status === "active") return;
-      state.message = appendOutput(state.message, chunk).slice(-2000);
-      if (/Local forwarding listening on 127\.0\.0\.1 port 5900/i.test(state.message)) {
-        state.status = "active";
-        state.message = "";
+      if (stderr.length < 2048) stderr += chunk.toString("utf8").slice(0, 2048 - stderr.length);
+    });
+    child.once("error", (error) => {
+      reject(Object.assign(new Error(`Nie udało się otworzyć PowerShell: ${error.message}`), { status: 503 }));
+    });
+    child.once("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
       }
+      reject(Object.assign(
+        new Error(
+          stderr.trim() ||
+          `PowerShell nie otworzył okna z tunelem (kod ${code === null ? "brak" : code}).`,
+        ),
+        { status: 503 },
+      ));
     });
-    child.on("error", (error) => {
-      state.status = "error";
-      state.message = `Nie udało się uruchomić OpenSSH: ${error.message}`;
-      if (activeTunnel === state) activeTunnel = null;
-    });
-    child.on("exit", (code, signal) => {
-      state.status = code === 0 || signal ? "stopped" : "error";
-      if (state.status === "error" && !state.message) {
-        state.message = `Połączenie SSH zakończyło się kodem ${code}.`;
-      }
-      if (activeTunnel === state) activeTunnel = null;
-    });
-    return publicTunnelState(state);
-  } catch (error) {
-    tunnelStartPending = false;
-    throw error;
-  }
+  });
 }
 
-function getVncTunnelState() {
-  return publicTunnelState(activeTunnel || lastTunnelState);
-}
-
-function stopVncTunnel(deviceId) {
-  if (!activeTunnel || activeTunnel.deviceId !== deviceId) {
-    throw Object.assign(new Error("Nie ma aktywnego tunelu VNC dla tego terminala."), { status: 404 });
+async function startVncTunnel(device, sshUser) {
+  validateTerminal(device, sshUser);
+  const target = await getPrivateTarget(device);
+  if (process.platform !== "win32") {
+    throw Object.assign(new Error("Otwieranie tunelu w PowerShell jest dostępne tylko w systemie Windows."), { status: 501 });
   }
-  activeTunnel.status = "stopping";
-  activeTunnel.child.kill();
-  return publicTunnelState(activeTunnel);
-}
 
-function closeVncTunnel() {
-  if (activeTunnel && activeTunnel.child.exitCode === null) {
-    activeTunnel.child.kill();
-  }
+  const args = vncTunnelArguments(device, target, sshUser);
+  await launchPowerShellWindow(powerShellScript(args));
+  return { launched: true };
 }
 
 module.exports = {
-  closeVncTunnel,
-  getVncTunnelState,
-  runSshCommand,
+  powerShellLauncherScript,
+  powerShellScript,
   startVncTunnel,
-  stopVncTunnel,
+  vncTunnelArguments,
 };

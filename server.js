@@ -13,20 +13,16 @@ const {
   getDevice,
   getDevices,
   getLocations,
+  getAppSettings,
   getSummary,
   saveDeviceStatus,
   updateCategory,
   updateDevice,
   updateLocation,
+  updateSshUser,
 } = require("./database");
 const { pingLocalTarget } = require("./ping");
-const {
-  closeVncTunnel,
-  getVncTunnelState,
-  runSshCommand,
-  startVncTunnel,
-  stopVncTunnel,
-} = require("./terminal");
+const { startVncTunnel } = require("./terminal");
 
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "0.0.0.0";
@@ -91,7 +87,6 @@ function validateDevice(input) {
     "hostName",
     "ip",
     "groupName",
-    "sshUser",
     "location",
     "description",
     "lineNumber",
@@ -100,14 +95,10 @@ function validateDevice(input) {
   const device = {};
   for (const field of textFields) {
     const value = input[field] === undefined ? "" : input[field];
-    const maxLength = field === "description" ? 5000 : field === "sshUser" ? 64 : 255;
-    if (typeof value !== "string" || value.length > maxLength) {
+    if (typeof value !== "string" || value.length > (field === "description" ? 5000 : 255)) {
       throw new HttpError(400, "Nieprawidłowa wartość jednego z pól maszyny.");
     }
     device[field] = value.trim();
-  }
-  if (device.sshUser && !/^[A-Za-z0-9_.-]+$/.test(device.sshUser)) {
-    throw new HttpError(400, "Nazwa użytkownika SSH może zawierać tylko litery, cyfry, kropki, myślniki i podkreślenia.");
   }
 
   const categoryId = Number(input.categoryId);
@@ -141,6 +132,21 @@ function validateNamedItem(input, label) {
   return input.name.trim();
 }
 
+function validateSshUsername(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new HttpError(400, "Nieprawidłowe ustawienia SSH.");
+  }
+  const username = input.sshUser;
+  if (
+    typeof username !== "string" ||
+    username.length > 64 ||
+    (username.trim() && !/^[A-Za-z0-9_.-]+$/.test(username.trim()))
+  ) {
+    throw new HttpError(400, "Nazwa użytkownika SSH może zawierać tylko litery, cyfry, kropki, myślniki i podkreślenia.");
+  }
+  return username.trim();
+}
+
 function isLoopbackAddress(address) {
   if (!address) return false;
   const normalized = address.toLowerCase().replace(/^::ffff:/, "");
@@ -161,10 +167,10 @@ function isLocalOrigin(request) {
   }
 }
 
-function assertLocalTerminalRequest(request, requireOrigin = true) {
+function assertLocalTerminalRequest(request) {
   if (
     !isLoopbackAddress(request.socket.remoteAddress) ||
-    (requireOrigin && !isLocalOrigin(request))
+    !isLocalOrigin(request)
   ) {
     throw new HttpError(403, "Funkcje SSH są dostępne wyłącznie lokalnie z aplikacji Lanwatch.");
   }
@@ -217,6 +223,16 @@ async function pingDeviceAndDependencies(deviceId) {
 }
 
 async function handleApi(request, response, pathname) {
+  if (pathname === "/api/settings" && request.method === "GET") {
+    sendJson(response, 200, getAppSettings());
+    return;
+  }
+  if (pathname === "/api/settings" && request.method === "PUT") {
+    assertLocalTerminalRequest(request);
+    const username = validateSshUsername(await readJson(request));
+    sendJson(response, 200, updateSshUser(username));
+    return;
+  }
   if (pathname === "/api/summary" && request.method === "GET") {
     sendJson(response, 200, getSummary());
     return;
@@ -280,33 +296,13 @@ async function handleApi(request, response, pathname) {
     return;
   }
 
-  const terminalMatch = pathname.match(/^\/api\/devices\/(\d+)\/terminal\/(command|tunnel)$/);
+  const terminalMatch = pathname.match(/^\/api\/devices\/(\d+)\/terminal\/tunnel$/);
   if (terminalMatch) {
     const deviceId = Number(terminalMatch[1]);
-    const action = terminalMatch[2];
-    if (action === "command" && request.method === "POST") {
+    if (request.method === "POST") {
       assertLocalTerminalRequest(request);
       const device = getTerminalDevice(deviceId);
-      const body = await readJson(request);
-      sendJson(response, 200, await runSshCommand(device, body.command));
-      return;
-    }
-    if (action === "tunnel" && request.method === "GET") {
-      assertLocalTerminalRequest(request, false);
-      getTerminalDevice(deviceId);
-      sendJson(response, 200, getVncTunnelState());
-      return;
-    }
-    if (action === "tunnel" && request.method === "POST") {
-      assertLocalTerminalRequest(request);
-      const device = getTerminalDevice(deviceId);
-      sendJson(response, 200, await startVncTunnel(device));
-      return;
-    }
-    if (action === "tunnel" && request.method === "DELETE") {
-      assertLocalTerminalRequest(request);
-      getTerminalDevice(deviceId);
-      sendJson(response, 200, stopVncTunnel(deviceId));
+      sendJson(response, 200, await startVncTunnel(device, getAppSettings().sshUser));
       return;
     }
   }
@@ -321,27 +317,12 @@ async function handleApi(request, response, pathname) {
   const deviceMatch = pathname.match(/^\/api\/devices\/(\d+)$/);
   if (deviceMatch && request.method === "PUT") {
     const deviceId = Number(deviceMatch[1]);
-    const existing = getDevice(deviceId);
     const device = updateDevice(deviceId, validateDevice(await readJson(request)));
-    const tunnel = getVncTunnelState();
-    if (
-      tunnel.deviceId === deviceId &&
-      (existing?.hostName !== device.hostName ||
-        existing?.ip !== device.ip ||
-        existing?.sshUser !== device.sshUser ||
-        existing?.categoryId !== device.categoryId)
-    ) {
-      stopVncTunnel(deviceId);
-    }
     sendJson(response, 200, device);
     return;
   }
   if (deviceMatch && request.method === "DELETE") {
     const deviceId = Number(deviceMatch[1]);
-    const tunnel = getVncTunnelState();
-    if (tunnel.deviceId === deviceId && ["starting", "active"].includes(tunnel.status)) {
-      stopVncTunnel(deviceId);
-    }
     deleteDevice(deviceId);
     sendJson(response, 200, { ok: true });
     return;
@@ -385,7 +366,6 @@ server.listen(port, host, () => {
 });
 
 function shutdown() {
-  closeVncTunnel();
   server.close(() => process.exit(0));
 }
 

@@ -287,18 +287,6 @@ button, input, select, textarea { font: inherit; }
 .settings-empty { margin: 0; padding: 19px 0; color: var(--muted); font-size: 11px; }
 .settings-preference-card { max-width: 100%; }
 .page-size-select { max-width: 140px; }
-.terminal-dialog { width: min(760px, calc(100vw - 48px)); }
-.terminal-content { display: grid; gap: 20px; padding: 21px 24px; }
-.terminal-content h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; }
-.terminal-tunnel-section { padding: 15px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-muted); }
-.terminal-tunnel-section p { margin: 0 0 8px; color: var(--muted); font-size: 11px; }
-.terminal-tunnel-section .terminal-endpoint { color: var(--text); }
-.terminal-endpoint code { color: var(--accent); }
-.terminal-actions, .terminal-command-row { display: flex; align-items: center; gap: 9px; }
-.terminal-actions .btn, .terminal-command-row .btn { flex: 0 0 auto; font-size: 11px; }
-.terminal-content form label { display: block; margin-bottom: 7px; font-size: 11px; font-weight: 650; }
-.terminal-content form > small { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; }
-.terminal-output { min-height: 90px; max-height: 260px; overflow: auto; margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-muted); color: var(--text); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ping-results-dialog { width: min(840px, calc(100vw - 48px)); }
 .ping-results-wrap { padding: 4px 24px; }
 .ping-results-table { margin: 0; color: var(--text); }
@@ -306,7 +294,7 @@ button, input, select, textarea { font: inherit; }
 .ping-results-table td { padding: 12px 9px; border-color: var(--border); color: var(--text); font-size: 11px; }
 .ping-results-table > :not(caption) > * > * { background: transparent; }
 .ping-message { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; white-space: normal; }
-.alert-stack { position: fixed; z-index: 20; top: 18px; right: 22px; width: 340px; }
+.alert-stack { position: fixed; z-index: 20; right: 22px; bottom: 18px; width: 340px; }
 .notification { margin-bottom: 8px; box-shadow: var(--shadow); font-size: 12px; }
 
 :root[data-theme="dark"] .btn-outline-secondary { --bs-btn-color: var(--text); --bs-btn-border-color: var(--border); --bs-btn-hover-bg: var(--surface-muted); --bs-btn-hover-color: var(--text); --bs-btn-hover-border-color: var(--border); }

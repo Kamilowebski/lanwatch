@@ -33,7 +33,7 @@ async function waitForServer(child, url) {
   throw new Error("Lanwatch server did not become ready.", { cause: lastError });
 }
 
-test("validates duplicate device identifiers, expires old online status, and protects SSH routes", async (t) => {
+test("validates devices, expires old online status, and restricts SSH tunnel launching", async (t) => {
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "lanwatch-test-"));
   const databasePath = path.join(temporaryDirectory, "lanwatch.sqlite");
   const port = await findAvailablePort();
@@ -91,12 +91,35 @@ test("validates duplicate device identifiers, expires old online status, and pro
   const terminalCategory = categories.result.find((category) => category.name === "Terminal");
   const locationResponse = await request("/api/locations", "POST", { name: "Test lokalizacja" });
   const location = locationResponse.result;
+  const initialSettings = await request("/api/settings");
+  assert.deepEqual(initialSettings.result, { sshUser: "" });
+  const remoteSettingsUpdate = await request(
+    "/api/settings",
+    "PUT",
+    { sshUser: "admin" },
+    { Origin: "http://attacker.example" },
+  );
+  assert.equal(remoteSettingsUpdate.status, 403);
+  const savedSettings = await request(
+    "/api/settings",
+    "PUT",
+    { sshUser: "StarachowiceSWRBis" },
+    { Origin: baseUrl },
+  );
+  assert.equal(savedSettings.status, 200);
+  assert.deepEqual(savedSettings.result, { sshUser: "StarachowiceSWRBis" });
+  const invalidSshUser = await request(
+    "/api/settings",
+    "PUT",
+    { sshUser: "admin;id" },
+    { Origin: baseUrl },
+  );
+  assert.equal(invalidSshUser.status, 400);
   const newDevice = (hostName, ip) => ({
     hostName,
     ip,
     location: location.name,
     categoryId: terminalCategory.id,
-    sshUser: "admin",
     dependencyIds: [],
   });
   const first = await request(
@@ -105,14 +128,7 @@ test("validates duplicate device identifiers, expires old online status, and pro
     newDevice("Terminal A", "192.168.10.10"),
   );
   assert.equal(first.status, 201);
-  assert.equal(first.result.sshUser, "admin");
-
-  const invalidSshUser = await request(
-    "/api/devices",
-    "POST",
-    { ...newDevice("Terminal Invalid", ""), sshUser: "admin;id" },
-  );
-  assert.equal(invalidSshUser.status, 400);
+  assert.equal("sshUser" in first.result, false);
 
   const duplicateHost = await request(
     "/api/devices",
@@ -146,24 +162,28 @@ test("validates duplicate device identifiers, expires old online status, and pro
   );
   assert.equal(sameDeviceUpdate.status, 200);
 
-  const forbiddenCommand = await request(
+  const forbiddenTunnel = await request(
+    `/api/devices/${first.result.id}/terminal/tunnel`,
+    "POST",
+    undefined,
+    { Origin: "http://attacker.example" },
+  );
+  assert.equal(forbiddenTunnel.status, 403);
+
+  const removedBrowserCommand = await request(
     `/api/devices/${first.result.id}/terminal/command`,
     "POST",
     { command: "whoami" },
-    { Origin: "http://attacker.example" },
-  );
-  assert.equal(forbiddenCommand.status, 403);
-
-  const emptyCommand = await request(
-    `/api/devices/${first.result.id}/terminal/command`,
-    "POST",
-    { command: "" },
     { Origin: baseUrl },
   );
-  assert.equal(emptyCommand.status, 400);
+  assert.equal(removedBrowserCommand.status, 404);
 
   const database = new DatabaseSync(databasePath);
   try {
+    const storedSshUser = database
+      .prepare("SELECT value FROM app_settings WHERE key = 'ssh_user'")
+      .get();
+    assert.equal(storedSshUser.value, "StarachowiceSWRBis");
     const checkedAt = new Date().toISOString();
     database.prepare(`
       INSERT OR REPLACE INTO device_status (device_id, status, checked_at, replies, target, message)

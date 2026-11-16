@@ -9,7 +9,7 @@ Bootstrap, a dane są przechowywane w SQLite.
 - Node.js w wersji 22.5 lub nowszej (wymagana wbudowana obsługa `node:sqlite`)
 - npm
 - Dostęp do internetu w przeglądarce, aby pobrać arkusz stylów Bootstrap z CDN
-- Klient OpenSSH na komputerze z serwerem (dla funkcji terminala)
+- Windows PowerShell i klient OpenSSH na komputerze z serwerem (dla tunelu VNC)
 
 ## Uruchomienie
 
@@ -75,18 +75,23 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Status Online wygasa po 5 minutach od ostatniego sprawdzenia i zmienia się na
   „Nieustalony”. Widok odświeża się po upływie tego czasu; nie uruchamia to
   kolejnych pingów.
-- Dla kategorii „Terminal” można skonfigurować użytkownika SSH, uruchomić
-  pojedyncze polecenie albo tunel VNC. Funkcje korzystają z systemowego
-  OpenSSH, kluczy/ssh-agent konta uruchamiającego serwer i ścisłej weryfikacji
-  klucza hosta. Lanwatch nie zapisuje haseł SSH.
-- Polecenia SSH można wysyłać tylko z aplikacji otwartej lokalnie na komputerze
-  serwera. Każde polecenie jest uruchamiane ręcznie, ma limit 30 sekund i
-  maksymalnie 2000 znaków; wyjście jest ograniczone do 32 KB. SSH łączy się
-  tylko z lokalnym adresem urządzenia.
-- Tunel VNC nasłuchuje wyłącznie na `127.0.0.1:5900`; TigerVNC należy uruchomić
-  na tym samym komputerze i połączyć z `127.0.0.1:5900`. Nieznany klucz SSH
-  zostanie odrzucony — przed pierwszym połączeniem zweryfikuj odcisk klucza i
-  dodaj go do `known_hosts` konta uruchamiającego Lanwatch.
+- Dla kategorii „Terminal” wspólnego użytkownika SSH konfiguruje się w
+  „Ustawieniach”; nie trzeba podawać go osobno dla każdej maszyny. Połączenie
+  używa nazwy hosta, np. `ssh StarachowiceSWRBis@T104-0173`, i jest
+  uwierzytelniane przez klucze/ssh-agent konta Windows uruchamiającego serwer.
+  Lanwatch nie zapisuje haseł SSH.
+- Przycisk „Tunel VNC” otwiera okno PowerShell i uruchamia w nim OpenSSH;
+  przeglądarka nie wykonuje poleceń SSH ani nie pokazuje zdalnego terminala.
+  Polecenie tunelu ma postać
+  `ssh -L 5900:localhost:5900 użytkownik@nazwa-hosta`; nasłuchuje lokalnie na
+  porcie 5900. Mały komunikat w aplikacji potwierdza uruchomienie okna. Zamknij
+  okno PowerShell, aby zakończyć tunel. TigerVNC uruchom na tym samym komputerze
+  i połącz z `127.0.0.1:5900`.
+- Lanwatch przypina połączenie do wcześniej zweryfikowanego prywatnego adresu
+  maszyny, odrzuca nieznane klucze hosta i używa systemowego `known_hosts`.
+  Przed pierwszym połączeniem zweryfikuj odcisk klucza hosta. Widoczne okno
+  PowerShell wymaga uruchomienia Lanwatch w aktywnej sesji użytkownika Windows,
+  nie jako usługi systemowej.
 - Jasny i ciemny motyw zapamiętywany w przeglądarce.
 
 Ping jest uruchamiany wyłącznie po kliknięciu i tylko do adresów lokalnych:
@@ -99,9 +104,9 @@ sond TCP/UDP ani skanowania portów, nie ma też automatycznego odpytywania w tl
 
 Aplikacja nie ma logowania ani kontroli dostępu. Udostępniaj ją tylko w zaufanej
 sieci; aby ograniczyć dostęp do komputera lokalnego, ustaw `HOST` na
-`127.0.0.1`. Operacje SSH dodatkowo odrzucają żądania spoza loopbacku i żądania
-bez lokalnego źródła przeglądarki. Używaj adresu `http://localhost:3000`, aby
-otworzyć funkcje SSH i tunel VNC.
+`127.0.0.1`. Uruchamianie tunelu SSH i zmiana globalnego użytkownika SSH
+odrzucają żądania spoza loopbacku i żądania bez lokalnego źródła przeglądarki.
+Używaj adresu `http://localhost:3000`, aby otwierać okna PowerShell z tunelami.
 
 ## Zasada aktualizacji dokumentacji
 

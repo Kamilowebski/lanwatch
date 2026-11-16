@@ -28,18 +28,9 @@ const elements = {
   previousPage: document.getElementById("previous-page"),
   nextPage: document.getElementById("next-page"),
   search: document.getElementById("device-search"),
-  sshUser: document.getElementById("ssh-user"),
-  sshUserField: document.getElementById("ssh-user-field"),
+  sshUser: document.getElementById("ssh-user-setting"),
+  sshSettingsForm: document.getElementById("ssh-settings-form"),
   hostNameFeedback: document.getElementById("host-name-feedback"),
-  terminalDialog: document.getElementById("terminal-dialog"),
-  terminalDetails: document.getElementById("terminal-device-details"),
-  terminalStatus: document.getElementById("terminal-tunnel-status"),
-  sshCommand: document.getElementById("ssh-command"),
-  sshCommandForm: document.getElementById("ssh-command-form"),
-  sshCommandOutput: document.getElementById("ssh-command-output"),
-  runSshCommand: document.getElementById("run-ssh-command"),
-  startVncTunnel: document.getElementById("start-vnc-tunnel"),
-  stopVncTunnel: document.getElementById("stop-vnc-tunnel"),
 };
 
 const namedItemConfig = {
@@ -68,6 +59,7 @@ const namedItemConfig = {
 let devices = [];
 let categories = [];
 let locations = [];
+let sshUser = "";
 const editingIds = { category: null, location: null };
 const allowedPageSizes = [10, 20, 50, 100];
 const savedPageSize = Number(localStorage.getItem("lanwatch-page-size"));
@@ -79,8 +71,6 @@ let statusFilter = "";
 let dependencyCurrentDeviceId = null;
 let selectedDependencyIds = new Set();
 let statusExpiryTimer = null;
-let tunnelStatusTimer = null;
-let activeTerminalDevice = null;
 const expandedGroups = new Set();
 
 async function api(url, options = {}) {
@@ -218,6 +208,7 @@ function renderSettings() {
     locationFilter,
   );
   elements.pageSize.value = String(pageSize);
+  if (document.activeElement !== elements.sshUser) elements.sshUser.value = sshUser;
 }
 
 function renderDependencies(selectedIds = [], currentDeviceId = null) {
@@ -314,15 +305,6 @@ function updateDeviceIdentifierValidation() {
 
 function isTerminalDevice(device) {
   return device.category.toLocaleLowerCase("pl") === "terminal";
-}
-
-function updateSshUserVisibility() {
-  const categoryId = Number(elements.categories.value);
-  const category = categories.find((item) => item.id === categoryId);
-  elements.sshUserField.classList.toggle(
-    "d-none",
-    !category || category.name.toLocaleLowerCase("pl") !== "terminal",
-  );
 }
 
 function scheduleStatusExpiry(ttlMs) {
@@ -465,11 +447,11 @@ function renderDeviceRow(device, isGroupMember = false) {
     const terminal = document.createElement("button");
     terminal.className = "row-action";
     terminal.type = "button";
-    terminal.textContent = "SSH / VNC";
-    terminal.title = device.sshUser
-      ? `Otwórz SSH jako ${device.sshUser}`
-      : "Najpierw ustaw użytkownika SSH w edycji terminala.";
-    terminal.addEventListener("click", () => openTerminalDialog(device));
+    terminal.textContent = "Tunel VNC";
+    terminal.title = sshUser
+      ? `Uruchom tunel SSH jako ${sshUser} w nowym oknie PowerShell`
+      : "Najpierw ustaw globalnego użytkownika SSH w Ustawieniach.";
+    terminal.addEventListener("click", () => openTunnelInPowerShell(device, terminal));
     actionsCell.append(terminal);
   }
   const edit = document.createElement("button");
@@ -568,15 +550,17 @@ function renderDevices() {
 }
 
 async function refresh() {
-  const [nextDevices, nextCategories, nextLocations, summary] = await Promise.all([
+  const [nextDevices, nextCategories, nextLocations, summary, settings] = await Promise.all([
     api("/api/devices"),
     api("/api/categories"),
     api("/api/locations"),
     api("/api/summary"),
+    api("/api/settings"),
   ]);
   devices = nextDevices;
   categories = nextCategories;
   locations = nextLocations;
+  sshUser = settings.sshUser;
   renderSettings();
   renderDevices();
   renderSummary(summary);
@@ -593,13 +577,11 @@ function openDeviceForm(device = null) {
   elements.deviceHostName.value = device?.hostName || "";
   elements.deviceIp.value = device?.ip || "";
   document.getElementById("group-name").value = device?.groupName || "";
-  elements.sshUser.value = device?.sshUser || "";
   elements.locations.value = device?.location || (locations.length === 1 ? locations[0].name : "");
   document.getElementById("line-number").value = device?.lineNumber || "";
   document.getElementById("numerator").value = device?.numerator || "";
   document.getElementById("device-description").value = device?.description || "";
   elements.categories.value = device?.categoryId || categories[0]?.id || "";
-  updateSshUserVisibility();
   updateDeviceIdentifierValidation();
   renderDependencies(device?.dependencyIds || [], device?.id || null);
   elements.deviceDialog.showModal();
@@ -670,117 +652,33 @@ async function removeDevice(device) {
   }
 }
 
-function renderTunnelState(state) {
-  if (!activeTerminalDevice) return;
-  const isThisDevice = state.deviceId === activeTerminalDevice.id;
-  const isBusy = state.status === "starting" || state.status === "active";
-  const statusLabels = {
-    starting: "Łączenie z terminalem…",
-    active: isThisDevice ? "Tunel VNC jest aktywny." : "Tunel działa dla innego terminala.",
-    stopping: "Zamykanie tunelu…",
-    stopped: "Tunel nieaktywny.",
-    error: "Nie udało się uruchomić tunelu.",
-  };
-  const label = isThisDevice
-    ? statusLabels[state.status] || "Tunel nieaktywny."
-    : isBusy
-      ? statusLabels.active
-      : statusLabels.stopped;
-  elements.terminalStatus.textContent = state.message && isThisDevice
-    ? `${label} ${state.message}`
-    : label;
-  elements.startVncTunnel.disabled = !activeTerminalDevice.sshUser || isBusy;
-  elements.stopVncTunnel.classList.toggle(
-    "d-none",
-    !isThisDevice || !["starting", "active", "stopping"].includes(state.status),
-  );
-  elements.runSshCommand.disabled = !activeTerminalDevice.sshUser;
-  elements.terminalDetails.textContent =
-    `${activeTerminalDevice.hostName} · SSH ${activeTerminalDevice.sshUser || "nie skonfigurowano"}`;
-
-  window.clearTimeout(tunnelStatusTimer);
-  if (elements.terminalDialog.open && isBusy) {
-    tunnelStatusTimer = window.setTimeout(() => refreshTunnelStatus(), 1500);
-  }
-}
-
-async function refreshTunnelStatus() {
-  if (!activeTerminalDevice || !elements.terminalDialog.open) return;
+async function saveSshSettings(event) {
+  event.preventDefault();
   try {
-    const state = await api(`/api/devices/${activeTerminalDevice.id}/terminal/tunnel`);
-    renderTunnelState(state);
+    const settings = await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ sshUser: elements.sshUser.value.trim() }),
+    });
+    sshUser = settings.sshUser;
+    elements.sshUser.value = sshUser;
+    notify("Ustawienia SSH zostały zapisane.");
   } catch (error) {
-    elements.terminalStatus.textContent = error.message;
+    notify(error.message, "danger");
   }
 }
 
-function openTerminalDialog(device) {
-  activeTerminalDevice = device;
-  elements.terminalDialog.querySelector("#terminal-dialog-title").textContent = "SSH / VNC";
-  elements.terminalDetails.textContent =
-    `${device.hostName} · SSH ${device.sshUser || "nie skonfigurowano"}`;
-  elements.sshCommand.value = "";
-  elements.sshCommandOutput.textContent = "";
-  elements.terminalStatus.textContent = "Sprawdzanie tunelu…";
-  elements.terminalDialog.showModal();
-  refreshTunnelStatus();
-}
-
-async function startTerminalTunnel() {
-  if (!activeTerminalDevice) return;
-  elements.startVncTunnel.disabled = true;
+async function openTunnelInPowerShell(device, button) {
+  button.disabled = true;
   try {
-    const state = await api(
-      `/api/devices/${activeTerminalDevice.id}/terminal/tunnel`,
+    await api(
+      `/api/devices/${device.id}/terminal/tunnel`,
       { method: "POST" },
     );
-    renderTunnelState(state);
-  } catch (error) {
-    notify(error.message, "danger");
-    elements.startVncTunnel.disabled = false;
-  }
-}
-
-async function stopTerminalTunnel() {
-  if (!activeTerminalDevice) return;
-  elements.stopVncTunnel.disabled = true;
-  try {
-    const state = await api(
-      `/api/devices/${activeTerminalDevice.id}/terminal/tunnel`,
-      { method: "DELETE" },
-    );
-    renderTunnelState(state);
+    notify(`Uruchomiono tunel dla ${device.hostName} w oknie PowerShell.`);
   } catch (error) {
     notify(error.message, "danger");
   } finally {
-    elements.stopVncTunnel.disabled = false;
-  }
-}
-
-async function executeSshCommand(event) {
-  event.preventDefault();
-  if (!activeTerminalDevice) return;
-  elements.runSshCommand.disabled = true;
-  elements.sshCommandOutput.textContent = "Łączenie przez SSH…";
-  try {
-    const result = await api(
-      `/api/devices/${activeTerminalDevice.id}/terminal/command`,
-      {
-        method: "POST",
-        body: JSON.stringify({ command: elements.sshCommand.value }),
-      },
-    );
-    const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
-    elements.sshCommandOutput.textContent = [
-      `Kod zakończenia: ${result.exitCode === null ? "brak" : result.exitCode}`,
-      result.timedOut ? "Polecenie przerwano po przekroczeniu limitu 30 sekund." : "",
-      result.outputTruncated ? "Wyjście zostało skrócone do 32 KB." : "",
-      output || "(brak wyjścia)",
-    ].filter(Boolean).join("\n\n");
-  } catch (error) {
-    elements.sshCommandOutput.textContent = error.message;
-  } finally {
-    elements.runSshCommand.disabled = !activeTerminalDevice.sshUser;
+    if (button.isConnected) button.disabled = false;
   }
 }
 
@@ -855,7 +753,7 @@ document.getElementById("add-device").addEventListener("click", () => openDevice
 document.getElementById("empty-add-device").addEventListener("click", () => openDeviceForm());
 elements.deviceHostName.addEventListener("input", updateDeviceIdentifierValidation);
 elements.deviceIp.addEventListener("input", updateDeviceIdentifierValidation);
-elements.categories.addEventListener("change", updateSshUserVisibility);
+elements.sshSettingsForm.addEventListener("submit", saveSshSettings);
 elements.search.addEventListener("input", () => {
   currentPage = 1;
   renderDevices();
@@ -896,12 +794,6 @@ elements.pageSize.addEventListener("change", () => {
   renderDevices();
 });
 elements.dependencySearch.addEventListener("input", renderDependencyOptions);
-elements.startVncTunnel.addEventListener("click", startTerminalTunnel);
-elements.stopVncTunnel.addEventListener("click", stopTerminalTunnel);
-elements.sshCommandForm.addEventListener("submit", executeSshCommand);
-elements.terminalDialog.addEventListener("close", () => {
-  window.clearTimeout(tunnelStatusTimer);
-});
 elements.categoryForm.addEventListener("submit", (event) => saveNamedItem("category", event));
 elements.locationForm.addEventListener("submit", (event) => saveNamedItem("location", event));
 namedItemConfig.category.cancelButton.addEventListener("click", () => resetNamedItemEdit("category"));
@@ -920,7 +812,6 @@ elements.deviceForm.addEventListener("submit", async (event) => {
     groupName: device.groupName,
     location: device.location,
     categoryId: device.categoryId,
-    sshUser: device.sshUser,
   };
   try {
     await api(id ? `/api/devices/${id}` : "/api/devices", {
@@ -931,10 +822,8 @@ elements.deviceForm.addEventListener("submit", async (event) => {
     if (addNext) {
       elements.deviceForm.reset();
       document.getElementById("group-name").value = nextDefaults.groupName;
-      elements.sshUser.value = nextDefaults.sshUser;
       elements.locations.value = nextDefaults.location;
       elements.categories.value = nextDefaults.categoryId;
-      updateSshUserVisibility();
       updateDeviceIdentifierValidation();
       renderDependencies();
       elements.deviceHostName.focus();

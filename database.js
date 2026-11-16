@@ -36,12 +36,16 @@ database.exec(`
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE
   );
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  INSERT OR IGNORE INTO app_settings (key, value) VALUES ('ssh_user', '');
   CREATE TABLE IF NOT EXISTS devices (
     id INTEGER PRIMARY KEY,
     host_name TEXT NOT NULL,
     ip TEXT NOT NULL,
     group_name TEXT NOT NULL DEFAULT '',
-    ssh_user TEXT NOT NULL DEFAULT '',
     location TEXT NOT NULL,
     category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
     description TEXT NOT NULL DEFAULT '',
@@ -67,9 +71,6 @@ database.exec(`
 const deviceColumns = database.prepare("PRAGMA table_info(devices)").all();
 if (!deviceColumns.some((column) => column.name === "group_name")) {
   database.exec("ALTER TABLE devices ADD COLUMN group_name TEXT NOT NULL DEFAULT ''");
-}
-if (!deviceColumns.some((column) => column.name === "ssh_user")) {
-  database.exec("ALTER TABLE devices ADD COLUMN ssh_user TEXT NOT NULL DEFAULT ''");
 }
 
 database.exec(`
@@ -108,7 +109,6 @@ function getLocationByName(name) {
 function getDevice(id) {
   const device = database.prepare(`
     SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
-      d.ssh_user AS sshUser,
       d.category_id AS categoryId, c.name AS category,
       d.description, d.line_number AS lineNumber, d.numerator,
       ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
@@ -167,7 +167,6 @@ function getLocations() {
 function getDevices() {
   const devices = database.prepare(`
     SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
-      d.ssh_user AS sshUser,
       d.category_id AS categoryId, c.name AS category,
       d.description, d.line_number AS lineNumber, d.numerator,
       ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
@@ -206,6 +205,19 @@ function getSummary() {
     LEFT JOIN device_status s ON s.device_id = d.id
   `).get();
   return { ...summary, onlineTtlMs: ONLINE_STATUS_TTL_MS };
+}
+
+function getAppSettings() {
+  const setting = database.prepare("SELECT value FROM app_settings WHERE key = 'ssh_user'").get();
+  return { sshUser: setting?.value || "" };
+}
+
+function updateSshUser(sshUser) {
+  database.prepare(`
+    INSERT INTO app_settings (key, value) VALUES ('ssh_user', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(sshUser);
+  return getAppSettings();
 }
 
 function saveDeviceStatus(deviceId, result) {
@@ -340,13 +352,12 @@ function createDevice(device) {
   const id = withTransaction(() => {
     assertDeviceIdentifiersUnique(device);
     const result = database.prepare(`
-      INSERT INTO devices (host_name, ip, group_name, ssh_user, location, category_id, description, line_number, numerator)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (host_name, ip, group_name, location, category_id, description, line_number, numerator)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       device.hostName,
       device.ip,
       device.groupName,
-      device.sshUser,
       location.name,
       device.categoryId,
       device.description,
@@ -376,14 +387,13 @@ function updateDevice(id, device) {
     assertDeviceIdentifiersUnique(device, id);
     database.prepare(`
       UPDATE devices
-      SET host_name = ?, ip = ?, group_name = ?, ssh_user = ?, location = ?, category_id = ?,
+      SET host_name = ?, ip = ?, group_name = ?, location = ?, category_id = ?,
         description = ?, line_number = ?, numerator = ?
       WHERE id = ?
     `).run(
       device.hostName,
       device.ip,
       device.groupName,
-      device.sshUser,
       location.name,
       device.categoryId,
       device.description,
@@ -417,9 +427,11 @@ module.exports = {
   getDevice,
   getDevices,
   getLocations,
+  getAppSettings,
   getSummary,
   saveDeviceStatus,
   updateCategory,
   updateDevice,
   updateLocation,
+  updateSshUser,
 };
