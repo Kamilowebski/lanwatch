@@ -70,6 +70,8 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Ręczne sprawdzanie dostępności po kliknięciu statusu maszyny. Aplikacja używa
   wyłącznie systemowego polecenia `ping` (ICMP), wysyła trzy próby i sprawdza
   także pozostałe elementy tej samej grupy oraz ich bezpośrednie zależności.
+  Przycisk „Pinguj widoczne” sprawdza osobno maszyny z bieżącej strony wyników,
+  bez sprawdzania ich zależności i bez otwierania raportu.
 - Wyniki pingowania i czas ostatniego sprawdzenia są zapisywane w bazie oraz
   pokazywane w tabeli i dashboardzie. Status „Brak odpowiedzi” oznacza brak
   odpowiedzi na wszystkie trzy próby ICMP, nie pewność, że urządzenie jest
@@ -77,8 +79,10 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Status Online wygasa po 5 minutach od ostatniego sprawdzenia i zmienia się na
   „Nieustalony”. Widok odświeża się po upływie tego czasu; nie uruchamia to
   kolejnych pingów.
-- Zakładka „Monitor” pokazuje status i opóźnienie maszyn oraz pozwala włączyć
-  monitoring wybranych urządzeń. Aktywne maszyny są sprawdzane co 15 sekund,
+- Monitoring pojedynczej maszyny włącza się przyciskiem „Monitor” w jej wierszu
+  zakładki „Maszyny”; nie włącza on monitorowania grupy ani zależności. Zakładka
+  „Monitor” pokazuje tylko wybrane maszyny, ich status i opóźnienie. Aktywne
+  maszyny są sprawdzane co 15 sekund,
   a widok odświeża się co 5 sekund. Dla każdej maszyny można osobno włączyć
   powiadomienia o przejściu online i braku odpowiedzi. Powiadomienia wymagają
   otwartej karty Lanwatch, a systemowe dodatkowo zgody przeglądarki.

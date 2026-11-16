@@ -144,6 +144,10 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     { enabled: true, notifyOnline: "yes", notifyOffline: false },
   );
   assert.equal(invalidMonitorSettings.status, 400);
+  const invalidBulkPing = await request("/api/ping", "POST", { deviceIds: ["1"] });
+  assert.equal(invalidBulkPing.status, 400);
+  const emptyBulkPing = await request("/api/ping", "POST", { deviceIds: [] });
+  assert.equal(emptyBulkPing.status, 400);
   const monitorSettings = await request(
     `/api/devices/${first.result.id}/monitor`,
     "PUT",
@@ -221,6 +225,23 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
       .prepare("SELECT value FROM app_settings WHERE key = 'ssh_user'")
       .get();
     assert.equal(storedSshUser.value, "StarachowiceSWRBis");
+    database.prepare(`
+      INSERT INTO device_dependencies (device_id, dependency_id) VALUES (?, ?)
+    `).run(first.result.id, second.result.id);
+    await request(
+      `/api/devices/${first.result.id}/monitor`,
+      "PUT",
+      { enabled: true, notifyOnline: false, notifyOffline: false },
+    );
+    const monitorSelection = await request("/api/devices");
+    assert.equal(
+      monitorSelection.result.find((device) => device.id === first.result.id).monitorEnabled,
+      true,
+    );
+    assert.equal(
+      monitorSelection.result.find((device) => device.id === second.result.id).monitorEnabled,
+      false,
+    );
     const migratedStatusColumns = database.prepare("PRAGMA table_info(device_status)").all();
     assert.ok(migratedStatusColumns.some((column) => column.name === "latency_ms"));
     const checkedAt = new Date().toISOString();

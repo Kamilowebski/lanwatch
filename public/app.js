@@ -25,6 +25,7 @@ const elements = {
   notifications: document.getElementById("notifications"),
   pingResultsDialog: document.getElementById("ping-results-dialog"),
   pingResultsList: document.getElementById("ping-results-list"),
+  pingVisibleDevices: document.getElementById("ping-visible-devices"),
   pageIndicator: document.getElementById("page-indicator"),
   pageSize: document.getElementById("page-size-setting"),
   previousPage: document.getElementById("previous-page"),
@@ -76,6 +77,7 @@ let statusExpiryTimer = null;
 const expandedGroups = new Set();
 const knownMonitorStatuses = new Map();
 let hasLoadedMonitorStatuses = false;
+let visiblePageDeviceIds = [];
 
 async function api(url, options = {}) {
   const response = await fetch(url, {
@@ -106,11 +108,17 @@ function setTheme(theme) {
     theme === "dark" ? "Jasny motyw" : "Ciemny motyw";
 }
 
-function renderSummary(summary) {
-  document.getElementById("summary-devices").textContent = summary.devices;
-  document.getElementById("summary-online").textContent = summary.online;
-  document.getElementById("summary-offline").textContent = summary.offline;
-  document.getElementById("summary-unchecked").textContent = summary.unchecked;
+function renderSummary(summaryDevices, hasFilters) {
+  const uniqueDevices = [...new Map(summaryDevices.map((device) => [device.id, device])).values()];
+  document.getElementById("summary-devices-label").textContent =
+    hasFilters ? "Maszyny w wynikach" : "Wszystkie maszyny";
+  document.getElementById("summary-devices").textContent = uniqueDevices.length;
+  document.getElementById("summary-online").textContent =
+    uniqueDevices.filter((device) => device.status === "online").length;
+  document.getElementById("summary-offline").textContent =
+    uniqueDevices.filter((device) => device.status === "offline").length;
+  document.getElementById("summary-unchecked").textContent =
+    uniqueDevices.filter((device) => device.status === "unknown").length;
 }
 
 function renderSelect(select, items, selectedValue, itemLabel) {
@@ -183,16 +191,17 @@ function renderNamedItems(type, items) {
 }
 
 function renderSettings() {
+  const preserveFormSelection = elements.deviceDialog.open;
   renderSelect(
     elements.categories,
     categories.map((category) => ({ value: category.id, name: category.name })),
-    "",
+    preserveFormSelection ? elements.categories.value : "",
     "kategorię",
   );
   renderSelect(
     elements.locations,
     locations.map((location) => ({ value: location.name, name: location.name })),
-    "",
+    preserveFormSelection ? elements.locations.value : "",
     "lokalizację",
   );
   renderNamedItems("category", categories);
@@ -504,6 +513,20 @@ function renderDeviceRow(device, isGroupMember = false) {
 
   const actionsCell = document.createElement("td");
   actionsCell.className = "actions-cell";
+  const monitor = document.createElement("button");
+  monitor.className = "row-action";
+  monitor.type = "button";
+  monitor.textContent = device.monitorEnabled ? "Wyłącz monitor" : "Monitor";
+  monitor.setAttribute(
+    "aria-label",
+    `${device.monitorEnabled ? "Wyłącz monitor" : "Włącz monitor"}: ${device.hostName}`,
+  );
+  monitor.addEventListener("click", () => saveMonitorSettings(device, {
+    enabled: !device.monitorEnabled,
+    notifyOnline: Boolean(device.notifyOnline),
+    notifyOffline: Boolean(device.notifyOffline),
+  }));
+  actionsCell.append(monitor);
   if (isTerminalDevice(device)) {
     const terminal = document.createElement("button");
     terminal.className = "row-action";
@@ -578,6 +601,13 @@ function renderDevices() {
   currentPage = Math.min(currentPage, pageCount);
   const start = (currentPage - 1) * pageSize;
   const pageGroups = filteredGroups.slice(start, start + pageSize);
+  visiblePageDeviceIds = [...new Set(pageGroups.flatMap((group) =>
+    group.devices.map((device) => device.id),
+  ))];
+  elements.pingVisibleDevices.disabled = visiblePageDeviceIds.length === 0;
+  elements.pingVisibleDevices.textContent = visiblePageDeviceIds.length
+    ? `Pinguj widoczne (${visiblePageDeviceIds.length})`
+    : "Pinguj widoczne";
 
   elements.deviceList.replaceChildren();
   for (const group of pageGroups) {
@@ -598,6 +628,7 @@ function renderDevices() {
   }
 
   const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter);
+  renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
   document.getElementById("result-count").textContent =
     hasFilters ? `${filteredGroups.length} wyników` : "";
   const firstPosition = filteredGroups.length ? start + 1 : 0;
@@ -646,9 +677,9 @@ function renderMonitor() {
     `${monitoredDevices.length} aktywnych · ${onlineCount} online · ${offlineCount} bez odpowiedzi`;
   elements.monitorList.replaceChildren();
 
-  if (!devices.length) {
+  if (!monitoredDevices.length) {
     const row = document.createElement("tr");
-    const empty = makeCell("Brak maszyn do monitorowania.");
+    const empty = makeCell("Brak aktywnych maszyn. Włącz monitorowanie przy wybranych maszynach w zakładce Maszyny.");
     empty.colSpan = 6;
     row.append(empty);
     elements.monitorList.append(row);
@@ -660,7 +691,7 @@ function renderMonitor() {
     offline: "Brak odpowiedzi",
     unknown: "Nieustalony",
   };
-  for (const device of devices) {
+  for (const device of monitoredDevices) {
     const row = document.createElement("tr");
     const host = document.createElement("td");
     host.className = "host-cell";
@@ -685,7 +716,17 @@ function renderMonitor() {
       : "—";
     row.append(makeCell(latency, "monitor-latency"));
     const monitorCell = document.createElement("td");
-    monitorCell.append(monitorToggle(device, "monitorEnabled", "Aktywny"));
+    const disableMonitor = document.createElement("button");
+    disableMonitor.className = "row-action";
+    disableMonitor.type = "button";
+    disableMonitor.textContent = "Wyłącz";
+    disableMonitor.setAttribute("aria-label", `Wyłącz monitor: ${device.hostName}`);
+    disableMonitor.addEventListener("click", () => saveMonitorSettings(device, {
+      enabled: false,
+      notifyOnline: Boolean(device.notifyOnline),
+      notifyOffline: Boolean(device.notifyOffline),
+    }));
+    monitorCell.append(disableMonitor);
     row.append(monitorCell);
 
     const notifications = document.createElement("td");
@@ -751,7 +792,6 @@ async function refresh() {
   renderSettings();
   renderDevices();
   renderMonitor();
-  renderSummary(summary);
   scheduleStatusExpiry(summary.onlineTtlMs);
   if (elements.deviceDialog.open) updateDeviceIdentifierValidation();
 }
@@ -967,6 +1007,29 @@ async function pingDevice(device, button) {
   }
 }
 
+async function pingVisibleDevices(button) {
+  const deviceIds = [...visiblePageDeviceIds];
+  if (!deviceIds.length) return;
+  button.disabled = true;
+  const previousLabel = button.textContent;
+  button.textContent = "Sprawdzam…";
+  try {
+    const result = await api("/api/ping", {
+      method: "POST",
+      body: JSON.stringify({ deviceIds }),
+    });
+    await refresh();
+    notify(`Sprawdzono ${result.checked} widocznych maszyn. Wyniki zapisano w tabeli.`);
+  } catch (error) {
+    notify(error.message, "danger");
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = previousLabel;
+    }
+  }
+}
+
 document.getElementById("theme-toggle").addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 });
@@ -990,6 +1053,9 @@ elements.sshSettingsForm.addEventListener("submit", saveSshSettings);
 elements.search.addEventListener("input", () => {
   currentPage = 1;
   renderDevices();
+});
+elements.pingVisibleDevices.addEventListener("click", () => {
+  pingVisibleDevices(elements.pingVisibleDevices);
 });
 elements.filterCategory.addEventListener("change", () => {
   categoryFilter = elements.filterCategory.value;

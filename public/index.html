@@ -44,7 +44,7 @@
         <section class="dashboard-grid" aria-label="Podsumowanie statusu">
           <article class="dashboard-card">
             <div class="dashboard-icon icon-blue" aria-hidden="true">▦</div>
-            <div><p>Wszystkie maszyny</p><strong id="summary-devices">—</strong></div>
+            <div><p id="summary-devices-label">Wszystkie maszyny</p><strong id="summary-devices">—</strong></div>
             <span class="card-caption">w ewidencji</span>
           </article>
           <article class="dashboard-card">
@@ -97,6 +97,9 @@
               </label>
             </div>
             <span class="result-count" id="result-count"></span>
+            <button class="btn btn-sm btn-outline-secondary" id="ping-visible-devices" type="button" disabled>
+              Pinguj widoczne
+            </button>
           </div>
 
           <div class="table-responsive">
@@ -154,7 +157,7 @@
                     <th scope="col">Adres IP</th>
                     <th scope="col">Status</th>
                     <th scope="col">Opóźnienie</th>
-                    <th scope="col">Monitor</th>
+                    <th scope="col">Akcja</th>
                     <th scope="col">Powiadomienia</th>
                   </tr>
                 </thead>

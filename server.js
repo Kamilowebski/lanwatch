@@ -240,6 +240,32 @@ async function pingDeviceAndDependencies(deviceId) {
   }
 }
 
+async function pingSelectedDevices(deviceIds) {
+  const devices = getDevices();
+  const devicesById = new Map(devices.map((device) => [device.id, device]));
+  if (deviceIds.some((id) => !devicesById.has(id))) {
+    throw new HttpError(404, "Nie znaleziono jednej z wybranych maszyn.");
+  }
+  if (pingJobActive) throw new HttpError(409, "Inne sprawdzanie ping jest już w toku.");
+
+  pingJobActive = true;
+  try {
+    for (const id of deviceIds) {
+      const device = devicesById.get(id);
+      const result = await pingLocalTarget(device.ip || device.hostName);
+      if (getDevice(device.id)) {
+        saveDeviceStatus(device.id, {
+          ...result,
+          checkedAt: new Date().toISOString(),
+        });
+      }
+    }
+    return { checked: deviceIds.length };
+  } finally {
+    pingJobActive = false;
+  }
+}
+
 async function pollMonitoredDevices() {
   try {
     const monitoredDevices = getDevices().filter((device) => device.monitorEnabled);
@@ -291,6 +317,22 @@ async function handleApi(request, response, pathname) {
   }
   if (pathname === "/api/devices" && request.method === "GET") {
     sendJson(response, 200, getDevices());
+    return;
+  }
+  if (pathname === "/api/ping" && request.method === "POST") {
+    const body = await readJson(request);
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
+      !Array.isArray(body.deviceIds) ||
+      body.deviceIds.length === 0 ||
+      body.deviceIds.some((id) => !Number.isSafeInteger(id) || id < 1)
+    ) {
+      throw new HttpError(400, "Wybierz prawidłowe maszyny do sprawdzenia.");
+    }
+    const deviceIds = [...new Set(body.deviceIds)];
+    sendJson(response, 200, await pingSelectedDevices(deviceIds));
     return;
   }
 
