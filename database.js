@@ -14,6 +14,10 @@ database.exec(`
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE
   );
+  CREATE TABLE IF NOT EXISTS locations (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE
+  );
   CREATE TABLE IF NOT EXISTS devices (
     id INTEGER PRIMARY KEY,
     host_name TEXT NOT NULL,
@@ -30,6 +34,11 @@ database.exec(`
     PRIMARY KEY (device_id, dependency_id),
     CHECK (device_id != dependency_id)
   );
+`);
+
+database.exec(`
+  INSERT OR IGNORE INTO locations (name)
+  SELECT DISTINCT location FROM devices WHERE trim(location) <> '';
 `);
 
 const defaultCategories = [
@@ -52,13 +61,22 @@ function getCategory(id) {
   return database.prepare("SELECT id, name FROM categories WHERE id = ?").get(id);
 }
 
+function getLocation(id) {
+  return database.prepare("SELECT id, name FROM locations WHERE id = ?").get(id);
+}
+
+function getLocationByName(name) {
+  return database.prepare("SELECT id, name FROM locations WHERE name = ? COLLATE NOCASE").get(name);
+}
+
 function getDevice(id) {
   const device = database.prepare(`
-    SELECT d.id, d.host_name AS hostName, d.ip, d.location,
+    SELECT d.id, d.host_name AS hostName, d.ip, l.name AS location,
       d.category_id AS categoryId, c.name AS category,
       d.description, d.line_number AS lineNumber, d.numerator
     FROM devices d
     JOIN categories c ON c.id = d.category_id
+    JOIN locations l ON l.name = d.location COLLATE NOCASE
     WHERE d.id = ?
   `).get(id);
   if (!device) return undefined;
@@ -101,13 +119,18 @@ function getCategories() {
   return database.prepare("SELECT id, name FROM categories ORDER BY name COLLATE NOCASE").all();
 }
 
+function getLocations() {
+  return database.prepare("SELECT id, name FROM locations ORDER BY name COLLATE NOCASE").all();
+}
+
 function getDevices() {
   const devices = database.prepare(`
-    SELECT d.id, d.host_name AS hostName, d.ip, d.location,
+    SELECT d.id, d.host_name AS hostName, d.ip, l.name AS location,
       d.category_id AS categoryId, c.name AS category,
       d.description, d.line_number AS lineNumber, d.numerator
     FROM devices d
     JOIN categories c ON c.id = d.category_id
+    JOIN locations l ON l.name = d.location COLLATE NOCASE
     ORDER BY d.host_name COLLATE NOCASE
   `).all();
   const dependencyQuery = database.prepare(`
@@ -130,44 +153,97 @@ function getDevices() {
 function getSummary() {
   return {
     devices: database.prepare("SELECT COUNT(*) AS count FROM devices").get().count,
-    categories: database.prepare("SELECT COUNT(*) AS count FROM categories").get().count,
-    locations: database.prepare("SELECT COUNT(DISTINCT location) AS count FROM devices").get().count,
   };
 }
 
-function createCategory(name) {
-  if (database.prepare("SELECT id FROM categories WHERE name = ? COLLATE NOCASE").get(name)) {
-    throw Object.assign(new Error("Kategoria o tej nazwie już istnieje."), { status: 409 });
+function createNamedItem(table, label, name) {
+  const existing = database.prepare(`SELECT id FROM ${table} WHERE name = ? COLLATE NOCASE`).get(name);
+  if (existing) {
+    throw Object.assign(new Error(`${label} o tej nazwie już istnieje.`), { status: 409 });
   }
-  const result = database.prepare("INSERT INTO categories (name) VALUES (?)").run(name);
-  return getCategory(Number(result.lastInsertRowid));
+  const result = database.prepare(`INSERT INTO ${table} (name) VALUES (?)`).run(name);
+  return database.prepare(`SELECT id, name FROM ${table} WHERE id = ?`).get(Number(result.lastInsertRowid));
+}
+
+function updateNamedItem(table, label, genitive, id, name) {
+  const existing = database.prepare(`SELECT id, name FROM ${table} WHERE id = ?`).get(id);
+  if (!existing) {
+    throw Object.assign(new Error(`Nie znaleziono ${genitive}.`), { status: 404 });
+  }
+  if (
+    database.prepare(`SELECT id FROM ${table} WHERE name = ? COLLATE NOCASE AND id != ?`).get(name, id)
+  ) {
+    throw Object.assign(new Error(`${label} o tej nazwie już istnieje.`), { status: 409 });
+  }
+  if (table === "locations") {
+    withTransaction(() => {
+      database.prepare("UPDATE devices SET location = ? WHERE location = ? COLLATE NOCASE").run(name, existing.name);
+      database.prepare("UPDATE locations SET name = ? WHERE id = ?").run(name, id);
+    });
+  } else {
+    database.prepare(`UPDATE ${table} SET name = ? WHERE id = ?`).run(name, id);
+  }
+  return database.prepare(`SELECT id, name FROM ${table} WHERE id = ?`).get(id);
+}
+
+function deleteNamedItem(table, genitive, id, usageQuery, usageMessage) {
+  const existing = database.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(id);
+  if (!existing) {
+    throw Object.assign(new Error(`Nie znaleziono ${genitive}.`), { status: 404 });
+  }
+  if (usageQuery && usageQuery(id).count) {
+    throw Object.assign(new Error(usageMessage), { status: 409 });
+  }
+  database.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);
+}
+
+function createCategory(name) {
+  return createNamedItem("categories", "Kategoria", name);
 }
 
 function updateCategory(id, name) {
-  if (!getCategory(id)) {
-    throw Object.assign(new Error("Nie znaleziono kategorii."), { status: 404 });
-  }
-  if (database.prepare("SELECT id FROM categories WHERE name = ? COLLATE NOCASE AND id != ?").get(name, id)) {
-    throw Object.assign(new Error("Kategoria o tej nazwie już istnieje."), { status: 409 });
-  }
-  database.prepare("UPDATE categories SET name = ? WHERE id = ?").run(name, id);
-  return getCategory(id);
+  return updateNamedItem("categories", "Kategoria", "kategorii", id, name);
 }
 
 function deleteCategory(id) {
-  if (!getCategory(id)) {
-    throw Object.assign(new Error("Nie znaleziono kategorii."), { status: 404 });
-  }
-  const usage = database.prepare("SELECT COUNT(*) AS count FROM devices WHERE category_id = ?").get(id);
-  if (usage.count) {
-    throw Object.assign(new Error("Nie można usunąć kategorii używanej przez maszyny."), { status: 409 });
-  }
-  database.prepare("DELETE FROM categories WHERE id = ?").run(id);
+  deleteNamedItem(
+    "categories",
+    "kategorii",
+    id,
+    (categoryId) => database.prepare("SELECT COUNT(*) AS count FROM devices WHERE category_id = ?").get(categoryId),
+    "Nie można usunąć kategorii używanej przez maszyny.",
+  );
+}
+
+function createLocation(name) {
+  return createNamedItem("locations", "Lokalizacja", name);
+}
+
+function updateLocation(id, name) {
+  return updateNamedItem("locations", "Lokalizacja", "lokalizacji", id, name);
+}
+
+function deleteLocation(id) {
+  deleteNamedItem(
+    "locations",
+    "lokalizacji",
+    id,
+    (locationId) => {
+      const location = getLocation(locationId);
+      return database.prepare("SELECT COUNT(*) AS count FROM devices WHERE location = ? COLLATE NOCASE")
+        .get(location.name);
+    },
+    "Nie można usunąć lokalizacji używanej przez maszyny.",
+  );
 }
 
 function createDevice(device) {
   if (!getCategory(device.categoryId)) {
     throw Object.assign(new Error("Wybrana kategoria już nie istnieje."), { status: 400 });
+  }
+  const location = getLocationByName(device.location);
+  if (!location) {
+    throw Object.assign(new Error("Wybrana lokalizacja już nie istnieje."), { status: 400 });
   }
   const id = withTransaction(() => {
     const result = database.prepare(`
@@ -176,7 +252,7 @@ function createDevice(device) {
     `).run(
       device.hostName,
       device.ip,
-      device.location,
+      location.name,
       device.categoryId,
       device.description,
       device.lineNumber,
@@ -196,6 +272,10 @@ function updateDevice(id, device) {
   if (!getCategory(device.categoryId)) {
     throw Object.assign(new Error("Wybrana kategoria już nie istnieje."), { status: 400 });
   }
+  const location = getLocationByName(device.location);
+  if (!location) {
+    throw Object.assign(new Error("Wybrana lokalizacja już nie istnieje."), { status: 400 });
+  }
   withTransaction(() => {
     database.prepare(`
       UPDATE devices
@@ -205,7 +285,7 @@ function updateDevice(id, device) {
     `).run(
       device.hostName,
       device.ip,
-      device.location,
+      location.name,
       device.categoryId,
       device.description,
       device.lineNumber,
@@ -227,11 +307,15 @@ function deleteDevice(id) {
 module.exports = {
   createCategory,
   createDevice,
+  createLocation,
   deleteCategory,
   deleteDevice,
+  deleteLocation,
   getCategories,
   getDevices,
+  getLocations,
   getSummary,
   updateCategory,
   updateDevice,
+  updateLocation,
 };

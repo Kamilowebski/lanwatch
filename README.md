@@ -32,18 +32,23 @@ npm start
 ```
 
 Domyślna baza SQLite tworzy się automatycznie w `data/lanwatch.sqlite`.
-Lokalizację bazy można zmienić zmienną `DB_PATH`.
+Lokalizację bazy można zmienić zmienną `DB_PATH`. Przy aktualizacji istniejące
+lokalizacje maszyn są automatycznie dodawane do listy lokalizacji.
 
 ## Funkcje
 
 - Dodawanie, edycja i usuwanie maszyn.
-- Dane maszyny: nazwa hosta, IP, lokalizacja, kategoria, opis, numer linii,
-  numerator i zależności od innych maszyn.
-- Zarządzanie kategoriami; przy pierwszym uruchomieniu tworzone są kategorie:
-  Terminal, Komputer, Server, drukarka, Raspberry pi, kamera, detektor, waga,
-  bizerba i inne.
+- Dane maszyny: nazwa hosta, opcjonalny adres IP (np. dla urządzeń z DHCP),
+  lokalizacja, kategoria, opis, numer linii, numerator i zależności od innych
+  maszyn.
+- Zarządzanie kategoriami i lokalizacjami w zakładce „Ustawienia”. Nazwę użytej
+  lokalizacji można zmienić, a jej usunięcie jest zablokowane, gdy przypisane są
+  do niej maszyny.
+- Przy pierwszym uruchomieniu tworzone są kategorie: Terminal, Komputer, Server,
+  drukarka, Raspberry pi, kamera, detektor, waga, bizerba i inne.
 - Tabela z nazwą hosta, adresem IP, lokalizacją, typem i statusem.
-- Wyszukiwanie maszyn oraz podsumowanie liczby maszyn, kategorii i lokalizacji.
+- Dashboard z liczbą maszyn i informacją o statusie monitorowania.
+- Wyszukiwanie maszyn.
 - Jasny i ciemny motyw zapamiętywany w przeglądarce.
 
 Status urządzeń ma obecnie wartość informacyjną „Nie sprawdzono”. Aplikacja nie

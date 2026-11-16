@@ -4,13 +4,17 @@ const path = require("node:path");
 const {
   createCategory,
   createDevice,
+  createLocation,
   deleteCategory,
   deleteDevice,
+  deleteLocation,
   getCategories,
   getDevices,
+  getLocations,
   getSummary,
   updateCategory,
   updateDevice,
+  updateLocation,
 } = require("./database");
 
 const port = Number(process.env.PORT) || 3000;
@@ -64,10 +68,10 @@ function validateDevice(input) {
     throw new HttpError(400, "Nieprawidłowe dane maszyny.");
   }
 
-  const requiredTextFields = ["hostName", "ip", "location"];
+  const requiredTextFields = ["hostName", "location"];
   for (const field of requiredTextFields) {
     if (typeof input[field] !== "string" || !input[field].trim()) {
-      throw new HttpError(400, "Uzupełnij nazwę hosta, adres IP i lokalizację.");
+      throw new HttpError(400, "Uzupełnij nazwę hosta i lokalizację.");
     }
   }
 
@@ -98,7 +102,7 @@ function validateDevice(input) {
   return device;
 }
 
-function validateCategoryName(input) {
+function validateNamedItem(input, label) {
   if (
     !input ||
     typeof input !== "object" ||
@@ -107,7 +111,7 @@ function validateCategoryName(input) {
     !input.name.trim() ||
     input.name.length > 100
   ) {
-    throw new HttpError(400, "Podaj nazwę kategorii (maksymalnie 100 znaków).");
+    throw new HttpError(400, `Podaj nazwę ${label} (maksymalnie 100 znaków).`);
   }
   return input.name.trim();
 }
@@ -121,6 +125,10 @@ async function handleApi(request, response, pathname) {
     sendJson(response, 200, getCategories());
     return;
   }
+  if (pathname === "/api/locations" && request.method === "GET") {
+    sendJson(response, 200, getLocations());
+    return;
+  }
   if (pathname === "/api/devices" && request.method === "GET") {
     sendJson(response, 200, getDevices());
     return;
@@ -128,18 +136,40 @@ async function handleApi(request, response, pathname) {
 
   if (pathname === "/api/categories" && request.method === "POST") {
     const body = await readJson(request);
-    sendJson(response, 201, createCategory(validateCategoryName(body)));
+    sendJson(response, 201, createCategory(validateNamedItem(body, "kategorii")));
+    return;
+  }
+  if (pathname === "/api/locations" && request.method === "POST") {
+    const body = await readJson(request);
+    sendJson(response, 201, createLocation(validateNamedItem(body, "lokalizacji")));
     return;
   }
 
   const categoryMatch = pathname.match(/^\/api\/categories\/(\d+)$/);
   if (categoryMatch && request.method === "PUT") {
     const body = await readJson(request);
-    sendJson(response, 200, updateCategory(Number(categoryMatch[1]), validateCategoryName(body)));
+    sendJson(response, 200, updateCategory(
+      Number(categoryMatch[1]),
+      validateNamedItem(body, "kategorii"),
+    ));
+    return;
+  }
+  const locationMatch = pathname.match(/^\/api\/locations\/(\d+)$/);
+  if (locationMatch && request.method === "PUT") {
+    const body = await readJson(request);
+    sendJson(response, 200, updateLocation(
+      Number(locationMatch[1]),
+      validateNamedItem(body, "lokalizacji"),
+    ));
     return;
   }
   if (categoryMatch && request.method === "DELETE") {
     deleteCategory(Number(categoryMatch[1]));
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+  if (locationMatch && request.method === "DELETE") {
+    deleteLocation(Number(locationMatch[1]));
     sendJson(response, 200, { ok: true });
     return;
   }

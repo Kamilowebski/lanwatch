@@ -15,6 +15,10 @@
           <span class="brand-mark" aria-hidden="true">L</span>
           <span>lanwatch<span class="brand-period">.</span></span>
         </a>
+        <nav class="main-nav" aria-label="Nawigacja główna">
+          <button class="main-nav-button active" type="button" data-view="inventory-view">Maszyny</button>
+          <button class="main-nav-button" type="button" data-view="settings-view">Ustawienia</button>
+        </nav>
         <div class="topbar-actions">
           <span class="network-label"><span class="live-dot"></span> Ewidencja lokalna</span>
           <button class="btn theme-toggle" id="theme-toggle" type="button" aria-label="Przełącz motyw">
@@ -24,6 +28,7 @@
       </header>
 
       <main class="main-content">
+        <section class="view-panel" id="inventory-view">
         <section class="welcome-row">
           <div>
             <p class="eyebrow">PANEL ADMINISTRACYJNY</p>
@@ -42,14 +47,9 @@
             <span class="card-caption">w ewidencji</span>
           </article>
           <article class="dashboard-card">
-            <div class="dashboard-icon icon-violet" aria-hidden="true">◈</div>
-            <div><p>Kategorie</p><strong id="summary-categories">—</strong></div>
-            <span class="card-caption">typy urządzeń</span>
-          </article>
-          <article class="dashboard-card">
-            <div class="dashboard-icon icon-green" aria-hidden="true">⌖</div>
-            <div><p>Lokalizacje</p><strong id="summary-locations">—</strong></div>
-            <span class="card-caption">obszarów</span>
+            <div class="dashboard-icon icon-green" aria-hidden="true">◈</div>
+            <div><p>Status urządzeń</p><strong class="status-value">W przygotowaniu</strong></div>
+            <span class="card-caption">bez aktywnego monitoringu</span>
           </article>
         </section>
 
@@ -59,9 +59,6 @@
               <h2>Inwentarz urządzeń</h2>
               <p>Lista maszyn zapisanych w systemie</p>
             </div>
-            <button class="btn btn-outline-secondary category-button" id="manage-categories" type="button">
-              Zarządzaj kategoriami
-            </button>
           </div>
 
           <div class="table-toolbar">
@@ -95,7 +92,54 @@
           </div>
           <div class="table-footer">
             <span id="inventory-count"></span>
-            <span class="status-note"><span class="status-dot"></span> Monitorowanie statusu urządzeń — w przygotowaniu</span>
+            <span class="status-note"><span class="status-dot"></span> Status: monitorowanie w przygotowaniu</span>
+          </div>
+        </section>
+        </section>
+
+        <section class="view-panel d-none" id="settings-view">
+          <section class="settings-heading">
+            <div>
+              <p class="eyebrow">KONFIGURACJA</p>
+              <h1>Ustawienia</h1>
+              <p class="page-subtitle">Zarządzaj kategoriami maszyn i lokalizacjami.</p>
+            </div>
+          </section>
+          <div class="settings-grid">
+            <section class="settings-card">
+              <div class="settings-card-heading">
+                <div>
+                  <h2>Kategorie</h2>
+                  <p>Typy urządzeń dostępne w ewidencji</p>
+                </div>
+              </div>
+              <form id="category-form" class="settings-form">
+                <label for="category-name">Nazwa kategorii</label>
+                <div class="settings-input-row">
+                  <input class="form-control" id="category-name" maxlength="100" required placeholder="Np. Terminal">
+                  <button class="btn btn-primary" id="save-category" type="submit">Dodaj</button>
+                  <button class="btn btn-outline-secondary d-none" id="cancel-category-edit" type="button">Anuluj</button>
+                </div>
+              </form>
+              <div class="settings-list" id="category-list"></div>
+            </section>
+            <section class="settings-card">
+              <div class="settings-card-heading">
+                <div>
+                  <h2>Lokalizacje</h2>
+                  <p>Miejsca, w których znajdują się maszyny</p>
+                </div>
+              </div>
+              <form id="location-form" class="settings-form">
+                <label for="location-name">Nazwa lokalizacji</label>
+                <div class="settings-input-row">
+                  <input class="form-control" id="location-name" maxlength="100" required placeholder="Np. Hala produkcyjna">
+                  <button class="btn btn-primary" id="save-location" type="submit">Dodaj</button>
+                  <button class="btn btn-outline-secondary d-none" id="cancel-location-edit" type="button">Anuluj</button>
+                </div>
+              </form>
+              <div class="settings-list" id="location-list"></div>
+            </section>
           </div>
         </section>
       </main>
@@ -117,12 +161,13 @@
             <input class="form-control" id="host-name" name="hostName" maxlength="255" required>
           </div>
           <div class="form-field">
-            <label for="device-ip">Adres IP <span>*</span></label>
-            <input class="form-control" id="device-ip" name="ip" maxlength="255" required>
+            <label for="device-ip">Adres IP</label>
+            <input class="form-control" id="device-ip" name="ip" maxlength="255" placeholder="Opcjonalny — np. urządzenie z DHCP">
           </div>
           <div class="form-field">
             <label for="device-location">Lokalizacja <span>*</span></label>
-            <input class="form-control" id="device-location" name="location" maxlength="255" required>
+            <select class="form-select" id="device-location" name="location" required></select>
+            <small>Brak lokalizacji? Dodaj ją w zakładce Ustawienia.</small>
           </div>
           <div class="form-field">
             <label for="device-category">Kategoria <span>*</span></label>
@@ -151,23 +196,6 @@
           <button class="btn btn-primary" id="save-device" type="submit">Zapisz maszynę</button>
         </div>
       </form>
-    </dialog>
-
-    <dialog class="app-dialog category-dialog" id="category-dialog">
-      <div class="dialog-header">
-        <div><p class="eyebrow">USTAWIENIA EWIDENCJI</p><h2>Zarządzaj kategoriami</h2></div>
-        <button class="icon-button" type="button" data-close="category-dialog" aria-label="Zamknij">×</button>
-      </div>
-      <form id="category-form" class="category-form">
-        <label for="category-name" class="form-label">Nazwa kategorii</label>
-        <div class="category-input-row">
-          <input class="form-control" id="category-name" maxlength="100" required placeholder="Np. Terminal">
-          <button class="btn btn-primary" id="save-category" type="submit">Dodaj</button>
-          <button class="btn btn-outline-secondary d-none" id="cancel-category-edit" type="button">Anuluj</button>
-        </div>
-      </form>
-      <div class="category-list" id="category-list"></div>
-      <div class="dialog-actions"><button class="btn btn-outline-secondary" type="button" data-close="category-dialog">Gotowe</button></div>
     </dialog>
 
     <script src="/app.js" defer></script>
