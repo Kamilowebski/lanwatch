@@ -88,13 +88,13 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
   otwartej karty Lanwatch, a systemowe dodatkowo zgody przeglądarki.
 - Dla kategorii „Terminal” wspólnego użytkownika SSH konfiguruje się w
   „Ustawieniach”; nie trzeba podawać go osobno dla każdej maszyny. Połączenie
-  używa nazwy hosta, np. `ssh StarachowiceSWRBis@T104-0239`. Uwierzytelnienie
+  używa nazwy hosta, np. `ssh użytkownik@nazwa-hosta`. Uwierzytelnienie
   korzysta ze standardowej konfiguracji OpenSSH, kluczy/ssh-agent lub monitu
   SSH w PowerShell. Lanwatch nie zapisuje haseł SSH.
 - Przycisk „Tunel VNC” otwiera okno PowerShell i uruchamia w nim OpenSSH;
   przeglądarka nie wykonuje poleceń SSH ani nie pokazuje zdalnego terminala.
   Uruchamiana komenda SSH zawiera tylko przekierowanie i cel, np.
-  `ssh -L 5900:localhost:5900 StarachowiceSWRBis@T104-0239`; połączenie
+  `ssh -L 5900:localhost:5900 użytkownik@nazwa-hosta`; połączenie
   pozostaje interaktywne w PowerShell. Mały komunikat w aplikacji potwierdza
   uruchomienie okna. Zamknij okno PowerShell, aby zakończyć tunel. TigerVNC
   uruchom na tym samym komputerze i połącz z `127.0.0.1:5900`.

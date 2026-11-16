@@ -111,11 +111,11 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
   const savedSettings = await request(
     "/api/settings",
     "PUT",
-    { sshUser: "StarachowiceSWRBis" },
+    { sshUser: "testuser" },
     { Origin: baseUrl },
   );
   assert.equal(savedSettings.status, 200);
-  assert.deepEqual(savedSettings.result, { sshUser: "StarachowiceSWRBis" });
+  assert.deepEqual(savedSettings.result, { sshUser: "testuser" });
   const invalidSshUser = await request(
     "/api/settings",
     "PUT",
@@ -224,7 +224,7 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     const storedSshUser = database
       .prepare("SELECT value FROM app_settings WHERE key = 'ssh_user'")
       .get();
-    assert.equal(storedSshUser.value, "StarachowiceSWRBis");
+    assert.equal(storedSshUser.value, "testuser");
     database.prepare(`
       INSERT INTO device_dependencies (device_id, dependency_id) VALUES (?, ?)
     `).run(first.result.id, second.result.id);

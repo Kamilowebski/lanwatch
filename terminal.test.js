@@ -17,19 +17,19 @@ const terminal = {
 test("builds the requested PowerShell tunnel command", () => {
   const tunnelArguments = vncTunnelArguments(
     { ...terminal, hostName: "T104-0173" },
-    "StarachowiceSWRBis",
+    "testuser",
   );
   assert.deepEqual(tunnelArguments, [
     "-L",
     "5900:localhost:5900",
-    "StarachowiceSWRBis@T104-0173",
+    "testuser@T104-0173",
   ]);
 
   const script = powerShellScript(tunnelArguments);
-  assert.ok(script.includes("Write-Host 'ssh -L 5900:localhost:5900 StarachowiceSWRBis@T104-0173'"));
+  assert.ok(script.includes("Write-Host 'ssh -L 5900:localhost:5900 testuser@T104-0173'"));
   assert.equal(
     script.split(/\r?\n/)[1],
-    "ssh -L 5900:localhost:5900 StarachowiceSWRBis@T104-0173",
+    "ssh -L 5900:localhost:5900 testuser@T104-0173",
   );
 });
 
@@ -64,7 +64,7 @@ test("rejects unsafe values in the PowerShell SSH command", () => {
 test("launches the tunnel script in a separate visible PowerShell window", () => {
   const script = powerShellScript(vncTunnelArguments(
     { ...terminal, hostName: "T104-0173" },
-    "StarachowiceSWRBis",
+    "testuser",
   ));
   const launcher = powerShellLauncherScript(
     script,
