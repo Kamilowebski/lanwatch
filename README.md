@@ -34,6 +34,7 @@ npm start
 Domyślna baza SQLite tworzy się automatycznie w `data/lanwatch.sqlite`.
 Lokalizację bazy można zmienić zmienną `DB_PATH`. Przy aktualizacji istniejące
 lokalizacje maszyn są automatycznie dodawane do listy lokalizacji.
+Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez Git.
 
 ## Funkcje
 
