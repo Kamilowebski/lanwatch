@@ -72,10 +72,29 @@
           </div>
 
           <div class="table-toolbar">
-            <label class="search-box" for="device-search">
-              <span aria-hidden="true">⌕</span>
-              <input id="device-search" type="search" placeholder="Szukaj po nazwie, IP lub lokalizacji">
-            </label>
+            <div class="table-filters">
+              <label class="search-box" for="device-search">
+                <span aria-hidden="true">⌕</span>
+                <input id="device-search" type="search" placeholder="Szukaj nazwy, IP, grupy, typu lub lokalizacji">
+              </label>
+              <label class="filter-select">
+                <span>Typ</span>
+                <select id="filter-category" class="form-select" aria-label="Filtruj po typie"></select>
+              </label>
+              <label class="filter-select">
+                <span>Lokalizacja</span>
+                <select id="filter-location" class="form-select" aria-label="Filtruj po lokalizacji"></select>
+              </label>
+              <label class="filter-select">
+                <span>Status</span>
+                <select id="filter-status" class="form-select" aria-label="Filtruj po statusie">
+                  <option value="">Wszystkie</option>
+                  <option value="online">Online</option>
+                  <option value="offline">Brak odpowiedzi</option>
+                  <option value="unknown">Nieustalony</option>
+                </select>
+              </label>
+            </div>
             <span class="result-count" id="result-count"></span>
           </div>
 
@@ -102,7 +121,11 @@
           </div>
           <div class="table-footer">
             <span id="inventory-count"></span>
-            <span class="status-note"><span class="status-dot"></span> Status aktualizuje ręczne sprawdzenie ICMP.</span>
+            <nav class="pagination-controls" aria-label="Stronicowanie maszyn">
+              <button class="btn btn-sm btn-outline-secondary" id="previous-page" type="button">Poprzednia</button>
+              <span id="page-indicator">1 / 1</span>
+              <button class="btn btn-sm btn-outline-secondary" id="next-page" type="button">Następna</button>
+            </nav>
           </div>
         </section>
         </section>
@@ -149,6 +172,23 @@
                 </div>
               </form>
               <div class="settings-list" id="location-list"></div>
+            </section>
+            <section class="settings-card settings-preference-card">
+              <div class="settings-card-heading">
+                <div>
+                  <h2>Widok listy</h2>
+                  <p>Ustaw liczbę pozycji wyświetlanych na stronie</p>
+                </div>
+              </div>
+              <div class="settings-form">
+                <label for="page-size-setting">Pozycji na stronie</label>
+                <select class="form-select page-size-select" id="page-size-setting">
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
             </section>
           </div>
         </section>
@@ -201,13 +241,15 @@
             <textarea class="form-control" id="device-description" name="description" rows="3" maxlength="5000"></textarea>
           </div>
           <div class="form-field form-field-wide">
-            <label for="device-dependencies">Zależności od innych maszyn</label>
-            <select class="form-select dependency-select" id="device-dependencies" name="dependencyIds" multiple></select>
-            <small>Przytrzymaj Ctrl (Windows) lub Command (Mac), aby zaznaczyć kilka maszyn.</small>
+            <label for="dependency-search">Zależności od innych maszyn</label>
+            <input class="form-control dependency-search" id="dependency-search" type="search" placeholder="Szukaj po nazwie, grupie, IP, typie lub lokalizacji">
+            <div class="dependency-options" id="dependency-options" role="group" aria-label="Wybierz maszyny zależne"></div>
+            <small id="dependency-count">Wybrano 0</small>
           </div>
         </div>
         <div class="dialog-actions">
           <button class="btn btn-outline-secondary" type="button" data-close="device-dialog">Anuluj</button>
+          <button class="btn btn-outline-secondary d-none" id="save-and-add-next" type="submit">Zapisz i dodaj następną</button>
           <button class="btn btn-primary" id="save-device" type="submit">Zapisz maszynę</button>
         </div>
       </form>

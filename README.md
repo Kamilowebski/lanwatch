@@ -52,6 +52,15 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Przy pierwszym uruchomieniu tworzone są kategorie: Terminal, Komputer, Server,
   drukarka, Raspberry pi, kamera, detektor, waga, bizerba i inne.
 - Tabela z nazwą hosta, adresem IP, lokalizacją, typem i statusem.
+- Lista grupuje elementy o tej samej nazwie w jeden zwijany wiersz; wyszukiwanie
+  i filtry typu, lokalizacji oraz statusu dotyczą całej grupy.
+- Stronicowanie pokazuje domyślnie 20 pozycji (grup lub pojedynczych maszyn).
+  Ustawienie 10, 20, 50 albo 100 pozycji znajduje się w „Ustawieniach” i jest
+  zapamiętywane w przeglądarce.
+- Wybór zależności ma wyszukiwarkę po nazwie hosta, grupie, IP, lokalizacji
+  i typie; zaznaczenia pozostają wybrane podczas filtrowania wyników.
+- Przy dodawaniu kolejnych elementów można użyć „Zapisz i dodaj następną”;
+  formularz zachowuje wtedy grupę, lokalizację i kategorię.
 - Ręczne sprawdzanie dostępności po kliknięciu statusu maszyny. Aplikacja używa
   wyłącznie systemowego polecenia `ping` (ICMP), wysyła trzy próby i sprawdza
   także pozostałe elementy tej samej grupy oraz ich bezpośrednie zależności.
@@ -59,7 +68,6 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
   pokazywane w tabeli i dashboardzie. Status „Brak odpowiedzi” oznacza brak
   odpowiedzi na wszystkie trzy próby ICMP, nie pewność, że urządzenie jest
   wyłączone (np. firewall może blokować ICMP).
-- Wyszukiwanie maszyn.
 - Jasny i ciemny motyw zapamiętywany w przeglądarce.
 
 Ping jest uruchamiany wyłącznie po kliknięciu i tylko do adresów lokalnych:
