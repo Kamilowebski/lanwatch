@@ -1,0 +1,12 @@
+{
+  "name": "lanwatch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimalny szkielet aplikacji Lanwatch z serwerem Node.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
