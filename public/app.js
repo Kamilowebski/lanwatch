@@ -679,7 +679,10 @@ function renderMonitor() {
 
   if (!monitoredDevices.length) {
     const row = document.createElement("tr");
-    const empty = makeCell("Brak aktywnych maszyn. Włącz monitorowanie przy wybranych maszynach w zakładce Maszyny.");
+    const empty = makeCell(
+      "Brak aktywnych maszyn. Włącz monitorowanie przy wybranych maszynach w zakładce Maszyny.",
+      "monitor-empty-cell",
+    );
     empty.colSpan = 6;
     row.append(empty);
     elements.monitorList.append(row);
@@ -695,12 +698,20 @@ function renderMonitor() {
     const row = document.createElement("tr");
     const host = document.createElement("td");
     host.className = "host-cell";
-    host.textContent = device.hostName;
+    const hostName = document.createElement("span");
+    hostName.className = "monitor-host-name";
+    hostName.textContent = device.hostName;
+    const details = document.createElement("small");
+    details.className = "monitor-device-meta";
+    details.textContent = [device.groupName || device.category, device.location]
+      .filter(Boolean)
+      .join(" · ");
+    host.append(hostName, details);
     row.append(host, makeCell(device.ip, "ip-cell"));
 
     const statusCell = document.createElement("td");
     const status = document.createElement("span");
-    status.className = `status-badge status-${device.status}`;
+    status.className = `status-badge monitor-status status-${device.status}`;
     status.textContent = statusLabels[device.status] || statusLabels.unknown;
     statusCell.append(status);
     if (device.statusCheckedAt) {
@@ -714,10 +725,18 @@ function renderMonitor() {
     const latency = device.status === "online" && Number.isFinite(device.pingLatencyMs)
       ? `${device.pingLatencyMs < 1 ? "<1" : Number(device.pingLatencyMs.toFixed(1))} ms`
       : "—";
-    row.append(makeCell(latency, "monitor-latency"));
+    const latencyCell = document.createElement("td");
+    latencyCell.className = "monitor-latency";
+    const latencyValue = document.createElement("span");
+    latencyValue.className = device.status === "online"
+      ? "monitor-latency-value monitor-latency-online"
+      : "monitor-latency-value";
+    latencyValue.textContent = latency;
+    latencyCell.append(latencyValue);
+    row.append(latencyCell);
     const monitorCell = document.createElement("td");
     const disableMonitor = document.createElement("button");
-    disableMonitor.className = "row-action";
+    disableMonitor.className = "btn btn-sm btn-outline-secondary monitor-remove";
     disableMonitor.type = "button";
     disableMonitor.textContent = "Wyłącz";
     disableMonitor.setAttribute("aria-label", `Wyłącz monitor: ${device.hostName}`);

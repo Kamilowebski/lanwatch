@@ -295,17 +295,46 @@ button, input, select, textarea { font: inherit; }
 .ping-results-table > :not(caption) > * > * { background: transparent; }
 .ping-message { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; white-space: normal; }
 .monitor-panel { overflow: hidden; }
-.monitor-table tbody td { height: 62px; }
+.monitor-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface-muted);
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  font-weight: 600;
+}
+.monitor-table { min-width: 860px; }
+.monitor-table thead th { height: 47px; font-size: 9px; letter-spacing: .55px; }
+.monitor-table tbody tr { transition: background-color .15s ease; }
+.monitor-table tbody tr:hover > td { background-color: var(--surface-muted) !important; }
+.monitor-table tbody td { height: 76px; padding-top: 13px; padding-bottom: 13px; }
+.monitor-table .host-cell { min-width: 220px; white-space: normal; }
+.monitor-host-name { display: block; font-size: 13px; font-weight: 650; }
+.monitor-device-meta { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; font-weight: 450; }
+.monitor-table .ip-cell { min-width: 160px; }
+.monitor-table .status-badge { gap: 7px; padding: 7px 10px; font-size: 11px; font-weight: 600; }
+.monitor-status::before { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); content: ""; }
+.monitor-status.status-online::before { background: #37a875; }
+.monitor-status.status-offline::before { background: #d65b57; }
 .monitor-latency { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.monitor-latency-value { display: inline-flex; min-width: 54px; justify-content: center; padding: 6px 9px; border-radius: 6px; background: var(--surface-muted); color: var(--muted); font-size: 11px; }
+.monitor-latency-online { background: #eaf8f1; color: #248853; }
+.monitor-remove { padding: 5px 9px; font-size: 10px; }
 .monitor-toggle { display: inline-flex; align-items: center; gap: 6px; margin-right: 13px; color: var(--muted); font-size: 10px; white-space: nowrap; }
 .monitor-toggle:last-child { margin-right: 0; }
 .monitor-toggle input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
 .monitor-toggle input:disabled { opacity: .45; }
-.monitor-notifications { min-width: 180px; }
+.monitor-notifications { min-width: 190px; }
+.monitor-table .monitor-empty-cell { padding: 40px 24px !important; color: var(--muted) !important; text-align: center; white-space: normal; }
 .alert-stack { position: fixed; z-index: 20; right: 22px; bottom: 18px; width: 340px; }
 .notification { margin-bottom: 8px; box-shadow: var(--shadow); font-size: 12px; }
 
 :root[data-theme="dark"] .btn-outline-secondary { --bs-btn-color: var(--text); --bs-btn-border-color: var(--border); --bs-btn-hover-bg: var(--surface-muted); --bs-btn-hover-color: var(--text); --bs-btn-hover-border-color: var(--border); }
+:root[data-theme="dark"] .monitor-latency-online { background: #294438; color: #8bd1a8; }
 :root[data-theme="dark"] .btn-outline-danger { --bs-btn-color: #f08c8c; --bs-btn-border-color: #74494f; --bs-btn-hover-bg: #472e34; }
 :root[data-theme="dark"] .alert-success { --bs-alert-bg: #223b31; --bs-alert-color: #b4e1c8; --bs-alert-border-color: #355746; }
 :root[data-theme="dark"] .alert-danger { --bs-alert-bg: #462e33; --bs-alert-color: #f0b5b5; --bs-alert-border-color: #71444c; }
