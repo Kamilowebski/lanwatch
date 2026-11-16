@@ -12,6 +12,10 @@ const elements = {
   deviceForm: document.getElementById("device-form"),
   deviceList: document.getElementById("device-list"),
   deviceIpFeedback: document.getElementById("device-ip-feedback"),
+  deviceDetailsDialog: document.getElementById("device-details-dialog"),
+  deviceDetailsList: document.getElementById("device-details-list"),
+  deviceDetailsTitle: document.getElementById("device-details-title"),
+  editDeviceFromDetails: document.getElementById("edit-device-from-details"),
   emptyState: document.getElementById("empty-state"),
   filterCategory: document.getElementById("filter-category"),
   filterLocation: document.getElementById("filter-location"),
@@ -23,8 +27,6 @@ const elements = {
   monitorList: document.getElementById("monitor-list"),
   monitorCount: document.getElementById("monitor-count"),
   notifications: document.getElementById("notifications"),
-  pingResultsDialog: document.getElementById("ping-results-dialog"),
-  pingResultsList: document.getElementById("ping-results-list"),
   pingVisibleDevices: document.getElementById("ping-visible-devices"),
   pageIndicator: document.getElementById("page-indicator"),
   pageSize: document.getElementById("page-size-setting"),
@@ -487,21 +489,76 @@ function appendStatusCell(row, relatedDevices, representative, subjectLabel) {
   row.append(cell);
 }
 
+function dependencyNames(relatedDevices) {
+  const devicesById = new Map(devices.map((device) => [device.id, device]));
+  const names = [...new Set(relatedDevices.flatMap((device) => device.dependencyIds)
+    .map((dependencyId) => devicesById.get(dependencyId)?.hostName)
+    .filter(Boolean))];
+  if (names.length > 2) return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  return names.join(", ") || "—";
+}
+
+function appendDependencyCell(row, relatedDevices) {
+  row.append(makeCell(dependencyNames(relatedDevices), "dependency-cell"));
+}
+
+function openDeviceDetails(device) {
+  elements.deviceDetailsTitle.textContent = device.hostName;
+  elements.deviceDetailsList.replaceChildren();
+  const devicesById = new Map(devices.map((item) => [item.id, item]));
+  const detailValues = [
+    ["Adres IP", device.ip],
+    ["Grupa", device.groupName],
+    ["Lokalizacja", device.location],
+    ["Typ", device.category],
+    ["Nr linii", device.lineNumber],
+    ["Numerator", device.numerator],
+    ["Zależności", device.dependencyIds
+      .map((dependencyId) => devicesById.get(dependencyId)?.hostName)
+      .filter(Boolean)
+      .join(", ")],
+    ["Opis", device.description],
+  ];
+  for (const [label, value] of detailValues) {
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const description = document.createElement("dd");
+    description.textContent = value || "—";
+    elements.deviceDetailsList.append(term, description);
+  }
+  elements.editDeviceFromDetails.onclick = () => {
+    elements.deviceDetailsDialog.close();
+    openDeviceForm(device);
+  };
+  elements.deviceDetailsDialog.showModal();
+}
+
 function renderDeviceRow(device, isGroupMember = false) {
   const row = document.createElement("tr");
+  row.dataset.deviceIds = String(device.id);
+  row.dataset.subjectLabel = device.hostName;
   if (isGroupMember) row.className = "group-member-row";
   const hostCell = document.createElement("td");
   hostCell.className = "host-cell";
-  const hostName = document.createElement("span");
+  const hostName = document.createElement("button");
+  hostName.type = "button";
+  hostName.className = "host-detail-trigger";
   hostName.textContent = device.hostName;
+  hostName.addEventListener("click", () => openDeviceDetails(device));
   hostCell.append(hostName);
+  if (device.lineNumber) {
+    const lineNumber = document.createElement("small");
+    lineNumber.className = "line-number-cell";
+    lineNumber.textContent = `Linia ${device.lineNumber}`;
+    hostCell.append(lineNumber);
+  }
   if (device.groupName && !isGroupMember) {
     const groupName = document.createElement("small");
     groupName.className = "group-name-cell";
     groupName.textContent = device.groupName;
     hostCell.append(groupName);
   }
-  row.append(hostCell, makeCell(device.ip, "ip-cell"), makeCell(device.location));
+  row.append(hostCell, makeCell(device.location));
 
   const categoryCell = document.createElement("td");
   const badge = document.createElement("span");
@@ -509,6 +566,7 @@ function renderDeviceRow(device, isGroupMember = false) {
   badge.textContent = device.category;
   categoryCell.append(badge);
   row.append(categoryCell);
+  appendDependencyCell(row, [device]);
   appendStatusCell(row, [device], device, device.hostName);
 
   const actionsCell = document.createElement("td");
@@ -555,6 +613,8 @@ function renderDeviceRow(device, isGroupMember = false) {
 
 function renderGroupSummaryRow(group) {
   const row = document.createElement("tr");
+  row.dataset.deviceIds = group.devices.map((device) => device.id).join(",");
+  row.dataset.subjectLabel = group.relatedName || group.groupName;
   const hostCell = document.createElement("td");
   hostCell.className = "host-cell group-summary-cell";
   const name = document.createElement("span");
@@ -566,7 +626,6 @@ function renderGroupSummaryRow(group) {
     : `Liczba urządzeń: ${group.devices.length}`;
   hostCell.append(name, count);
   row.append(hostCell);
-  row.append(makeCell(summaryValues(group.devices, "ip", "bez IP"), "ip-cell"));
   row.append(makeCell(summaryValues(group.devices, "location")));
 
   const categoryCell = document.createElement("td");
@@ -575,7 +634,13 @@ function renderGroupSummaryRow(group) {
   badge.textContent = summaryValues(group.devices, "category");
   categoryCell.append(badge);
   row.append(categoryCell);
-  appendStatusCell(row, group.devices, group.devices[0], group.groupName);
+  appendDependencyCell(row, group.devices);
+  appendStatusCell(
+    row,
+    group.devices,
+    group.devices[0],
+    group.relatedName || group.groupName,
+  );
 
   const actionsCell = document.createElement("td");
   actionsCell.className = "actions-cell";
@@ -645,6 +710,55 @@ function renderDevices() {
     ? "Zmień wyszukiwanie lub filtry i spróbuj ponownie."
     : "Dodaj pierwszą maszynę, aby rozpocząć tworzenie ewidencji.";
   document.getElementById("empty-add-device").classList.toggle("d-none", devices.length > 0);
+}
+
+function updateVisibleDeviceStatuses() {
+  const devicesById = new Map(devices.map((device) => [device.id, device]));
+  for (const row of elements.deviceList.rows) {
+    const relatedDevices = row.dataset.deviceIds
+      .split(",")
+      .map(Number)
+      .map((id) => devicesById.get(id))
+      .filter(Boolean);
+    if (!relatedDevices.length) continue;
+
+    const representative = relatedDevices[0];
+    const subjectLabel = row.dataset.subjectLabel;
+    const summary = statusSummary(relatedDevices);
+    const status = row.querySelector(".status-trigger");
+    status.classList.remove("status-online", "status-offline", "status-unknown");
+    status.classList.add(`status-${summary.status}`);
+    status.textContent = summary.label;
+    status.title = relatedDevices.length > 1
+      ? `Kliknij, aby sprawdzić ping dla ${subjectLabel} i jego zależności.`
+      : representative.statusMessage || "Kliknij, aby sprawdzić ping i zależności.";
+    status.setAttribute(
+      "aria-label",
+      `Status ${subjectLabel}: ${summary.label}. Kliknij, aby sprawdzić.`,
+    );
+
+    const latestCheck = relatedDevices
+      .map((device) => device.statusCheckedAt)
+      .filter(Boolean)
+      .sort()
+      .pop();
+    let checkedAt = row.querySelector(".status-time");
+    if (latestCheck) {
+      if (!checkedAt) {
+        checkedAt = document.createElement("small");
+        checkedAt.className = "status-time";
+        status.parentElement.append(checkedAt);
+      }
+      checkedAt.textContent = new Date(latestCheck).toLocaleString("pl-PL");
+    } else {
+      checkedAt?.remove();
+    }
+  }
+
+  const query = elements.search.value.trim().toLocaleLowerCase("pl");
+  const filteredGroups = searchRelatedGroups(query).filter(matchesDeviceFilters);
+  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter);
+  renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
 }
 
 function monitorToggle(device, property, label, disabled = false) {
@@ -795,7 +909,32 @@ function trackMonitorStatusChanges(nextDevices) {
   hasLoadedMonitorStatuses = true;
 }
 
-async function refresh() {
+function inventoryMetadataChanged(nextDevices) {
+  if (nextDevices.length !== devices.length) return true;
+  const currentDevices = new Map(devices.map((device) => [device.id, device]));
+  const metadata = (item) => JSON.stringify([
+    item.hostName,
+    item.ip,
+    item.groupName,
+    item.location,
+    item.categoryId,
+    item.category,
+    item.lineNumber,
+    item.numerator,
+    item.description,
+    item.dependencyIds,
+    item.monitorEnabled,
+    item.notifyOnline,
+    item.notifyOffline,
+  ]);
+  return nextDevices.some((device) => {
+    const current = currentDevices.get(device.id);
+    if (!current) return true;
+    return metadata(device) !== metadata(current);
+  });
+}
+
+async function refresh({ preserveInventory = false } = {}) {
   const [nextDevices, nextCategories, nextLocations, summary, settings] = await Promise.all([
     api("/api/devices"),
     api("/api/categories"),
@@ -803,13 +942,15 @@ async function refresh() {
     api("/api/summary"),
     api("/api/settings"),
   ]);
+  const canPreserveInventory = preserveInventory && !inventoryMetadataChanged(nextDevices);
   trackMonitorStatusChanges(nextDevices);
   devices = nextDevices;
   categories = nextCategories;
   locations = nextLocations;
   sshUser = settings.sshUser;
   renderSettings();
-  renderDevices();
+  if (canPreserveInventory) updateVisibleDeviceStatuses();
+  else renderDevices();
   renderMonitor();
   scheduleStatusExpiry(summary.onlineTtlMs);
   if (elements.deviceDialog.open) updateDeviceIdentifierValidation();
@@ -851,7 +992,7 @@ async function saveMonitorSettings(device, settings) {
 function scheduleLiveRefresh() {
   window.setTimeout(async () => {
     try {
-      await refresh();
+      await refresh({ preserveInventory: true });
     } catch (error) {
       notify(error.message, "danger");
     } finally {
@@ -974,55 +1115,15 @@ async function openTunnelInPowerShell(device, button) {
   }
 }
 
-function renderPingResults(results) {
-  const statusLabels = {
-    online: "Online",
-    offline: "Brak odpowiedzi",
-    unknown: "Nieustalony",
-  };
-  elements.pingResultsList.replaceChildren();
-  for (const result of results) {
-    const row = document.createElement("tr");
-    const machine = document.createElement("td");
-    machine.textContent = result.hostName;
-    const target = document.createElement("td");
-    target.textContent = result.target || "—";
-    const statusCell = document.createElement("td");
-    const status = document.createElement("span");
-    status.className = `status-badge status-${result.status}`;
-    status.textContent = statusLabels[result.status] || statusLabels.unknown;
-    statusCell.append(status);
-    if (result.message) {
-      const message = document.createElement("small");
-      message.className = "ping-message";
-      message.textContent = result.message;
-      statusCell.append(message);
-    }
-    const replies = document.createElement("td");
-    replies.textContent = result.attempts
-      ? `${result.replies}/${result.attempts}`
-      : "Nie wysłano";
-    row.append(machine, target, statusCell, replies);
-    elements.pingResultsList.append(row);
-  }
-}
-
 async function pingDevice(device, button) {
-  const previousLabel = button.textContent;
   button.disabled = true;
-  button.textContent = "Sprawdzam…";
   try {
-    const { results } = await api(`/api/devices/${device.id}/ping`, { method: "POST" });
-    await refresh();
-    renderPingResults(results);
-    elements.pingResultsDialog.showModal();
+    await api(`/api/devices/${device.id}/ping`, { method: "POST" });
+    await refresh({ preserveInventory: true });
   } catch (error) {
     notify(error.message, "danger");
   } finally {
-    if (button.isConnected) {
-      button.disabled = false;
-      button.textContent = previousLabel;
-    }
+    if (button.isConnected) button.disabled = false;
   }
 }
 
@@ -1030,22 +1131,16 @@ async function pingVisibleDevices(button) {
   const deviceIds = [...visiblePageDeviceIds];
   if (!deviceIds.length) return;
   button.disabled = true;
-  const previousLabel = button.textContent;
-  button.textContent = "Sprawdzam…";
   try {
-    const result = await api("/api/ping", {
+    await api("/api/ping", {
       method: "POST",
       body: JSON.stringify({ deviceIds }),
     });
-    await refresh();
-    notify(`Sprawdzono ${result.checked} widocznych maszyn. Wyniki zapisano w tabeli.`);
+    await refresh({ preserveInventory: true });
   } catch (error) {
     notify(error.message, "danger");
   } finally {
-    if (button.isConnected) {
-      button.disabled = false;
-      button.textContent = previousLabel;
-    }
+    if (button.isConnected) button.disabled = false;
   }
 }
 

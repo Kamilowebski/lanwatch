@@ -191,14 +191,20 @@ button, input, select, textarea { font: inherit; }
 .inventory-table > :not(caption) > * > * { background-color: transparent; color: var(--text); }
 .inventory-table thead > tr > * { background-color: var(--surface-muted); color: var(--muted); }
 .host-cell { font-weight: 650; }
+.host-detail-trigger { padding: 0; border: 0; background: none; color: var(--text); font-weight: 650; text-align: left; }
+.host-detail-trigger:hover { color: var(--accent); text-decoration: underline; }
+.host-detail-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.line-number-cell { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; font-weight: 450; }
 .group-name-cell { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 450; }
 .group-summary-cell { font-weight: 650; }
 .inventory-table tbody tr.group-member-row td:first-child { padding-left: 42px; }
+.dependency-cell { max-width: 250px; color: var(--muted) !important; font-size: 11px !important; white-space: normal !important; }
 .ip-cell { color: var(--muted) !important; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .category-badge { display: inline-block; padding: 5px 9px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 650; }
 .status-badge { display: inline-flex; align-items: center; padding: 5px 8px; border: 1px solid var(--border); border-radius: 20px; color: var(--muted); font-size: 10px; }
 .status-trigger { background: var(--surface); cursor: pointer; font: inherit; }
 .status-trigger:hover { filter: brightness(.97); }
+.status-trigger:disabled { cursor: wait; opacity: 1; }
 .status-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .status-online { border-color: #b7e5cd; background: #edf9f2; color: #248853; }
 .status-offline { border-color: #f0c4c0; background: #fff2f1; color: #bb4944; }
@@ -287,13 +293,12 @@ button, input, select, textarea { font: inherit; }
 .settings-empty { margin: 0; padding: 19px 0; color: var(--muted); font-size: 11px; }
 .settings-preference-card { max-width: 100%; }
 .page-size-select { max-width: 140px; }
-.ping-results-dialog { width: min(840px, calc(100vw - 48px)); }
-.ping-results-wrap { padding: 4px 24px; }
-.ping-results-table { margin: 0; color: var(--text); }
-.ping-results-table th { padding: 11px 9px; border-color: var(--border); color: var(--muted); font-size: 10px; text-transform: uppercase; }
-.ping-results-table td { padding: 12px 9px; border-color: var(--border); color: var(--text); font-size: 11px; }
-.ping-results-table > :not(caption) > * > * { background: transparent; }
-.ping-message { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; white-space: normal; }
+.device-details-dialog { width: min(600px, calc(100vw - 48px)); }
+.device-details-grid { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 0; margin: 0; padding: 12px 24px; }
+.device-details-grid dt, .device-details-grid dd { margin: 0; padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.device-details-grid dt { color: var(--muted); font-weight: 600; }
+.device-details-grid dd { color: var(--text); overflow-wrap: anywhere; }
+.device-details-grid dt:last-of-type, .device-details-grid dd:last-of-type { border-bottom: 0; }
 .monitor-panel { overflow: hidden; }
 .monitor-count {
   display: inline-flex;

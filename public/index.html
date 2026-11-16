@@ -107,9 +107,9 @@
               <thead>
                 <tr>
                   <th scope="col">Host / grupa</th>
-                  <th scope="col">Adres IP</th>
                   <th scope="col">Lokalizacja</th>
                   <th scope="col">Typ</th>
+                  <th scope="col">Zależności</th>
                   <th scope="col">Status</th>
                   <th scope="col"><span class="visually-hidden">Akcje</span></th>
                 </tr>
@@ -310,30 +310,18 @@
       </form>
     </dialog>
 
-    <dialog class="app-dialog ping-results-dialog" id="ping-results-dialog">
+    <dialog class="app-dialog device-details-dialog" id="device-details-dialog">
       <div class="dialog-header">
         <div>
-          <p class="eyebrow">SPRAWDZANIE ICMP</p>
-          <h2>Wyniki pingowania</h2>
-          <p class="dialog-subtitle">Maszyna, jej grupa i zależności tych elementów</p>
+          <p class="eyebrow">SZCZEGÓŁY MASZYNY</p>
+          <h2 id="device-details-title"></h2>
         </div>
-        <button class="icon-button" type="button" data-close="ping-results-dialog" aria-label="Zamknij">×</button>
+        <button class="icon-button" type="button" data-close="device-details-dialog" aria-label="Zamknij">×</button>
       </div>
-      <div class="ping-results-wrap">
-        <table class="table ping-results-table align-middle">
-          <thead>
-            <tr>
-              <th scope="col">Maszyna</th>
-              <th scope="col">Adres sprawdzany</th>
-              <th scope="col">Status</th>
-              <th scope="col">Odpowiedzi</th>
-            </tr>
-          </thead>
-          <tbody id="ping-results-list"></tbody>
-        </table>
-      </div>
+      <dl class="device-details-grid" id="device-details-list"></dl>
       <div class="dialog-actions">
-        <button class="btn btn-outline-secondary" type="button" data-close="ping-results-dialog">Zamknij</button>
+        <button class="btn btn-outline-secondary" type="button" data-close="device-details-dialog">Zamknij</button>
+        <button class="btn btn-primary" id="edit-device-from-details" type="button">Edytuj maszynę</button>
       </div>
     </dialog>
 
