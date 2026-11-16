@@ -9,6 +9,7 @@ Bootstrap, a dane są przechowywane w SQLite.
 - Node.js w wersji 22.5 lub nowszej (wymagana wbudowana obsługa `node:sqlite`)
 - npm
 - Dostęp do internetu w przeglądarce, aby pobrać arkusz stylów Bootstrap z CDN
+- Klient OpenSSH na komputerze z serwerem (dla funkcji terminala)
 
 ## Uruchomienie
 
@@ -46,6 +47,9 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
   numerator i zależności od innych maszyn. Wspólna nazwa grupy łączy elementy
   jednego urządzenia, np. głowice Bizerby; wyszukiwarka znajduje wszystkie
   elementy tej grupy.
+- Nazwa hosta i niepusty adres IP muszą być unikalne (bez rozróżniania wielkości
+  liter). Formularz sprawdza duplikaty podczas wpisywania, a serwer ponownie
+  weryfikuje je przy zapisie.
 - Zarządzanie kategoriami i lokalizacjami w zakładce „Ustawienia”. Nazwę użytej
   lokalizacji można zmienić, a jej usunięcie jest zablokowane, gdy przypisane są
   do niej maszyny.
@@ -68,6 +72,21 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
   pokazywane w tabeli i dashboardzie. Status „Brak odpowiedzi” oznacza brak
   odpowiedzi na wszystkie trzy próby ICMP, nie pewność, że urządzenie jest
   wyłączone (np. firewall może blokować ICMP).
+- Status Online wygasa po 5 minutach od ostatniego sprawdzenia i zmienia się na
+  „Nieustalony”. Widok odświeża się po upływie tego czasu; nie uruchamia to
+  kolejnych pingów.
+- Dla kategorii „Terminal” można skonfigurować użytkownika SSH, uruchomić
+  pojedyncze polecenie albo tunel VNC. Funkcje korzystają z systemowego
+  OpenSSH, kluczy/ssh-agent konta uruchamiającego serwer i ścisłej weryfikacji
+  klucza hosta. Lanwatch nie zapisuje haseł SSH.
+- Polecenia SSH można wysyłać tylko z aplikacji otwartej lokalnie na komputerze
+  serwera. Każde polecenie jest uruchamiane ręcznie, ma limit 30 sekund i
+  maksymalnie 2000 znaków; wyjście jest ograniczone do 32 KB. SSH łączy się
+  tylko z lokalnym adresem urządzenia.
+- Tunel VNC nasłuchuje wyłącznie na `127.0.0.1:5900`; TigerVNC należy uruchomić
+  na tym samym komputerze i połączyć z `127.0.0.1:5900`. Nieznany klucz SSH
+  zostanie odrzucony — przed pierwszym połączeniem zweryfikuj odcisk klucza i
+  dodaj go do `known_hosts` konta uruchamiającego Lanwatch.
 - Jasny i ciemny motyw zapamiętywany w przeglądarce.
 
 Ping jest uruchamiany wyłącznie po kliknięciu i tylko do adresów lokalnych:
@@ -80,7 +99,9 @@ sond TCP/UDP ani skanowania portów, nie ma też automatycznego odpytywania w tl
 
 Aplikacja nie ma logowania ani kontroli dostępu. Udostępniaj ją tylko w zaufanej
 sieci; aby ograniczyć dostęp do komputera lokalnego, ustaw `HOST` na
-`127.0.0.1`.
+`127.0.0.1`. Operacje SSH dodatkowo odrzucają żądania spoza loopbacku i żądania
+bez lokalnego źródła przeglądarki. Używaj adresu `http://localhost:3000`, aby
+otworzyć funkcje SSH i tunel VNC.
 
 ## Zasada aktualizacji dokumentacji
 

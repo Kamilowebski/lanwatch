@@ -6,9 +6,12 @@ const elements = {
   dependencyCount: document.getElementById("dependency-count"),
   dependencyOptions: document.getElementById("dependency-options"),
   dependencySearch: document.getElementById("dependency-search"),
+  deviceIp: document.getElementById("device-ip"),
+  deviceHostName: document.getElementById("host-name"),
   deviceDialog: document.getElementById("device-dialog"),
   deviceForm: document.getElementById("device-form"),
   deviceList: document.getElementById("device-list"),
+  deviceIpFeedback: document.getElementById("device-ip-feedback"),
   emptyState: document.getElementById("empty-state"),
   filterCategory: document.getElementById("filter-category"),
   filterLocation: document.getElementById("filter-location"),
@@ -25,6 +28,18 @@ const elements = {
   previousPage: document.getElementById("previous-page"),
   nextPage: document.getElementById("next-page"),
   search: document.getElementById("device-search"),
+  sshUser: document.getElementById("ssh-user"),
+  sshUserField: document.getElementById("ssh-user-field"),
+  hostNameFeedback: document.getElementById("host-name-feedback"),
+  terminalDialog: document.getElementById("terminal-dialog"),
+  terminalDetails: document.getElementById("terminal-device-details"),
+  terminalStatus: document.getElementById("terminal-tunnel-status"),
+  sshCommand: document.getElementById("ssh-command"),
+  sshCommandForm: document.getElementById("ssh-command-form"),
+  sshCommandOutput: document.getElementById("ssh-command-output"),
+  runSshCommand: document.getElementById("run-ssh-command"),
+  startVncTunnel: document.getElementById("start-vnc-tunnel"),
+  stopVncTunnel: document.getElementById("stop-vnc-tunnel"),
 };
 
 const namedItemConfig = {
@@ -63,6 +78,9 @@ let locationFilter = "";
 let statusFilter = "";
 let dependencyCurrentDeviceId = null;
 let selectedDependencyIds = new Set();
+let statusExpiryTimer = null;
+let tunnelStatusTimer = null;
+let activeTerminalDevice = null;
 const expandedGroups = new Set();
 
 async function api(url, options = {}) {
@@ -272,6 +290,54 @@ function containsQuery(values, query) {
   );
 }
 
+function updateDeviceIdentifierValidation() {
+  const currentId = Number(document.getElementById("device-id").value) || null;
+  const hostName = elements.deviceHostName.value.trim().toLocaleLowerCase("pl");
+  const ip = elements.deviceIp.value.trim().toLocaleLowerCase("pl");
+  const duplicateHost = hostName && devices.some((device) =>
+    device.id !== currentId &&
+    device.hostName.trim().toLocaleLowerCase("pl") === hostName,
+  );
+  const duplicateIp = ip && devices.some((device) =>
+    device.id !== currentId &&
+    device.ip.trim().toLocaleLowerCase("pl") === ip,
+  );
+  const hostMessage = duplicateHost ? "Ta nazwa hosta jest już przypisana do innej maszyny." : "";
+  const ipMessage = duplicateIp ? "Ten adres IP jest już przypisany do innej maszyny." : "";
+  elements.deviceHostName.setCustomValidity(hostMessage);
+  elements.deviceIp.setCustomValidity(ipMessage);
+  elements.deviceHostName.setAttribute("aria-invalid", String(Boolean(hostMessage)));
+  elements.deviceIp.setAttribute("aria-invalid", String(Boolean(ipMessage)));
+  elements.hostNameFeedback.textContent = hostMessage;
+  elements.deviceIpFeedback.textContent = ipMessage;
+}
+
+function isTerminalDevice(device) {
+  return device.category.toLocaleLowerCase("pl") === "terminal";
+}
+
+function updateSshUserVisibility() {
+  const categoryId = Number(elements.categories.value);
+  const category = categories.find((item) => item.id === categoryId);
+  elements.sshUserField.classList.toggle(
+    "d-none",
+    !category || category.name.toLocaleLowerCase("pl") !== "terminal",
+  );
+}
+
+function scheduleStatusExpiry(ttlMs) {
+  window.clearTimeout(statusExpiryTimer);
+  const nextExpiry = devices
+    .filter((device) => device.status === "online" && device.statusCheckedAt)
+    .map((device) => Date.parse(device.statusCheckedAt) + ttlMs)
+    .filter((expiry) => Number.isFinite(expiry))
+    .sort((left, right) => left - right)[0];
+  if (nextExpiry === undefined) return;
+  statusExpiryTimer = window.setTimeout(() => {
+    refresh().catch((error) => notify(error.message, "danger"));
+  }, Math.max(0, nextExpiry - Date.now() + 50));
+}
+
 function makeCell(text, className = "") {
   const cell = document.createElement("td");
   if (className) cell.className = className;
@@ -395,6 +461,17 @@ function renderDeviceRow(device, isGroupMember = false) {
 
   const actionsCell = document.createElement("td");
   actionsCell.className = "actions-cell";
+  if (isTerminalDevice(device)) {
+    const terminal = document.createElement("button");
+    terminal.className = "row-action";
+    terminal.type = "button";
+    terminal.textContent = "SSH / VNC";
+    terminal.title = device.sshUser
+      ? `Otwórz SSH jako ${device.sshUser}`
+      : "Najpierw ustaw użytkownika SSH w edycji terminala.";
+    terminal.addEventListener("click", () => openTerminalDialog(device));
+    actionsCell.append(terminal);
+  }
   const edit = document.createElement("button");
   edit.className = "row-action";
   edit.type = "button";
@@ -503,6 +580,8 @@ async function refresh() {
   renderSettings();
   renderDevices();
   renderSummary(summary);
+  scheduleStatusExpiry(summary.onlineTtlMs);
+  if (elements.deviceDialog.open) updateDeviceIdentifierValidation();
 }
 
 function openDeviceForm(device = null) {
@@ -511,17 +590,20 @@ function openDeviceForm(device = null) {
   document.getElementById("device-id").value = device?.id || "";
   document.getElementById("device-dialog-title").textContent =
     device ? "Edytuj maszynę" : "Dodaj maszynę";
-  document.getElementById("host-name").value = device?.hostName || "";
-  document.getElementById("device-ip").value = device?.ip || "";
+  elements.deviceHostName.value = device?.hostName || "";
+  elements.deviceIp.value = device?.ip || "";
   document.getElementById("group-name").value = device?.groupName || "";
+  elements.sshUser.value = device?.sshUser || "";
   elements.locations.value = device?.location || (locations.length === 1 ? locations[0].name : "");
   document.getElementById("line-number").value = device?.lineNumber || "";
   document.getElementById("numerator").value = device?.numerator || "";
   document.getElementById("device-description").value = device?.description || "";
   elements.categories.value = device?.categoryId || categories[0]?.id || "";
+  updateSshUserVisibility();
+  updateDeviceIdentifierValidation();
   renderDependencies(device?.dependencyIds || [], device?.id || null);
   elements.deviceDialog.showModal();
-  document.getElementById("host-name").focus();
+  elements.deviceHostName.focus();
 }
 
 function startNamedItemEdit(type, item) {
@@ -585,6 +667,120 @@ async function removeDevice(device) {
     notify("Maszyna została usunięta.");
   } catch (error) {
     notify(error.message, "danger");
+  }
+}
+
+function renderTunnelState(state) {
+  if (!activeTerminalDevice) return;
+  const isThisDevice = state.deviceId === activeTerminalDevice.id;
+  const isBusy = state.status === "starting" || state.status === "active";
+  const statusLabels = {
+    starting: "Łączenie z terminalem…",
+    active: isThisDevice ? "Tunel VNC jest aktywny." : "Tunel działa dla innego terminala.",
+    stopping: "Zamykanie tunelu…",
+    stopped: "Tunel nieaktywny.",
+    error: "Nie udało się uruchomić tunelu.",
+  };
+  const label = isThisDevice
+    ? statusLabels[state.status] || "Tunel nieaktywny."
+    : isBusy
+      ? statusLabels.active
+      : statusLabels.stopped;
+  elements.terminalStatus.textContent = state.message && isThisDevice
+    ? `${label} ${state.message}`
+    : label;
+  elements.startVncTunnel.disabled = !activeTerminalDevice.sshUser || isBusy;
+  elements.stopVncTunnel.classList.toggle(
+    "d-none",
+    !isThisDevice || !["starting", "active", "stopping"].includes(state.status),
+  );
+  elements.runSshCommand.disabled = !activeTerminalDevice.sshUser;
+  elements.terminalDetails.textContent =
+    `${activeTerminalDevice.hostName} · SSH ${activeTerminalDevice.sshUser || "nie skonfigurowano"}`;
+
+  window.clearTimeout(tunnelStatusTimer);
+  if (elements.terminalDialog.open && isBusy) {
+    tunnelStatusTimer = window.setTimeout(() => refreshTunnelStatus(), 1500);
+  }
+}
+
+async function refreshTunnelStatus() {
+  if (!activeTerminalDevice || !elements.terminalDialog.open) return;
+  try {
+    const state = await api(`/api/devices/${activeTerminalDevice.id}/terminal/tunnel`);
+    renderTunnelState(state);
+  } catch (error) {
+    elements.terminalStatus.textContent = error.message;
+  }
+}
+
+function openTerminalDialog(device) {
+  activeTerminalDevice = device;
+  elements.terminalDialog.querySelector("#terminal-dialog-title").textContent = "SSH / VNC";
+  elements.terminalDetails.textContent =
+    `${device.hostName} · SSH ${device.sshUser || "nie skonfigurowano"}`;
+  elements.sshCommand.value = "";
+  elements.sshCommandOutput.textContent = "";
+  elements.terminalStatus.textContent = "Sprawdzanie tunelu…";
+  elements.terminalDialog.showModal();
+  refreshTunnelStatus();
+}
+
+async function startTerminalTunnel() {
+  if (!activeTerminalDevice) return;
+  elements.startVncTunnel.disabled = true;
+  try {
+    const state = await api(
+      `/api/devices/${activeTerminalDevice.id}/terminal/tunnel`,
+      { method: "POST" },
+    );
+    renderTunnelState(state);
+  } catch (error) {
+    notify(error.message, "danger");
+    elements.startVncTunnel.disabled = false;
+  }
+}
+
+async function stopTerminalTunnel() {
+  if (!activeTerminalDevice) return;
+  elements.stopVncTunnel.disabled = true;
+  try {
+    const state = await api(
+      `/api/devices/${activeTerminalDevice.id}/terminal/tunnel`,
+      { method: "DELETE" },
+    );
+    renderTunnelState(state);
+  } catch (error) {
+    notify(error.message, "danger");
+  } finally {
+    elements.stopVncTunnel.disabled = false;
+  }
+}
+
+async function executeSshCommand(event) {
+  event.preventDefault();
+  if (!activeTerminalDevice) return;
+  elements.runSshCommand.disabled = true;
+  elements.sshCommandOutput.textContent = "Łączenie przez SSH…";
+  try {
+    const result = await api(
+      `/api/devices/${activeTerminalDevice.id}/terminal/command`,
+      {
+        method: "POST",
+        body: JSON.stringify({ command: elements.sshCommand.value }),
+      },
+    );
+    const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+    elements.sshCommandOutput.textContent = [
+      `Kod zakończenia: ${result.exitCode === null ? "brak" : result.exitCode}`,
+      result.timedOut ? "Polecenie przerwano po przekroczeniu limitu 30 sekund." : "",
+      result.outputTruncated ? "Wyjście zostało skrócone do 32 KB." : "",
+      output || "(brak wyjścia)",
+    ].filter(Boolean).join("\n\n");
+  } catch (error) {
+    elements.sshCommandOutput.textContent = error.message;
+  } finally {
+    elements.runSshCommand.disabled = !activeTerminalDevice.sshUser;
   }
 }
 
@@ -657,6 +853,9 @@ document.querySelectorAll(".main-nav-button").forEach((button) => {
 
 document.getElementById("add-device").addEventListener("click", () => openDeviceForm());
 document.getElementById("empty-add-device").addEventListener("click", () => openDeviceForm());
+elements.deviceHostName.addEventListener("input", updateDeviceIdentifierValidation);
+elements.deviceIp.addEventListener("input", updateDeviceIdentifierValidation);
+elements.categories.addEventListener("change", updateSshUserVisibility);
 elements.search.addEventListener("input", () => {
   currentPage = 1;
   renderDevices();
@@ -697,6 +896,12 @@ elements.pageSize.addEventListener("change", () => {
   renderDevices();
 });
 elements.dependencySearch.addEventListener("input", renderDependencyOptions);
+elements.startVncTunnel.addEventListener("click", startTerminalTunnel);
+elements.stopVncTunnel.addEventListener("click", stopTerminalTunnel);
+elements.sshCommandForm.addEventListener("submit", executeSshCommand);
+elements.terminalDialog.addEventListener("close", () => {
+  window.clearTimeout(tunnelStatusTimer);
+});
 elements.categoryForm.addEventListener("submit", (event) => saveNamedItem("category", event));
 elements.locationForm.addEventListener("submit", (event) => saveNamedItem("location", event));
 namedItemConfig.category.cancelButton.addEventListener("click", () => resetNamedItemEdit("category"));
@@ -704,6 +909,8 @@ namedItemConfig.location.cancelButton.addEventListener("click", () => resetNamed
 
 elements.deviceForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  updateDeviceIdentifierValidation();
+  if (!elements.deviceForm.reportValidity()) return;
   const id = document.getElementById("device-id").value;
   const addNext = event.submitter?.id === "save-and-add-next" && !id;
   const formData = new FormData(elements.deviceForm);
@@ -713,6 +920,7 @@ elements.deviceForm.addEventListener("submit", async (event) => {
     groupName: device.groupName,
     location: device.location,
     categoryId: device.categoryId,
+    sshUser: device.sshUser,
   };
   try {
     await api(id ? `/api/devices/${id}` : "/api/devices", {
@@ -723,10 +931,13 @@ elements.deviceForm.addEventListener("submit", async (event) => {
     if (addNext) {
       elements.deviceForm.reset();
       document.getElementById("group-name").value = nextDefaults.groupName;
+      elements.sshUser.value = nextDefaults.sshUser;
       elements.locations.value = nextDefaults.location;
       elements.categories.value = nextDefaults.categoryId;
+      updateSshUserVisibility();
+      updateDeviceIdentifierValidation();
       renderDependencies();
-      document.getElementById("host-name").focus();
+      elements.deviceHostName.focus();
       notify("Maszyna została dodana. Możesz wprowadzić następny element.");
     } else {
       elements.deviceDialog.close();

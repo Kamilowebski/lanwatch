@@ -8,6 +8,24 @@ const databasePath = process.env.DB_PATH
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 
 const database = new DatabaseSync(databasePath);
+const ONLINE_STATUS_TTL_MINUTES = 5;
+const ONLINE_STATUS_TTL_MS = ONLINE_STATUS_TTL_MINUTES * 60 * 1000;
+const onlineStatusExpression = `
+  CASE
+    WHEN s.status = 'online'
+      AND julianday(s.checked_at) <= julianday('now', '-${ONLINE_STATUS_TTL_MINUTES} minutes')
+    THEN 'unknown'
+    ELSE COALESCE(s.status, 'unknown')
+  END
+`;
+const statusMessageExpression = `
+  CASE
+    WHEN s.status = 'online'
+      AND julianday(s.checked_at) <= julianday('now', '-${ONLINE_STATUS_TTL_MINUTES} minutes')
+    THEN ''
+    ELSE COALESCE(s.message, '')
+  END
+`;
 database.exec(`
   PRAGMA foreign_keys = ON;
   CREATE TABLE IF NOT EXISTS categories (
@@ -23,6 +41,7 @@ database.exec(`
     host_name TEXT NOT NULL,
     ip TEXT NOT NULL,
     group_name TEXT NOT NULL DEFAULT '',
+    ssh_user TEXT NOT NULL DEFAULT '',
     location TEXT NOT NULL,
     category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
     description TEXT NOT NULL DEFAULT '',
@@ -48,6 +67,9 @@ database.exec(`
 const deviceColumns = database.prepare("PRAGMA table_info(devices)").all();
 if (!deviceColumns.some((column) => column.name === "group_name")) {
   database.exec("ALTER TABLE devices ADD COLUMN group_name TEXT NOT NULL DEFAULT ''");
+}
+if (!deviceColumns.some((column) => column.name === "ssh_user")) {
+  database.exec("ALTER TABLE devices ADD COLUMN ssh_user TEXT NOT NULL DEFAULT ''");
 }
 
 database.exec(`
@@ -86,11 +108,12 @@ function getLocationByName(name) {
 function getDevice(id) {
   const device = database.prepare(`
     SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
+      d.ssh_user AS sshUser,
       d.category_id AS categoryId, c.name AS category,
       d.description, d.line_number AS lineNumber, d.numerator,
-      COALESCE(s.status, 'unknown') AS status, s.checked_at AS statusCheckedAt,
+      ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
       COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
-      COALESCE(s.message, '') AS statusMessage
+      ${statusMessageExpression} AS statusMessage
     FROM devices d
     JOIN categories c ON c.id = d.category_id
     JOIN locations l ON l.name = d.location COLLATE NOCASE
@@ -144,11 +167,12 @@ function getLocations() {
 function getDevices() {
   const devices = database.prepare(`
     SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
+      d.ssh_user AS sshUser,
       d.category_id AS categoryId, c.name AS category,
       d.description, d.line_number AS lineNumber, d.numerator,
-      COALESCE(s.status, 'unknown') AS status, s.checked_at AS statusCheckedAt,
+      ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
       COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
-      COALESCE(s.message, '') AS statusMessage
+      ${statusMessageExpression} AS statusMessage
     FROM devices d
     JOIN categories c ON c.id = d.category_id
     JOIN locations l ON l.name = d.location COLLATE NOCASE
@@ -173,14 +197,15 @@ function getDevices() {
 }
 
 function getSummary() {
-  return database.prepare(`
+  const summary = database.prepare(`
     SELECT COUNT(*) AS devices,
-      COALESCE(SUM(CASE WHEN COALESCE(s.status, 'unknown') = 'online' THEN 1 ELSE 0 END), 0) AS online,
-      COALESCE(SUM(CASE WHEN COALESCE(s.status, 'unknown') = 'offline' THEN 1 ELSE 0 END), 0) AS offline,
-      COALESCE(SUM(CASE WHEN COALESCE(s.status, 'unknown') = 'unknown' THEN 1 ELSE 0 END), 0) AS unchecked
+      COALESCE(SUM(CASE WHEN ${onlineStatusExpression} = 'online' THEN 1 ELSE 0 END), 0) AS online,
+      COALESCE(SUM(CASE WHEN ${onlineStatusExpression} = 'offline' THEN 1 ELSE 0 END), 0) AS offline,
+      COALESCE(SUM(CASE WHEN ${onlineStatusExpression} = 'unknown' THEN 1 ELSE 0 END), 0) AS unchecked
     FROM devices d
     LEFT JOIN device_status s ON s.device_id = d.id
   `).get();
+  return { ...summary, onlineTtlMs: ONLINE_STATUS_TTL_MS };
 }
 
 function saveDeviceStatus(deviceId, result) {
@@ -201,6 +226,26 @@ function saveDeviceStatus(deviceId, result) {
     result.target,
     result.message,
   );
+}
+
+function assertDeviceIdentifiersUnique(device, excludedId = null) {
+  const ignoredId = excludedId || -1;
+  const duplicateHost = database.prepare(`
+    SELECT id FROM devices
+    WHERE host_name = ? COLLATE NOCASE AND id != ?
+  `).get(device.hostName, ignoredId);
+  if (duplicateHost) {
+    throw Object.assign(new Error("Nazwa hosta jest już przypisana do innej maszyny."), { status: 409 });
+  }
+  if (device.ip) {
+    const duplicateIp = database.prepare(`
+      SELECT id FROM devices
+      WHERE ip = ? COLLATE NOCASE AND ip <> '' AND id != ?
+    `).get(device.ip, ignoredId);
+    if (duplicateIp) {
+      throw Object.assign(new Error("Adres IP jest już przypisany do innej maszyny."), { status: 409 });
+    }
+  }
 }
 
 function createNamedItem(table, label, name) {
@@ -293,13 +338,15 @@ function createDevice(device) {
     throw Object.assign(new Error("Wybrana lokalizacja już nie istnieje."), { status: 400 });
   }
   const id = withTransaction(() => {
+    assertDeviceIdentifiersUnique(device);
     const result = database.prepare(`
-      INSERT INTO devices (host_name, ip, group_name, location, category_id, description, line_number, numerator)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (host_name, ip, group_name, ssh_user, location, category_id, description, line_number, numerator)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       device.hostName,
       device.ip,
       device.groupName,
+      device.sshUser,
       location.name,
       device.categoryId,
       device.description,
@@ -326,15 +373,17 @@ function updateDevice(id, device) {
     throw Object.assign(new Error("Wybrana lokalizacja już nie istnieje."), { status: 400 });
   }
   withTransaction(() => {
+    assertDeviceIdentifiersUnique(device, id);
     database.prepare(`
       UPDATE devices
-      SET host_name = ?, ip = ?, group_name = ?, location = ?, category_id = ?,
+      SET host_name = ?, ip = ?, group_name = ?, ssh_user = ?, location = ?, category_id = ?,
         description = ?, line_number = ?, numerator = ?
       WHERE id = ?
     `).run(
       device.hostName,
       device.ip,
       device.groupName,
+      device.sshUser,
       location.name,
       device.categoryId,
       device.description,

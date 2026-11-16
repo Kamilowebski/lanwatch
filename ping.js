@@ -131,4 +131,10 @@ async function pingLocalTarget(target) {
   return runSystemPing(address);
 }
 
-module.exports = { ATTEMPTS, classifyPingResult, isPrivateAddress, pingLocalTarget };
+module.exports = {
+  ATTEMPTS,
+  classifyPingResult,
+  isPrivateAddress,
+  pingLocalTarget,
+  resolvePrivateAddress,
+};

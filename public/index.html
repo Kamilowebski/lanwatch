@@ -209,15 +209,22 @@
           <div class="form-field">
             <label for="host-name">Nazwa hosta <span>*</span></label>
             <input class="form-control" id="host-name" name="hostName" maxlength="255" required>
+            <small class="field-validation" id="host-name-feedback" aria-live="polite"></small>
           </div>
           <div class="form-field">
             <label for="device-ip">Adres IP</label>
             <input class="form-control" id="device-ip" name="ip" maxlength="255" placeholder="Opcjonalny — np. urządzenie z DHCP">
+            <small class="field-validation" id="device-ip-feedback" aria-live="polite"></small>
           </div>
           <div class="form-field form-field-wide">
             <label for="group-name">Urządzenie / grupa</label>
             <input class="form-control" id="group-name" name="groupName" maxlength="255" placeholder="Np. Bizerba 01">
             <small>Wpisz tę samą nazwę dla wszystkich elementów jednego urządzenia, np. jego głowic.</small>
+          </div>
+          <div class="form-field form-field-wide d-none" id="ssh-user-field">
+            <label for="ssh-user">Użytkownik SSH</label>
+            <input class="form-control" id="ssh-user" name="sshUser" maxlength="64" autocomplete="off" placeholder="Np. administrator">
+            <small>Używany tylko lokalnie przez OpenSSH i klucz skonfigurowany na komputerze z serwerem.</small>
           </div>
           <div class="form-field">
             <label for="device-location">Lokalizacja <span>*</span></label>
@@ -253,6 +260,40 @@
           <button class="btn btn-primary" id="save-device" type="submit">Zapisz maszynę</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog class="app-dialog terminal-dialog" id="terminal-dialog">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">DOSTĘP LOKALNY SSH</p>
+          <h2 id="terminal-dialog-title">Terminal SSH</h2>
+          <p class="dialog-subtitle" id="terminal-device-details"></p>
+        </div>
+        <button class="icon-button" type="button" data-close="terminal-dialog" aria-label="Zamknij">×</button>
+      </div>
+      <div class="terminal-content">
+        <section class="terminal-tunnel-section">
+          <h3>Tunel VNC</h3>
+          <p id="terminal-tunnel-status" role="status">Tunel nieaktywny</p>
+          <p class="terminal-endpoint">TigerVNC: <code>127.0.0.1:5900</code></p>
+          <div class="terminal-actions">
+            <button class="btn btn-primary" id="start-vnc-tunnel" type="button">Uruchom tunel</button>
+            <button class="btn btn-outline-secondary" id="stop-vnc-tunnel" type="button">Zamknij tunel</button>
+          </div>
+        </section>
+        <form id="ssh-command-form">
+          <label for="ssh-command">Polecenie na terminalu</label>
+          <div class="terminal-command-row">
+            <input class="form-control" id="ssh-command" maxlength="2000" autocomplete="off" required placeholder="Wpisz jedno polecenie">
+            <button class="btn btn-primary" id="run-ssh-command" type="submit">Wykonaj</button>
+          </div>
+          <small>Polecenia są wykonywane pojedynczo, z limitem czasu 30 sekund.</small>
+        </form>
+        <pre class="terminal-output" id="ssh-command-output" aria-live="polite"></pre>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-outline-secondary" type="button" data-close="terminal-dialog">Zamknij</button>
+      </div>
     </dialog>
 
     <dialog class="app-dialog ping-results-dialog" id="ping-results-dialog">
