@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f6fa">
+    <title>Lanwatch — maszyny</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Lanwatch — strona główna">
+          <span class="brand-mark" aria-hidden="true">L</span>
+          <span>lanwatch<span class="brand-period">.</span></span>
+        </a>
+        <div class="topbar-actions">
+          <span class="network-label"><span class="live-dot"></span> Ewidencja lokalna</span>
+          <button class="btn theme-toggle" id="theme-toggle" type="button" aria-label="Przełącz motyw">
+            <span id="theme-label">Ciemny motyw</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <section class="welcome-row">
+          <div>
+            <p class="eyebrow">PANEL ADMINISTRACYJNY</p>
+            <h1>Maszyny</h1>
+            <p class="page-subtitle">Przegląd urządzeń i infrastruktury w Twojej sieci.</p>
+          </div>
+          <button class="btn btn-primary add-device-button" id="add-device" type="button">
+            <span aria-hidden="true">＋</span> Dodaj maszynę
+          </button>
+        </section>
+
+        <section class="dashboard-grid" aria-label="Podsumowanie">
+          <article class="dashboard-card">
+            <div class="dashboard-icon icon-blue" aria-hidden="true">▦</div>
+            <div><p>Wszystkie maszyny</p><strong id="summary-devices">—</strong></div>
+            <span class="card-caption">w ewidencji</span>
+          </article>
+          <article class="dashboard-card">
+            <div class="dashboard-icon icon-violet" aria-hidden="true">◈</div>
+            <div><p>Kategorie</p><strong id="summary-categories">—</strong></div>
+            <span class="card-caption">typy urządzeń</span>
+          </article>
+          <article class="dashboard-card">
+            <div class="dashboard-icon icon-green" aria-hidden="true">⌖</div>
+            <div><p>Lokalizacje</p><strong id="summary-locations">—</strong></div>
+            <span class="card-caption">obszarów</span>
+          </article>
+        </section>
+
+        <section class="inventory-panel">
+          <div class="inventory-heading">
+            <div>
+              <h2>Inwentarz urządzeń</h2>
+              <p>Lista maszyn zapisanych w systemie</p>
+            </div>
+            <button class="btn btn-outline-secondary category-button" id="manage-categories" type="button">
+              Zarządzaj kategoriami
+            </button>
+          </div>
+
+          <div class="table-toolbar">
+            <label class="search-box" for="device-search">
+              <span aria-hidden="true">⌕</span>
+              <input id="device-search" type="search" placeholder="Szukaj po nazwie, IP lub lokalizacji">
+            </label>
+            <span class="result-count" id="result-count"></span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table inventory-table align-middle">
+              <thead>
+                <tr>
+                  <th scope="col">Nazwa hosta</th>
+                  <th scope="col">Adres IP</th>
+                  <th scope="col">Lokalizacja</th>
+                  <th scope="col">Typ</th>
+                  <th scope="col">Status</th>
+                  <th scope="col"><span class="visually-hidden">Akcje</span></th>
+                </tr>
+              </thead>
+              <tbody id="device-list"></tbody>
+            </table>
+          </div>
+          <div class="empty-state d-none" id="empty-state">
+            <div class="empty-icon" aria-hidden="true">▦</div>
+            <h3 id="empty-title">Brak maszyn</h3>
+            <p id="empty-description">Dodaj pierwszą maszynę, aby rozpocząć tworzenie ewidencji.</p>
+            <button class="btn btn-primary" id="empty-add-device" type="button">Dodaj maszynę</button>
+          </div>
+          <div class="table-footer">
+            <span id="inventory-count"></span>
+            <span class="status-note"><span class="status-dot"></span> Monitorowanie statusu urządzeń — w przygotowaniu</span>
+          </div>
+        </section>
+      </main>
+      <footer class="app-footer">Lanwatch <span>·</span> Ewidencja infrastruktury</footer>
+    </div>
+
+    <div class="alert-stack" id="notifications" aria-live="polite"></div>
+
+    <dialog class="app-dialog" id="device-dialog">
+      <form id="device-form">
+        <div class="dialog-header">
+          <div><p class="eyebrow">EWIDENCJA</p><h2 id="device-dialog-title">Dodaj maszynę</h2></div>
+          <button class="icon-button" type="button" data-close="device-dialog" aria-label="Zamknij">×</button>
+        </div>
+        <input id="device-id" type="hidden">
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="host-name">Nazwa hosta <span>*</span></label>
+            <input class="form-control" id="host-name" name="hostName" maxlength="255" required>
+          </div>
+          <div class="form-field">
+            <label for="device-ip">Adres IP <span>*</span></label>
+            <input class="form-control" id="device-ip" name="ip" maxlength="255" required>
+          </div>
+          <div class="form-field">
+            <label for="device-location">Lokalizacja <span>*</span></label>
+            <input class="form-control" id="device-location" name="location" maxlength="255" required>
+          </div>
+          <div class="form-field">
+            <label for="device-category">Kategoria <span>*</span></label>
+            <select class="form-select" id="device-category" name="categoryId" required></select>
+          </div>
+          <div class="form-field">
+            <label for="line-number">Nr linii</label>
+            <input class="form-control" id="line-number" name="lineNumber" maxlength="255">
+          </div>
+          <div class="form-field">
+            <label for="numerator">Numerator</label>
+            <input class="form-control" id="numerator" name="numerator" maxlength="255">
+          </div>
+          <div class="form-field form-field-wide">
+            <label for="device-description">Opis</label>
+            <textarea class="form-control" id="device-description" name="description" rows="3" maxlength="5000"></textarea>
+          </div>
+          <div class="form-field form-field-wide">
+            <label for="device-dependencies">Zależności od innych maszyn</label>
+            <select class="form-select dependency-select" id="device-dependencies" name="dependencyIds" multiple></select>
+            <small>Przytrzymaj Ctrl (Windows) lub Command (Mac), aby zaznaczyć kilka maszyn.</small>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="btn btn-outline-secondary" type="button" data-close="device-dialog">Anuluj</button>
+          <button class="btn btn-primary" id="save-device" type="submit">Zapisz maszynę</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="app-dialog category-dialog" id="category-dialog">
+      <div class="dialog-header">
+        <div><p class="eyebrow">USTAWIENIA EWIDENCJI</p><h2>Zarządzaj kategoriami</h2></div>
+        <button class="icon-button" type="button" data-close="category-dialog" aria-label="Zamknij">×</button>
+      </div>
+      <form id="category-form" class="category-form">
+        <label for="category-name" class="form-label">Nazwa kategorii</label>
+        <div class="category-input-row">
+          <input class="form-control" id="category-name" maxlength="100" required placeholder="Np. Terminal">
+          <button class="btn btn-primary" id="save-category" type="submit">Dodaj</button>
+          <button class="btn btn-outline-secondary d-none" id="cancel-category-edit" type="button">Anuluj</button>
+        </div>
+      </form>
+      <div class="category-list" id="category-list"></div>
+      <div class="dialog-actions"><button class="btn btn-outline-secondary" type="button" data-close="category-dialog">Gotowe</button></div>
+    </dialog>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
