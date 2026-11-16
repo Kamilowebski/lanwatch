@@ -13,6 +13,8 @@ const elements = {
   locationName: document.getElementById("location-name"),
   locations: document.getElementById("device-location"),
   notifications: document.getElementById("notifications"),
+  pingResultsDialog: document.getElementById("ping-results-dialog"),
+  pingResultsList: document.getElementById("ping-results-list"),
   search: document.getElementById("device-search"),
 };
 
@@ -75,6 +77,9 @@ function setTheme(theme) {
 
 function renderSummary(summary) {
   document.getElementById("summary-devices").textContent = summary.devices;
+  document.getElementById("summary-online").textContent = summary.online;
+  document.getElementById("summary-offline").textContent = summary.offline;
+  document.getElementById("summary-unchecked").textContent = summary.unchecked;
 }
 
 function renderSelect(select, items, selectedValue, itemLabel) {
@@ -177,18 +182,25 @@ function makeCell(text, className = "") {
 function renderDevices() {
   const query = elements.search.value.trim().toLocaleLowerCase("pl");
   const visibleDevices = devices.filter((device) =>
-    [device.hostName, device.ip, device.location, device.category]
+    [device.hostName, device.groupName, device.ip, device.location, device.category]
       .some((value) => value.toLocaleLowerCase("pl").includes(query)),
   );
 
   elements.deviceList.replaceChildren();
   for (const device of visibleDevices) {
     const row = document.createElement("tr");
-    row.append(
-      makeCell(device.hostName, "host-cell"),
-      makeCell(device.ip, "ip-cell"),
-      makeCell(device.location),
-    );
+    const hostCell = document.createElement("td");
+    hostCell.className = "host-cell";
+    const hostName = document.createElement("span");
+    hostName.textContent = device.hostName;
+    hostCell.append(hostName);
+    if (device.groupName) {
+      const groupName = document.createElement("small");
+      groupName.className = "group-name-cell";
+      groupName.textContent = device.groupName;
+      hostCell.append(groupName);
+    }
+    row.append(hostCell, makeCell(device.ip, "ip-cell"), makeCell(device.location));
     const categoryCell = document.createElement("td");
     const badge = document.createElement("span");
     badge.className = "category-badge";
@@ -197,10 +209,25 @@ function renderDevices() {
     row.append(categoryCell);
 
     const statusCell = document.createElement("td");
-    const status = document.createElement("span");
-    status.className = "status-badge";
-    status.textContent = "Nie sprawdzono";
+    const status = document.createElement("button");
+    status.type = "button";
+    const statusLabels = {
+      online: "Online",
+      offline: "Brak odpowiedzi",
+      unknown: device.statusCheckedAt ? "Nieustalony" : "Nie sprawdzono",
+    };
+    status.className = `status-badge status-trigger status-${device.status}`;
+    status.textContent = statusLabels[device.status] || statusLabels.unknown;
+    status.title = device.statusMessage || "Kliknij, aby sprawdzić ping i zależności.";
+    status.setAttribute("aria-label", `Status ${device.hostName}: ${status.textContent}. Kliknij, aby sprawdzić.`);
+    status.addEventListener("click", () => pingDevice(device, status));
     statusCell.append(status);
+    if (device.statusCheckedAt) {
+      const checkedAt = document.createElement("small");
+      checkedAt.className = "status-time";
+      checkedAt.textContent = new Date(device.statusCheckedAt).toLocaleString("pl-PL");
+      statusCell.append(checkedAt);
+    }
     row.append(statusCell);
 
     const actionsCell = document.createElement("td");
@@ -255,6 +282,7 @@ function openDeviceForm(device = null) {
     device ? "Edytuj maszynę" : "Dodaj maszynę";
   document.getElementById("host-name").value = device?.hostName || "";
   document.getElementById("device-ip").value = device?.ip || "";
+  document.getElementById("group-name").value = device?.groupName || "";
   elements.locations.value = device?.location || (locations.length === 1 ? locations[0].name : "");
   document.getElementById("line-number").value = device?.lineNumber || "";
   document.getElementById("numerator").value = device?.numerator || "";
@@ -326,6 +354,58 @@ async function removeDevice(device) {
     notify("Maszyna została usunięta.");
   } catch (error) {
     notify(error.message, "danger");
+  }
+}
+
+function renderPingResults(results) {
+  const statusLabels = {
+    online: "Online",
+    offline: "Brak odpowiedzi",
+    unknown: "Nieustalony",
+  };
+  elements.pingResultsList.replaceChildren();
+  for (const result of results) {
+    const row = document.createElement("tr");
+    const machine = document.createElement("td");
+    machine.textContent = result.hostName;
+    const target = document.createElement("td");
+    target.textContent = result.target || "—";
+    const statusCell = document.createElement("td");
+    const status = document.createElement("span");
+    status.className = `status-badge status-${result.status}`;
+    status.textContent = statusLabels[result.status] || statusLabels.unknown;
+    statusCell.append(status);
+    if (result.message) {
+      const message = document.createElement("small");
+      message.className = "ping-message";
+      message.textContent = result.message;
+      statusCell.append(message);
+    }
+    const replies = document.createElement("td");
+    replies.textContent = result.attempts
+      ? `${result.replies}/${result.attempts}`
+      : "Nie wysłano";
+    row.append(machine, target, statusCell, replies);
+    elements.pingResultsList.append(row);
+  }
+}
+
+async function pingDevice(device, button) {
+  const previousLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Sprawdzam…";
+  try {
+    const { results } = await api(`/api/devices/${device.id}/ping`, { method: "POST" });
+    await refresh();
+    renderPingResults(results);
+    elements.pingResultsDialog.showModal();
+  } catch (error) {
+    notify(error.message, "danger");
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = previousLabel;
+    }
   }
 }
 

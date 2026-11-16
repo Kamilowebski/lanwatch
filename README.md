@@ -18,6 +18,8 @@ W katalogu projektu wykonaj:
 npm start
 ```
 
+Testy można uruchomić poleceniem `npm test`.
+
 Otwórz `http://localhost:3000`. Serwer domyślnie nasłuchuje na wszystkich
 interfejsach sieciowych, więc można też otworzyć aplikację z innego urządzenia
 w zaufanej sieci lokalnej, używając adresu IP komputera z serwerem.
@@ -40,20 +42,31 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 
 - Dodawanie, edycja i usuwanie maszyn.
 - Dane maszyny: nazwa hosta, opcjonalny adres IP (np. dla urządzeń z DHCP),
-  lokalizacja, kategoria, opis, numer linii, numerator i zależności od innych
-  maszyn.
+  opcjonalna nazwa urządzenia/grupy, lokalizacja, kategoria, opis, numer linii,
+  numerator i zależności od innych maszyn. Wspólna nazwa grupy łączy elementy
+  jednego urządzenia, np. głowice Bizerby; wyszukiwarka znajduje wszystkie
+  elementy tej grupy.
 - Zarządzanie kategoriami i lokalizacjami w zakładce „Ustawienia”. Nazwę użytej
   lokalizacji można zmienić, a jej usunięcie jest zablokowane, gdy przypisane są
   do niej maszyny.
 - Przy pierwszym uruchomieniu tworzone są kategorie: Terminal, Komputer, Server,
   drukarka, Raspberry pi, kamera, detektor, waga, bizerba i inne.
 - Tabela z nazwą hosta, adresem IP, lokalizacją, typem i statusem.
-- Dashboard z liczbą maszyn i informacją o statusie monitorowania.
+- Ręczne sprawdzanie dostępności po kliknięciu statusu maszyny. Aplikacja używa
+  wyłącznie systemowego polecenia `ping` (ICMP), wysyła trzy próby i sprawdza
+  także pozostałe elementy tej samej grupy oraz ich bezpośrednie zależności.
+- Wyniki pingowania i czas ostatniego sprawdzenia są zapisywane w bazie oraz
+  pokazywane w tabeli i dashboardzie. Status „Brak odpowiedzi” oznacza brak
+  odpowiedzi na wszystkie trzy próby ICMP, nie pewność, że urządzenie jest
+  wyłączone (np. firewall może blokować ICMP).
 - Wyszukiwanie maszyn.
 - Jasny i ciemny motyw zapamiętywany w przeglądarce.
 
-Status urządzeń ma obecnie wartość informacyjną „Nie sprawdzono”. Aplikacja nie
-sonduje maszyn ani nie monitoruje ich dostępności.
+Ping jest uruchamiany wyłącznie po kliknięciu i tylko do adresów lokalnych:
+prywatnych adresów IPv4, lokalnych adresów IPv6 lub nazw hostów rozpoznanych
+na taki adres. Bez adresu IP systemowy resolver rozpoznaje nazwę hosta (może
+użyć DNS); same próby diagnostyczne są wyłącznie ICMP. Aplikacja nie wykonuje
+sond TCP/UDP ani skanowania portów, nie ma też automatycznego odpytywania w tle.
 
 ## Bezpieczeństwo
 

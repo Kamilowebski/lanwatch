@@ -40,16 +40,26 @@
           </button>
         </section>
 
-        <section class="dashboard-grid" aria-label="Podsumowanie">
+        <section class="dashboard-grid" aria-label="Podsumowanie statusu">
           <article class="dashboard-card">
             <div class="dashboard-icon icon-blue" aria-hidden="true">▦</div>
             <div><p>Wszystkie maszyny</p><strong id="summary-devices">—</strong></div>
             <span class="card-caption">w ewidencji</span>
           </article>
           <article class="dashboard-card">
-            <div class="dashboard-icon icon-green" aria-hidden="true">◈</div>
-            <div><p>Status urządzeń</p><strong class="status-value">W przygotowaniu</strong></div>
-            <span class="card-caption">bez aktywnego monitoringu</span>
+            <div class="dashboard-icon icon-green" aria-hidden="true">●</div>
+            <div><p>Online</p><strong id="summary-online">0</strong></div>
+            <span class="card-caption">odpowiedź na ping</span>
+          </article>
+          <article class="dashboard-card">
+            <div class="dashboard-icon icon-red" aria-hidden="true">●</div>
+            <div><p>Brak odpowiedzi</p><strong id="summary-offline">0</strong></div>
+            <span class="card-caption">0/3 odpowiedzi ICMP</span>
+          </article>
+          <article class="dashboard-card">
+            <div class="dashboard-icon icon-violet" aria-hidden="true">◷</div>
+            <div><p>Nieustalony status</p><strong id="summary-unchecked">0</strong></div>
+            <span class="card-caption">brak wiarygodnego wyniku</span>
           </article>
         </section>
 
@@ -73,7 +83,7 @@
             <table class="table inventory-table align-middle">
               <thead>
                 <tr>
-                  <th scope="col">Nazwa hosta</th>
+                  <th scope="col">Host / grupa</th>
                   <th scope="col">Adres IP</th>
                   <th scope="col">Lokalizacja</th>
                   <th scope="col">Typ</th>
@@ -92,7 +102,7 @@
           </div>
           <div class="table-footer">
             <span id="inventory-count"></span>
-            <span class="status-note"><span class="status-dot"></span> Status: monitorowanie w przygotowaniu</span>
+            <span class="status-note"><span class="status-dot"></span> Status aktualizuje ręczne sprawdzenie ICMP.</span>
           </div>
         </section>
         </section>
@@ -164,6 +174,11 @@
             <label for="device-ip">Adres IP</label>
             <input class="form-control" id="device-ip" name="ip" maxlength="255" placeholder="Opcjonalny — np. urządzenie z DHCP">
           </div>
+          <div class="form-field form-field-wide">
+            <label for="group-name">Urządzenie / grupa</label>
+            <input class="form-control" id="group-name" name="groupName" maxlength="255" placeholder="Np. Bizerba 01">
+            <small>Wpisz tę samą nazwę dla wszystkich elementów jednego urządzenia, np. jego głowic.</small>
+          </div>
           <div class="form-field">
             <label for="device-location">Lokalizacja <span>*</span></label>
             <select class="form-select" id="device-location" name="location" required></select>
@@ -196,6 +211,33 @@
           <button class="btn btn-primary" id="save-device" type="submit">Zapisz maszynę</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog class="app-dialog ping-results-dialog" id="ping-results-dialog">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">SPRAWDZANIE ICMP</p>
+          <h2>Wyniki pingowania</h2>
+          <p class="dialog-subtitle">Maszyna, jej grupa i zależności tych elementów</p>
+        </div>
+        <button class="icon-button" type="button" data-close="ping-results-dialog" aria-label="Zamknij">×</button>
+      </div>
+      <div class="ping-results-wrap">
+        <table class="table ping-results-table align-middle">
+          <thead>
+            <tr>
+              <th scope="col">Maszyna</th>
+              <th scope="col">Adres sprawdzany</th>
+              <th scope="col">Status</th>
+              <th scope="col">Odpowiedzi</th>
+            </tr>
+          </thead>
+          <tbody id="ping-results-list"></tbody>
+        </table>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-outline-secondary" type="button" data-close="ping-results-dialog">Zamknij</button>
+      </div>
     </dialog>
 
     <script src="/app.js" defer></script>

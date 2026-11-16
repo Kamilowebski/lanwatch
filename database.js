@@ -22,6 +22,7 @@ database.exec(`
     id INTEGER PRIMARY KEY,
     host_name TEXT NOT NULL,
     ip TEXT NOT NULL,
+    group_name TEXT NOT NULL DEFAULT '',
     location TEXT NOT NULL,
     category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
     description TEXT NOT NULL DEFAULT '',
@@ -34,7 +35,20 @@ database.exec(`
     PRIMARY KEY (device_id, dependency_id),
     CHECK (device_id != dependency_id)
   );
+  CREATE TABLE IF NOT EXISTS device_status (
+    device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('online', 'offline', 'unknown')),
+    checked_at TEXT NOT NULL,
+    replies INTEGER NOT NULL DEFAULT 0,
+    target TEXT NOT NULL DEFAULT '',
+    message TEXT NOT NULL DEFAULT ''
+  );
 `);
+
+const deviceColumns = database.prepare("PRAGMA table_info(devices)").all();
+if (!deviceColumns.some((column) => column.name === "group_name")) {
+  database.exec("ALTER TABLE devices ADD COLUMN group_name TEXT NOT NULL DEFAULT ''");
+}
 
 database.exec(`
   INSERT OR IGNORE INTO locations (name)
@@ -71,12 +85,16 @@ function getLocationByName(name) {
 
 function getDevice(id) {
   const device = database.prepare(`
-    SELECT d.id, d.host_name AS hostName, d.ip, l.name AS location,
+    SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
       d.category_id AS categoryId, c.name AS category,
-      d.description, d.line_number AS lineNumber, d.numerator
+      d.description, d.line_number AS lineNumber, d.numerator,
+      COALESCE(s.status, 'unknown') AS status, s.checked_at AS statusCheckedAt,
+      COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
+      COALESCE(s.message, '') AS statusMessage
     FROM devices d
     JOIN categories c ON c.id = d.category_id
     JOIN locations l ON l.name = d.location COLLATE NOCASE
+    LEFT JOIN device_status s ON s.device_id = d.id
     WHERE d.id = ?
   `).get(id);
   if (!device) return undefined;
@@ -125,12 +143,16 @@ function getLocations() {
 
 function getDevices() {
   const devices = database.prepare(`
-    SELECT d.id, d.host_name AS hostName, d.ip, l.name AS location,
+    SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
       d.category_id AS categoryId, c.name AS category,
-      d.description, d.line_number AS lineNumber, d.numerator
+      d.description, d.line_number AS lineNumber, d.numerator,
+      COALESCE(s.status, 'unknown') AS status, s.checked_at AS statusCheckedAt,
+      COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
+      COALESCE(s.message, '') AS statusMessage
     FROM devices d
     JOIN categories c ON c.id = d.category_id
     JOIN locations l ON l.name = d.location COLLATE NOCASE
+    LEFT JOIN device_status s ON s.device_id = d.id
     ORDER BY d.host_name COLLATE NOCASE
   `).all();
   const dependencyQuery = database.prepare(`
@@ -151,9 +173,34 @@ function getDevices() {
 }
 
 function getSummary() {
-  return {
-    devices: database.prepare("SELECT COUNT(*) AS count FROM devices").get().count,
-  };
+  return database.prepare(`
+    SELECT COUNT(*) AS devices,
+      COALESCE(SUM(CASE WHEN COALESCE(s.status, 'unknown') = 'online' THEN 1 ELSE 0 END), 0) AS online,
+      COALESCE(SUM(CASE WHEN COALESCE(s.status, 'unknown') = 'offline' THEN 1 ELSE 0 END), 0) AS offline,
+      COALESCE(SUM(CASE WHEN COALESCE(s.status, 'unknown') = 'unknown' THEN 1 ELSE 0 END), 0) AS unchecked
+    FROM devices d
+    LEFT JOIN device_status s ON s.device_id = d.id
+  `).get();
+}
+
+function saveDeviceStatus(deviceId, result) {
+  database.prepare(`
+    INSERT INTO device_status (device_id, status, checked_at, replies, target, message)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(device_id) DO UPDATE SET
+      status = excluded.status,
+      checked_at = excluded.checked_at,
+      replies = excluded.replies,
+      target = excluded.target,
+      message = excluded.message
+  `).run(
+    deviceId,
+    result.status,
+    result.checkedAt,
+    result.replies,
+    result.target,
+    result.message,
+  );
 }
 
 function createNamedItem(table, label, name) {
@@ -247,11 +294,12 @@ function createDevice(device) {
   }
   const id = withTransaction(() => {
     const result = database.prepare(`
-      INSERT INTO devices (host_name, ip, location, category_id, description, line_number, numerator)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (host_name, ip, group_name, location, category_id, description, line_number, numerator)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       device.hostName,
       device.ip,
+      device.groupName,
       location.name,
       device.categoryId,
       device.description,
@@ -266,7 +314,8 @@ function createDevice(device) {
 }
 
 function updateDevice(id, device) {
-  if (!getDevice(id)) {
+  const existing = getDevice(id);
+  if (!existing) {
     throw Object.assign(new Error("Nie znaleziono maszyny."), { status: 404 });
   }
   if (!getCategory(device.categoryId)) {
@@ -279,12 +328,13 @@ function updateDevice(id, device) {
   withTransaction(() => {
     database.prepare(`
       UPDATE devices
-      SET host_name = ?, ip = ?, location = ?, category_id = ?,
+      SET host_name = ?, ip = ?, group_name = ?, location = ?, category_id = ?,
         description = ?, line_number = ?, numerator = ?
       WHERE id = ?
     `).run(
       device.hostName,
       device.ip,
+      device.groupName,
       location.name,
       device.categoryId,
       device.description,
@@ -293,6 +343,9 @@ function updateDevice(id, device) {
       id,
     );
     saveDependencies(id, device.dependencyIds);
+    if (existing.hostName !== device.hostName || existing.ip !== device.ip) {
+      database.prepare("DELETE FROM device_status WHERE device_id = ?").run(id);
+    }
   });
   return getDevice(id);
 }
@@ -312,9 +365,11 @@ module.exports = {
   deleteDevice,
   deleteLocation,
   getCategories,
+  getDevice,
   getDevices,
   getLocations,
   getSummary,
+  saveDeviceStatus,
   updateCategory,
   updateDevice,
   updateLocation,
