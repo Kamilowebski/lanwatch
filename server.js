@@ -18,6 +18,7 @@ const {
   saveDeviceStatus,
   updateCategory,
   updateDevice,
+  updateDeviceMonitor,
   updateLocation,
   updateSshUser,
 } = require("./database");
@@ -26,6 +27,7 @@ const { startVncTunnel } = require("./terminal");
 
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "0.0.0.0";
+const MONITOR_POLL_INTERVAL_MS = 15 * 1000;
 const publicDirectory = path.join(__dirname, "public");
 const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
@@ -147,6 +149,22 @@ function validateSshUsername(input) {
   return username.trim();
 }
 
+function validateMonitorSettings(input) {
+  if (
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    ["enabled", "notifyOnline", "notifyOffline"].some((key) => typeof input[key] !== "boolean")
+  ) {
+    throw new HttpError(400, "Nieprawidłowe ustawienia monitorowania.");
+  }
+  return {
+    enabled: input.enabled,
+    notifyOnline: input.notifyOnline,
+    notifyOffline: input.notifyOffline,
+  };
+}
+
 function isLoopbackAddress(address) {
   if (!address) return false;
   const normalized = address.toLowerCase().replace(/^::ffff:/, "");
@@ -219,6 +237,32 @@ async function pingDeviceAndDependencies(deviceId) {
     return results;
   } finally {
     pingJobActive = false;
+  }
+}
+
+async function pollMonitoredDevices() {
+  try {
+    const monitoredDevices = getDevices().filter((device) => device.monitorEnabled);
+    if (!pingJobActive && monitoredDevices.length) {
+      pingJobActive = true;
+      try {
+        for (const device of monitoredDevices) {
+          const result = await pingLocalTarget(device.ip || device.hostName);
+          if (getDevice(device.id)) {
+            saveDeviceStatus(device.id, {
+              ...result,
+              checkedAt: new Date().toISOString(),
+            });
+          }
+        }
+      } finally {
+        pingJobActive = false;
+      }
+    }
+  } catch (error) {
+    console.error("Błąd cyklicznego monitorowania:", error);
+  } finally {
+    setTimeout(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);
   }
 }
 
@@ -314,6 +358,13 @@ async function handleApi(request, response, pathname) {
     return;
   }
 
+  const monitorMatch = pathname.match(/^\/api\/devices\/(\d+)\/monitor$/);
+  if (monitorMatch && request.method === "PUT") {
+    const settings = validateMonitorSettings(await readJson(request));
+    sendJson(response, 200, updateDeviceMonitor(Number(monitorMatch[1]), settings));
+    return;
+  }
+
   const deviceMatch = pathname.match(/^\/api\/devices\/(\d+)$/);
   if (deviceMatch && request.method === "PUT") {
     const deviceId = Number(deviceMatch[1]);
@@ -363,6 +414,7 @@ const server = http.createServer(async (request, response) => {
 server.listen(port, host, () => {
   console.log(`Lanwatch działa pod adresem http://localhost:${port}`);
   console.log(`Nasłuchuje na interfejsie ${host}.`);
+  setTimeout(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);
 });
 
 function shutdown() {

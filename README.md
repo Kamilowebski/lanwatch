@@ -58,6 +58,8 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Tabela z nazwą hosta, adresem IP, lokalizacją, typem i statusem.
 - Lista grupuje elementy o tej samej nazwie w jeden zwijany wiersz; wyszukiwanie
   i filtry typu, lokalizacji oraz statusu dotyczą całej grupy.
+- Wyszukiwanie maszyny pokazuje także wszystkie maszyny połączone z nią
+  zależnościami, również wtedy, gdy wskazują na nią inne maszyny.
 - Stronicowanie pokazuje domyślnie 20 pozycji (grup lub pojedynczych maszyn).
   Ustawienie 10, 20, 50 albo 100 pozycji znajduje się w „Ustawieniach” i jest
   zapamiętywane w przeglądarce.
@@ -75,6 +77,11 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Status Online wygasa po 5 minutach od ostatniego sprawdzenia i zmienia się na
   „Nieustalony”. Widok odświeża się po upływie tego czasu; nie uruchamia to
   kolejnych pingów.
+- Zakładka „Monitor” pokazuje status i opóźnienie maszyn oraz pozwala włączyć
+  monitoring wybranych urządzeń. Aktywne maszyny są sprawdzane co 15 sekund,
+  a widok odświeża się co 5 sekund. Dla każdej maszyny można osobno włączyć
+  powiadomienia o przejściu online i braku odpowiedzi. Powiadomienia wymagają
+  otwartej karty Lanwatch, a systemowe dodatkowo zgody przeglądarki.
 - Dla kategorii „Terminal” wspólnego użytkownika SSH konfiguruje się w
   „Ustawieniach”; nie trzeba podawać go osobno dla każdej maszyny. Połączenie
   używa nazwy hosta, np. `ssh StarachowiceSWRBis@T104-0173`, i jest
@@ -94,11 +101,12 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
   nie jako usługi systemowej.
 - Jasny i ciemny motyw zapamiętywany w przeglądarce.
 
-Ping jest uruchamiany wyłącznie po kliknięciu i tylko do adresów lokalnych:
-prywatnych adresów IPv4, lokalnych adresów IPv6 lub nazw hostów rozpoznanych
-na taki adres. Bez adresu IP systemowy resolver rozpoznaje nazwę hosta (może
-użyć DNS); same próby diagnostyczne są wyłącznie ICMP. Aplikacja nie wykonuje
-sond TCP/UDP ani skanowania portów, nie ma też automatycznego odpytywania w tle.
+Ping jest uruchamiany po kliknięciu lub cyklicznie dla maszyn z włączonym
+monitoringiem, wyłącznie do adresów lokalnych: prywatnych adresów IPv4,
+lokalnych adresów IPv6 lub nazw hostów rozpoznanych na taki adres. Bez adresu
+IP systemowy resolver rozpoznaje nazwę hosta (może użyć DNS); same próby
+diagnostyczne są wyłącznie ICMP. Aplikacja nie wykonuje sond TCP/UDP ani
+skanowania portów.
 
 ## Bezpieczeństwo
 

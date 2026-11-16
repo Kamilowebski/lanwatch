@@ -22,6 +22,13 @@ test("one reply is enough to avoid a false offline status", () => {
   const result = classifyPingResult("Reply from 192.168.1.5: bytes=32 time<1ms TTL=64", 1);
   assert.equal(result.status, "online");
   assert.equal(result.replies, 1);
+  assert.equal(result.latencyMs, 0.5);
+});
+
+test("records the measured latency from a ping reply", () => {
+  const result = classifyPingResult("Reply from 192.168.1.5: bytes=32 time=12.4ms TTL=64", 0);
+  assert.equal(result.status, "online");
+  assert.equal(result.latencyMs, 12.4);
 });
 
 test("marks a completed ping with no replies as offline", () => {

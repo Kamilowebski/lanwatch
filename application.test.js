@@ -50,6 +50,14 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
       description TEXT NOT NULL DEFAULT '',
       line_number TEXT NOT NULL DEFAULT '',
       numerator TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE device_status (
+      device_id INTEGER PRIMARY KEY,
+      status TEXT NOT NULL,
+      checked_at TEXT NOT NULL,
+      replies INTEGER NOT NULL DEFAULT 0,
+      target TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL DEFAULT ''
     )
   `);
   legacyDatabase.close();
@@ -129,6 +137,35 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
   );
   assert.equal(first.status, 201);
   assert.equal("sshUser" in first.result, false);
+  assert.equal(first.result.monitorEnabled, false);
+  const invalidMonitorSettings = await request(
+    `/api/devices/${first.result.id}/monitor`,
+    "PUT",
+    { enabled: true, notifyOnline: "yes", notifyOffline: false },
+  );
+  assert.equal(invalidMonitorSettings.status, 400);
+  const monitorSettings = await request(
+    `/api/devices/${first.result.id}/monitor`,
+    "PUT",
+    { enabled: true, notifyOnline: true, notifyOffline: false },
+  );
+  assert.equal(monitorSettings.status, 200);
+  assert.deepEqual(monitorSettings.result, {
+    enabled: true,
+    notifyOnline: true,
+    notifyOffline: false,
+  });
+  const listedDevices = await request("/api/devices");
+  const monitoredDevice = listedDevices.result.find((device) => device.id === first.result.id);
+  assert.equal(monitoredDevice.monitorEnabled, true);
+  assert.equal(monitoredDevice.notifyOnline, true);
+  assert.equal(monitoredDevice.notifyOffline, false);
+  const disabledMonitor = await request(
+    `/api/devices/${first.result.id}/monitor`,
+    "PUT",
+    { enabled: false, notifyOnline: true, notifyOffline: false },
+  );
+  assert.equal(disabledMonitor.result.enabled, false);
 
   const duplicateHost = await request(
     "/api/devices",
@@ -184,10 +221,13 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
       .prepare("SELECT value FROM app_settings WHERE key = 'ssh_user'")
       .get();
     assert.equal(storedSshUser.value, "StarachowiceSWRBis");
+    const migratedStatusColumns = database.prepare("PRAGMA table_info(device_status)").all();
+    assert.ok(migratedStatusColumns.some((column) => column.name === "latency_ms"));
     const checkedAt = new Date().toISOString();
     database.prepare(`
-      INSERT OR REPLACE INTO device_status (device_id, status, checked_at, replies, target, message)
-      VALUES (?, 'online', ?, 1, '192.168.10.10', '')
+      INSERT OR REPLACE INTO device_status
+        (device_id, status, checked_at, replies, target, message, latency_ms)
+      VALUES (?, 'online', ?, 1, '192.168.10.10', '', 12.5)
     `).run(first.result.id, checkedAt);
     database.prepare(`
       INSERT OR REPLACE INTO device_status (device_id, status, checked_at, replies, target, message)
@@ -195,6 +235,7 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     `).run(second.result.id, new Date(Date.now() - 10 * 60 * 1000).toISOString());
     const freshDevices = await request("/api/devices");
     assert.equal(freshDevices.result.find((device) => device.id === first.result.id).status, "online");
+    assert.equal(freshDevices.result.find((device) => device.id === first.result.id).pingLatencyMs, 12.5);
 
     const expiredAt = new Date(Date.now() - 6 * 60 * 1000).toISOString();
     database.prepare("UPDATE device_status SET checked_at = ? WHERE device_id = ?")

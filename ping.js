@@ -33,13 +33,17 @@ function isPrivateAddress(address) {
 
 function classifyPingResult(output, exitCode) {
   const replies = [...output.matchAll(/\b(?:ttl|hlim)\s*=\s*\d+/gi)].length;
+  const latencyMatch = output.match(/\btime[=<]\s*(\d+(?:[.,]\d+)?)\s*ms\b/i);
+  const latencyMs = latencyMatch
+    ? Number(latencyMatch[1].replace(",", ".")) * (latencyMatch[0].includes("<") ? 0.5 : 1)
+    : null;
   if (replies > 0 || exitCode === 0) {
-    return { status: "online", replies: Math.max(replies, 1), message: "" };
+    return { status: "online", replies: Math.max(replies, 1), latencyMs, message: "" };
   }
   if (exitCode === 1) {
-    return { status: "offline", replies: 0, message: "Brak odpowiedzi po trzech próbach ICMP." };
+    return { status: "offline", replies: 0, latencyMs: null, message: "Brak odpowiedzi po trzech próbach ICMP." };
   }
-  return { status: "unknown", replies: 0, message: "Nie udało się ustalić statusu poleceniem ping." };
+  return { status: "unknown", replies: 0, latencyMs: null, message: "Nie udało się ustalić statusu poleceniem ping." };
 }
 
 async function resolvePrivateAddress(target) {

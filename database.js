@@ -64,13 +64,24 @@ database.exec(`
     checked_at TEXT NOT NULL,
     replies INTEGER NOT NULL DEFAULT 0,
     target TEXT NOT NULL DEFAULT '',
-    message TEXT NOT NULL DEFAULT ''
+    message TEXT NOT NULL DEFAULT '',
+    latency_ms REAL
+  );
+  CREATE TABLE IF NOT EXISTS device_monitor (
+    device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    notify_online INTEGER NOT NULL DEFAULT 0,
+    notify_offline INTEGER NOT NULL DEFAULT 0
   );
 `);
 
 const deviceColumns = database.prepare("PRAGMA table_info(devices)").all();
 if (!deviceColumns.some((column) => column.name === "group_name")) {
   database.exec("ALTER TABLE devices ADD COLUMN group_name TEXT NOT NULL DEFAULT ''");
+}
+const deviceStatusColumns = database.prepare("PRAGMA table_info(device_status)").all();
+if (!deviceStatusColumns.some((column) => column.name === "latency_ms")) {
+  database.exec("ALTER TABLE device_status ADD COLUMN latency_ms REAL");
 }
 
 database.exec(`
@@ -113,14 +124,21 @@ function getDevice(id) {
       d.description, d.line_number AS lineNumber, d.numerator,
       ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
       COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
-      ${statusMessageExpression} AS statusMessage
+      ${statusMessageExpression} AS statusMessage, s.latency_ms AS pingLatencyMs,
+      COALESCE(m.enabled, 0) AS monitorEnabled,
+      COALESCE(m.notify_online, 0) AS notifyOnline,
+      COALESCE(m.notify_offline, 0) AS notifyOffline
     FROM devices d
     JOIN categories c ON c.id = d.category_id
     JOIN locations l ON l.name = d.location COLLATE NOCASE
     LEFT JOIN device_status s ON s.device_id = d.id
+    LEFT JOIN device_monitor m ON m.device_id = d.id
     WHERE d.id = ?
   `).get(id);
   if (!device) return undefined;
+  device.monitorEnabled = Boolean(device.monitorEnabled);
+  device.notifyOnline = Boolean(device.notifyOnline);
+  device.notifyOffline = Boolean(device.notifyOffline);
   device.dependencyIds = database.prepare(
     "SELECT dependency_id AS id FROM device_dependencies WHERE device_id = ? ORDER BY dependency_id",
   ).all(id).map((row) => row.id);
@@ -171,11 +189,15 @@ function getDevices() {
       d.description, d.line_number AS lineNumber, d.numerator,
       ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
       COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
-      ${statusMessageExpression} AS statusMessage
+      ${statusMessageExpression} AS statusMessage, s.latency_ms AS pingLatencyMs,
+      COALESCE(m.enabled, 0) AS monitorEnabled,
+      COALESCE(m.notify_online, 0) AS notifyOnline,
+      COALESCE(m.notify_offline, 0) AS notifyOffline
     FROM devices d
     JOIN categories c ON c.id = d.category_id
     JOIN locations l ON l.name = d.location COLLATE NOCASE
     LEFT JOIN device_status s ON s.device_id = d.id
+    LEFT JOIN device_monitor m ON m.device_id = d.id
     ORDER BY d.host_name COLLATE NOCASE
   `).all();
   const dependencyQuery = database.prepare(`
@@ -189,6 +211,9 @@ function getDevices() {
     const dependencies = dependencyQuery.all(device.id);
     return {
       ...device,
+      monitorEnabled: Boolean(device.monitorEnabled),
+      notifyOnline: Boolean(device.notifyOnline),
+      notifyOffline: Boolean(device.notifyOffline),
       dependencyIds: dependencies.map((dependency) => dependency.id),
       dependencies: dependencies.map((dependency) => dependency.hostName),
     };
@@ -222,14 +247,15 @@ function updateSshUser(sshUser) {
 
 function saveDeviceStatus(deviceId, result) {
   database.prepare(`
-    INSERT INTO device_status (device_id, status, checked_at, replies, target, message)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO device_status (device_id, status, checked_at, replies, target, message, latency_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(device_id) DO UPDATE SET
       status = excluded.status,
       checked_at = excluded.checked_at,
       replies = excluded.replies,
       target = excluded.target,
-      message = excluded.message
+      message = excluded.message,
+      latency_ms = excluded.latency_ms
   `).run(
     deviceId,
     result.status,
@@ -237,7 +263,31 @@ function saveDeviceStatus(deviceId, result) {
     result.replies,
     result.target,
     result.message,
+    result.latencyMs ?? null,
   );
+}
+
+function updateDeviceMonitor(deviceId, settings) {
+  if (!getDevice(deviceId)) {
+    throw Object.assign(new Error("Nie znaleziono maszyny."), { status: 404 });
+  }
+  database.prepare(`
+    INSERT INTO device_monitor (device_id, enabled, notify_online, notify_offline)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(device_id) DO UPDATE SET
+      enabled = excluded.enabled,
+      notify_online = excluded.notify_online,
+      notify_offline = excluded.notify_offline
+  `).run(deviceId, Number(settings.enabled), Number(settings.notifyOnline), Number(settings.notifyOffline));
+  const saved = database.prepare(`
+    SELECT enabled, notify_online AS notifyOnline, notify_offline AS notifyOffline
+    FROM device_monitor WHERE device_id = ?
+  `).get(deviceId);
+  return {
+    enabled: Boolean(saved.enabled),
+    notifyOnline: Boolean(saved.notifyOnline),
+    notifyOffline: Boolean(saved.notifyOffline),
+  };
 }
 
 function assertDeviceIdentifiersUnique(device, excludedId = null) {
@@ -432,6 +482,7 @@ module.exports = {
   saveDeviceStatus,
   updateCategory,
   updateDevice,
+  updateDeviceMonitor,
   updateLocation,
   updateSshUser,
 };

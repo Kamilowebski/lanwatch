@@ -17,6 +17,7 @@
         </a>
         <nav class="main-nav" aria-label="Nawigacja główna">
           <button class="main-nav-button active" type="button" data-view="inventory-view">Maszyny</button>
+          <button class="main-nav-button" type="button" data-view="monitor-view">Monitor</button>
           <button class="main-nav-button" type="button" data-view="settings-view">Ustawienia</button>
         </nav>
         <div class="topbar-actions">
@@ -128,6 +129,39 @@
             </nav>
           </div>
         </section>
+        </section>
+
+        <section class="view-panel d-none" id="monitor-view">
+          <section class="settings-heading">
+            <div>
+              <p class="eyebrow">STATUS NA ŻYWO</p>
+              <h1>Monitor</h1>
+              <p class="page-subtitle">Monitorowanie wykonuje ping ICMP co 15 sekund; widok odświeża się co 5 sekund. Alerty są widoczne, gdy karta Lanwatch jest otwarta.</p>
+            </div>
+          </section>
+          <section class="inventory-panel monitor-panel">
+            <div class="inventory-heading">
+              <div>
+                <h2>Stan maszyn</h2>
+                <p id="monitor-count">0 aktywnych</p>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table inventory-table monitor-table align-middle">
+                <thead>
+                  <tr>
+                    <th scope="col">Maszyna</th>
+                    <th scope="col">Adres IP</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Opóźnienie</th>
+                    <th scope="col">Monitor</th>
+                    <th scope="col">Powiadomienia</th>
+                  </tr>
+                </thead>
+                <tbody id="monitor-list"></tbody>
+              </table>
+            </div>
+          </section>
         </section>
 
         <section class="view-panel d-none" id="settings-view">

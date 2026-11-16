@@ -20,6 +20,8 @@ const elements = {
   locationList: document.getElementById("location-list"),
   locationName: document.getElementById("location-name"),
   locations: document.getElementById("device-location"),
+  monitorList: document.getElementById("monitor-list"),
+  monitorCount: document.getElementById("monitor-count"),
   notifications: document.getElementById("notifications"),
   pingResultsDialog: document.getElementById("ping-results-dialog"),
   pingResultsList: document.getElementById("ping-results-list"),
@@ -72,6 +74,8 @@ let dependencyCurrentDeviceId = null;
 let selectedDependencyIds = new Set();
 let statusExpiryTimer = null;
 const expandedGroups = new Set();
+const knownMonitorStatuses = new Map();
+let hasLoadedMonitorStatuses = false;
 
 async function api(url, options = {}) {
   const response = await fetch(url, {
@@ -345,7 +349,7 @@ function groupDevices() {
   );
 }
 
-function matchesDeviceFilters(group, query) {
+function matchesDeviceQuery(group, query) {
   const searchableValues = [
     group.groupName,
     ...group.devices.flatMap((device) => [
@@ -356,8 +360,65 @@ function matchesDeviceFilters(group, query) {
       device.category,
     ]),
   ];
-  return containsQuery(searchableValues, query)
-    && (!categoryFilter || group.devices.some((device) => String(device.categoryId) === categoryFilter))
+  return containsQuery(searchableValues, query);
+}
+
+function searchRelatedGroups(query) {
+  const groups = groupDevices();
+  if (!query) return groups;
+
+  const groupsByDeviceId = new Map();
+  const groupsByKey = new Map(groups.map((group) => [group.key, group]));
+  const neighbors = new Map(groups.map((group) => [group.key, new Set()]));
+  for (const group of groups) {
+    for (const device of group.devices) groupsByDeviceId.set(device.id, group);
+  }
+  for (const device of devices) {
+    const source = groupsByDeviceId.get(device.id);
+    for (const dependencyId of device.dependencyIds) {
+      const target = groupsByDeviceId.get(dependencyId);
+      if (source && target && source.key !== target.key) {
+        neighbors.get(source.key).add(target.key);
+        neighbors.get(target.key).add(source.key);
+      }
+    }
+  }
+
+  const matchingGroups = groups.filter((group) => matchesDeviceQuery(group, query));
+  const matchedKeys = new Set(matchingGroups.map((group) => group.key));
+  const visited = new Set();
+  const results = [];
+  for (const group of matchingGroups) {
+    if (visited.has(group.key)) continue;
+    const component = new Set();
+    const pending = [group.key];
+    while (pending.length) {
+      const key = pending.pop();
+      if (component.has(key)) continue;
+      component.add(key);
+      visited.add(key);
+      pending.push(...neighbors.get(key));
+    }
+    if (component.size === 1) {
+      results.push(groupsByKey.get(group.key));
+      continue;
+    }
+    const componentGroups = groups.filter((candidate) => component.has(candidate.key));
+    const names = componentGroups
+      .filter((candidate) => matchedKeys.has(candidate.key))
+      .map((candidate) => candidate.groupName || candidate.devices[0].hostName);
+    results.push({
+      key: `related:${[...component].sort().join("|")}`,
+      related: true,
+      relatedName: names.join(" · "),
+      devices: componentGroups.flatMap((candidate) => candidate.devices),
+    });
+  }
+  return results;
+}
+
+function matchesDeviceFilters(group) {
+  return (!categoryFilter || group.devices.some((device) => String(device.categoryId) === categoryFilter))
     && (!locationFilter || group.devices.some((device) => device.location === locationFilter))
     && (!statusFilter || group.devices.some((device) => device.status === statusFilter));
 }
@@ -474,10 +535,12 @@ function renderGroupSummaryRow(group) {
   const hostCell = document.createElement("td");
   hostCell.className = "host-cell group-summary-cell";
   const name = document.createElement("span");
-  name.textContent = group.groupName;
+  name.textContent = group.relatedName || group.groupName;
   const count = document.createElement("small");
   count.className = "group-name-cell";
-  count.textContent = `Liczba urządzeń: ${group.devices.length}`;
+  count.textContent = group.related
+    ? `Połączone zależności: ${group.devices.length} maszyn`
+    : `Liczba urządzeń: ${group.devices.length}`;
   hostCell.append(name, count);
   row.append(hostCell);
   row.append(makeCell(summaryValues(group.devices, "ip", "bez IP"), "ip-cell"));
@@ -510,7 +573,7 @@ function renderGroupSummaryRow(group) {
 
 function renderDevices() {
   const query = elements.search.value.trim().toLocaleLowerCase("pl");
-  const filteredGroups = groupDevices().filter((group) => matchesDeviceFilters(group, query));
+  const filteredGroups = searchRelatedGroups(query).filter(matchesDeviceFilters);
   const pageCount = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
   currentPage = Math.min(currentPage, pageCount);
   const start = (currentPage - 1) * pageSize;
@@ -518,12 +581,16 @@ function renderDevices() {
 
   elements.deviceList.replaceChildren();
   for (const group of pageGroups) {
-    if (group.groupName && group.devices.length > 1) {
+    if (group.devices.length > 1 && !query && (group.groupName || group.related)) {
       elements.deviceList.append(renderGroupSummaryRow(group));
       if (expandedGroups.has(group.key)) {
         for (const device of group.devices) {
           elements.deviceList.append(renderDeviceRow(device, true));
         }
+      }
+    } else if (group.devices.length > 1 && query) {
+      for (const device of group.devices) {
+        elements.deviceList.append(renderDeviceRow(device, true));
       }
     } else {
       elements.deviceList.append(renderDeviceRow(group.devices[0]));
@@ -549,6 +616,125 @@ function renderDevices() {
   document.getElementById("empty-add-device").classList.toggle("d-none", devices.length > 0);
 }
 
+function monitorToggle(device, property, label, disabled = false) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "monitor-toggle";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(device[property]);
+  input.disabled = disabled;
+  input.setAttribute("aria-label", `${label}: ${device.hostName}`);
+  input.addEventListener("change", () => {
+    saveMonitorSettings(device, {
+      enabled: Boolean(device.monitorEnabled),
+      notifyOnline: Boolean(device.notifyOnline),
+      notifyOffline: Boolean(device.notifyOffline),
+      [property]: input.checked,
+    });
+  });
+  const text = document.createElement("span");
+  text.textContent = label;
+  wrapper.append(input, text);
+  return wrapper;
+}
+
+function renderMonitor() {
+  const monitoredDevices = devices.filter((device) => device.monitorEnabled);
+  const onlineCount = monitoredDevices.filter((device) => device.status === "online").length;
+  const offlineCount = monitoredDevices.filter((device) => device.status === "offline").length;
+  elements.monitorCount.textContent =
+    `${monitoredDevices.length} aktywnych · ${onlineCount} online · ${offlineCount} bez odpowiedzi`;
+  elements.monitorList.replaceChildren();
+
+  if (!devices.length) {
+    const row = document.createElement("tr");
+    const empty = makeCell("Brak maszyn do monitorowania.");
+    empty.colSpan = 6;
+    row.append(empty);
+    elements.monitorList.append(row);
+    return;
+  }
+
+  const statusLabels = {
+    online: "Online",
+    offline: "Brak odpowiedzi",
+    unknown: "Nieustalony",
+  };
+  for (const device of devices) {
+    const row = document.createElement("tr");
+    const host = document.createElement("td");
+    host.className = "host-cell";
+    host.textContent = device.hostName;
+    row.append(host, makeCell(device.ip, "ip-cell"));
+
+    const statusCell = document.createElement("td");
+    const status = document.createElement("span");
+    status.className = `status-badge status-${device.status}`;
+    status.textContent = statusLabels[device.status] || statusLabels.unknown;
+    statusCell.append(status);
+    if (device.statusCheckedAt) {
+      const checkedAt = document.createElement("small");
+      checkedAt.className = "status-time";
+      checkedAt.textContent = new Date(device.statusCheckedAt).toLocaleTimeString("pl-PL");
+      statusCell.append(checkedAt);
+    }
+    row.append(statusCell);
+
+    const latency = device.status === "online" && Number.isFinite(device.pingLatencyMs)
+      ? `${device.pingLatencyMs < 1 ? "<1" : Number(device.pingLatencyMs.toFixed(1))} ms`
+      : "—";
+    row.append(makeCell(latency, "monitor-latency"));
+    const monitorCell = document.createElement("td");
+    monitorCell.append(monitorToggle(device, "monitorEnabled", "Aktywny"));
+    row.append(monitorCell);
+
+    const notifications = document.createElement("td");
+    notifications.className = "monitor-notifications";
+    notifications.append(
+      monitorToggle(device, "notifyOnline", "Online", !device.monitorEnabled),
+      monitorToggle(device, "notifyOffline", "Offline", !device.monitorEnabled),
+    );
+    row.append(notifications);
+    elements.monitorList.append(row);
+  }
+}
+
+function notifyMonitorTransition(device, status) {
+  const label = status === "online" ? "online" : "brak odpowiedzi";
+  const message = `${device.hostName}: maszyna jest teraz ${label}.`;
+  notify(message, status === "online" ? "success" : "danger");
+  if ("Notification" in window && Notification.permission === "granted") {
+    try {
+      new Notification("Lanwatch — zmiana statusu", { body: message });
+    } catch (error) {
+      console.error("Nie udało się wyświetlić powiadomienia systemowego:", error);
+    }
+  }
+}
+
+function trackMonitorStatusChanges(nextDevices) {
+  for (const device of nextDevices) {
+    const previousStatus = knownMonitorStatuses.get(device.id);
+    if (
+      hasLoadedMonitorStatuses &&
+      device.monitorEnabled &&
+      previousStatus !== device.status &&
+      (device.status === "online" || device.status === "offline") &&
+      (device.status === "online" ? device.notifyOnline : device.notifyOffline)
+    ) {
+      notifyMonitorTransition(device, device.status);
+    }
+    if (device.status === "online" || device.status === "offline" || previousStatus === undefined) {
+      knownMonitorStatuses.set(device.id, device.status);
+    }
+  }
+  const deviceIds = new Set(nextDevices.map((device) => device.id));
+  for (const deviceId of knownMonitorStatuses.keys()) {
+    if (!deviceIds.has(deviceId)) knownMonitorStatuses.delete(deviceId);
+  }
+  hasLoadedMonitorStatuses = true;
+}
+
 async function refresh() {
   const [nextDevices, nextCategories, nextLocations, summary, settings] = await Promise.all([
     api("/api/devices"),
@@ -557,15 +743,62 @@ async function refresh() {
     api("/api/summary"),
     api("/api/settings"),
   ]);
+  trackMonitorStatusChanges(nextDevices);
   devices = nextDevices;
   categories = nextCategories;
   locations = nextLocations;
   sshUser = settings.sshUser;
   renderSettings();
   renderDevices();
+  renderMonitor();
   renderSummary(summary);
   scheduleStatusExpiry(summary.onlineTtlMs);
   if (elements.deviceDialog.open) updateDeviceIdentifierValidation();
+}
+
+async function saveMonitorSettings(device, settings) {
+  try {
+    let notificationPermissionFailed = false;
+    if (
+      (settings.notifyOnline || settings.notifyOffline) &&
+      "Notification" in window &&
+      Notification.permission === "default"
+    ) {
+      try {
+        await Notification.requestPermission();
+      } catch (error) {
+        notificationPermissionFailed = true;
+        console.error("Nie udało się poprosić o uprawnienie do powiadomień:", error);
+      }
+    }
+    await api(`/api/devices/${device.id}/monitor`, {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    });
+    await refresh();
+    notify(notificationPermissionFailed
+      ? "Ustawienia zapisano, ale nie udało się poprosić o powiadomienia systemowe."
+      : "Ustawienia monitorowania zostały zapisane.");
+  } catch (error) {
+    notify(error.message, "danger");
+    try {
+      await refresh();
+    } catch (refreshError) {
+      notify(`Nie udało się odświeżyć ustawień: ${refreshError.message}`, "danger");
+    }
+  }
+}
+
+function scheduleLiveRefresh() {
+  window.setTimeout(async () => {
+    try {
+      await refresh();
+    } catch (error) {
+      notify(error.message, "danger");
+    } finally {
+      scheduleLiveRefresh();
+    }
+  }, 5000);
 }
 
 function openDeviceForm(device = null) {
@@ -844,4 +1077,9 @@ document.querySelectorAll("[data-close]").forEach((button) => {
 });
 
 setTheme(localStorage.getItem("lanwatch-theme") || "light");
-refresh().catch((error) => notify(error.message, "danger"));
+refresh()
+  .then(scheduleLiveRefresh)
+  .catch((error) => {
+    notify(error.message, "danger");
+    scheduleLiveRefresh();
+  });

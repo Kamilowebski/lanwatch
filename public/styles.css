@@ -294,6 +294,14 @@ button, input, select, textarea { font: inherit; }
 .ping-results-table td { padding: 12px 9px; border-color: var(--border); color: var(--text); font-size: 11px; }
 .ping-results-table > :not(caption) > * > * { background: transparent; }
 .ping-message { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; white-space: normal; }
+.monitor-panel { overflow: hidden; }
+.monitor-table tbody td { height: 62px; }
+.monitor-latency { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.monitor-toggle { display: inline-flex; align-items: center; gap: 6px; margin-right: 13px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.monitor-toggle:last-child { margin-right: 0; }
+.monitor-toggle input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+.monitor-toggle input:disabled { opacity: .45; }
+.monitor-notifications { min-width: 180px; }
 .alert-stack { position: fixed; z-index: 20; right: 22px; bottom: 18px; width: 340px; }
 .notification { margin-bottom: 8px; box-shadow: var(--shadow); font-size: 12px; }
 
