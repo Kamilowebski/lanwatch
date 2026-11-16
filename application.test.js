@@ -187,8 +187,12 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
 
   const second = await request("/api/devices", "POST", newDevice("Terminal B", ""));
   assert.equal(second.status, 201);
-  const third = await request("/api/devices", "POST", newDevice("Terminal C", ""));
+  const third = await request("/api/devices", "POST", {
+    ...newDevice("Terminal C", ""),
+    dependencyIds: [first.result.id],
+  });
   assert.equal(third.status, 201);
+  assert.deepEqual(third.result.dependencyIds, [first.result.id]);
 
   const conflictingUpdate = await request(
     `/api/devices/${second.result.id}`,
@@ -196,6 +200,12 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     { ...second.result, hostName: "Terminal A" },
   );
   assert.equal(conflictingUpdate.status, 409);
+  const updatedDependencies = await request(
+    `/api/devices/${first.result.id}`,
+    "PUT",
+    { ...first.result, dependencyIds: [second.result.id] },
+  );
+  assert.deepEqual(updatedDependencies.result.dependencyIds, [second.result.id]);
   const sameDeviceUpdate = await request(
     `/api/devices/${first.result.id}`,
     "PUT",
@@ -227,7 +237,7 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     assert.equal(storedSshUser.value, "testuser");
     database.prepare(`
       INSERT INTO device_dependencies (device_id, dependency_id) VALUES (?, ?)
-    `).run(first.result.id, second.result.id);
+    `).run(first.result.id, third.result.id);
     await request(
       `/api/devices/${first.result.id}/monitor`,
       "PUT",

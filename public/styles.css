@@ -269,7 +269,7 @@ button, input, select, textarea { font: inherit; }
 .dependency-option-host { color: var(--text); font-size: 11px; font-weight: 600; }
 .dependency-option-meta { color: var(--muted); font-size: 9px; }
 .dependency-empty { margin: 0; padding: 13px 10px; color: var(--muted); font-size: 11px; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 9px; padding: 15px 24px; border-top: 1px solid var(--border); }
+.dialog-actions { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 9px; padding: 15px 24px; border-top: 1px solid var(--border); background: var(--surface); }
 .dialog-actions .btn { font-size: 12px; }
 .settings-heading { margin-bottom: 25px; }
 .settings-heading h1 { margin: 0; font-size: 27px; font-weight: 720; letter-spacing: -.7px; }

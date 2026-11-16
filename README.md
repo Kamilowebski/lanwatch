@@ -65,8 +65,11 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
   zapamiętywane w przeglądarce.
 - Wybór zależności ma wyszukiwarkę po nazwie hosta, grupie, IP, lokalizacji
   i typie; zaznaczenia pozostają wybrane podczas filtrowania wyników.
+- Przyciski zapisu pozostają widoczne na dole przewijanego formularza maszyny.
 - Przy dodawaniu kolejnych elementów można użyć „Zapisz i dodaj następną”;
   formularz zachowuje wtedy grupę, lokalizację i kategorię.
+- Enter w formularzu maszyny zapisuje bieżącą maszynę; „Zapisz i dodaj następną”
+  pozostaje osobną akcją.
 - Ręczne sprawdzanie dostępności po kliknięciu statusu maszyny. Aplikacja używa
   wyłącznie systemowego polecenia `ping` (ICMP), wysyła trzy próby i sprawdza
   także pozostałe elementy tej samej grupy oraz ich bezpośrednie zależności.

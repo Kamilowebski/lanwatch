@@ -30,6 +30,7 @@ const elements = {
   pingVisibleDevices: document.getElementById("ping-visible-devices"),
   pageIndicator: document.getElementById("page-indicator"),
   pageSize: document.getElementById("page-size-setting"),
+  saveDevice: document.getElementById("save-device"),
   previousPage: document.getElementById("previous-page"),
   nextPage: document.getElementById("next-page"),
   search: document.getElementById("device-search"),
@@ -1212,12 +1213,17 @@ elements.locationForm.addEventListener("submit", (event) => saveNamedItem("locat
 namedItemConfig.category.cancelButton.addEventListener("click", () => resetNamedItemEdit("category"));
 namedItemConfig.location.cancelButton.addEventListener("click", () => resetNamedItemEdit("location"));
 
-elements.deviceForm.addEventListener("submit", async (event) => {
+async function saveDevice(event) {
   event.preventDefault();
   updateDeviceIdentifierValidation();
-  if (!elements.deviceForm.reportValidity()) return;
+  if (!elements.deviceForm.reportValidity()) {
+    notify("Sprawdź wymagane pola i popraw wskazane wartości.", "warning");
+    return;
+  }
   const id = document.getElementById("device-id").value;
-  const addNext = event.submitter?.id === "save-and-add-next" && !id;
+  const addNext = event.type === "submit" &&
+    event.submitter?.id === "save-and-add-next" &&
+    !id;
   const formData = new FormData(elements.deviceForm);
   const device = Object.fromEntries(formData.entries());
   device.dependencyIds = Array.from(selectedDependencyIds);
@@ -1226,6 +1232,8 @@ elements.deviceForm.addEventListener("submit", async (event) => {
     location: device.location,
     categoryId: device.categoryId,
   };
+  elements.saveDevice.disabled = true;
+  elements.saveDevice.textContent = "Zapisywanie…";
   try {
     await api(id ? `/api/devices/${id}` : "/api/devices", {
       method: id ? "PUT" : "POST",
@@ -1247,8 +1255,14 @@ elements.deviceForm.addEventListener("submit", async (event) => {
     }
   } catch (error) {
     notify(error.message, "danger");
+  } finally {
+    elements.saveDevice.disabled = false;
+    elements.saveDevice.textContent = "Zapisz maszynę";
   }
-});
+}
+
+elements.saveDevice.addEventListener("click", saveDevice);
+elements.deviceForm.addEventListener("submit", saveDevice);
 
 document.querySelectorAll("[data-close]").forEach((button) => {
   button.addEventListener("click", () => {
