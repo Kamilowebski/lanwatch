@@ -84,21 +84,21 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
   otwartej karty Lanwatch, a systemowe dodatkowo zgody przeglądarki.
 - Dla kategorii „Terminal” wspólnego użytkownika SSH konfiguruje się w
   „Ustawieniach”; nie trzeba podawać go osobno dla każdej maszyny. Połączenie
-  używa nazwy hosta, np. `ssh StarachowiceSWRBis@T104-0173`, i jest
-  uwierzytelniane przez klucze/ssh-agent konta Windows uruchamiającego serwer.
-  Lanwatch nie zapisuje haseł SSH.
+  używa nazwy hosta, np. `ssh StarachowiceSWRBis@T104-0239`. Uwierzytelnienie
+  korzysta ze standardowej konfiguracji OpenSSH, kluczy/ssh-agent lub monitu
+  SSH w PowerShell. Lanwatch nie zapisuje haseł SSH.
 - Przycisk „Tunel VNC” otwiera okno PowerShell i uruchamia w nim OpenSSH;
   przeglądarka nie wykonuje poleceń SSH ani nie pokazuje zdalnego terminala.
-  Polecenie tunelu ma postać
-  `ssh -L 5900:localhost:5900 użytkownik@nazwa-hosta`; nasłuchuje lokalnie na
-  porcie 5900. Mały komunikat w aplikacji potwierdza uruchomienie okna. Zamknij
-  okno PowerShell, aby zakończyć tunel. TigerVNC uruchom na tym samym komputerze
-  i połącz z `127.0.0.1:5900`.
-- Lanwatch przypina połączenie do wcześniej zweryfikowanego prywatnego adresu
-  maszyny, odrzuca nieznane klucze hosta i używa systemowego `known_hosts`.
-  Przed pierwszym połączeniem zweryfikuj odcisk klucza hosta. Widoczne okno
-  PowerShell wymaga uruchomienia Lanwatch w aktywnej sesji użytkownika Windows,
-  nie jako usługi systemowej.
+  Uruchamiana komenda SSH zawiera tylko przekierowanie i cel, np.
+  `ssh -L 5900:localhost:5900 StarachowiceSWRBis@T104-0239`; połączenie
+  pozostaje interaktywne w PowerShell. Mały komunikat w aplikacji potwierdza
+  uruchomienie okna. Zamknij okno PowerShell, aby zakończyć tunel. TigerVNC
+  uruchom na tym samym komputerze i połącz z `127.0.0.1:5900`.
+- Przed uruchomieniem Lanwatch sprawdza, czy nazwa hosta wskazuje na adres
+  lokalny. Samo SSH działa bez dodatkowych parametrów i korzysta z domyślnych
+  ustawień OpenSSH oraz `known_hosts`; ewentualne potwierdzenie klucza hosta
+  lub hasła wpisz w oknie PowerShell. Widoczne okno wymaga uruchomienia
+  Lanwatch w aktywnej sesji użytkownika Windows, nie jako usługi systemowej.
 - Jasny i ciemny motyw zapamiętywany w przeglądarce.
 
 Ping jest uruchamiany po kliknięciu lub cyklicznie dla maszyn z włączonym

@@ -2,19 +2,6 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 const { resolvePrivateAddress } = require("./ping");
 
-const SSH_HOST_KEY_OPTIONS = [
-  "-F", "none",
-  "-o", "BatchMode=yes",
-  "-o", "StrictHostKeyChecking=yes",
-  "-o", "ConnectTimeout=10",
-  "-o", "ServerAliveInterval=30",
-  "-o", "ServerAliveCountMax=3",
-];
-
-function sshExecutable() {
-  return "ssh.exe";
-}
-
 function validateTerminal(device, sshUser) {
   if (!device || device.category.toLocaleLowerCase("pl") !== "terminal") {
     throw Object.assign(new Error("Funkcje SSH są dostępne tylko dla kategorii Terminal."), { status: 400 });
@@ -31,33 +18,35 @@ function quotePowerShell(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
-async function getPrivateTarget(device) {
+async function validateLocalSshHost(hostName) {
   try {
-    return await resolvePrivateAddress(device.ip || device.hostName);
+    await resolvePrivateAddress(hostName);
   } catch (error) {
-    throw Object.assign(new Error(error.message), { status: 400 });
+    throw Object.assign(
+      new Error(`Nazwa hosta SSH musi wskazywać na adres lokalny: ${error.message}`),
+      { status: 400 },
+    );
   }
 }
 
-function vncTunnelArguments(device, target, sshUser) {
-  return [
-    "-L", "5900:localhost:5900",
-    ...SSH_HOST_KEY_OPTIONS,
-    "-v",
-    "-N",
-    "-o", "ExitOnForwardFailure=yes",
-    "-o", `HostName=${target}`,
-    "-o", `HostKeyAlias=${device.hostName}`,
-    `${sshUser}@${device.hostName}`,
-  ];
+function vncTunnelArguments(device, sshUser) {
+  return ["-L", "5900:localhost:5900", `${sshUser}@${device.hostName}`];
 }
 
 function powerShellScript(args) {
+  if (
+    !Array.isArray(args) ||
+    args.length !== 3 ||
+    args[0] !== "-L" ||
+    args[1] !== "5900:localhost:5900" ||
+    !/^[A-Za-z0-9_.-]{1,64}@[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/.test(args[2])
+  ) {
+    throw Object.assign(new Error("Nieprawidłowe argumenty tunelu SSH."), { status: 400 });
+  }
   const command = `ssh ${args.join(" ")}`;
-  const invocation = [sshExecutable(), ...args].map(quotePowerShell).join(" ");
   return [
     `Write-Host ${quotePowerShell(command)}`,
-    `& ${invocation}`,
+    command,
     "$sshExitCode = $LASTEXITCODE",
     "if ($sshExitCode -ne 0) {",
     "    Write-Host ('SSH zakończył się kodem ' + $sshExitCode)",
@@ -130,12 +119,12 @@ function launchPowerShellWindow(script) {
 
 async function startVncTunnel(device, sshUser) {
   validateTerminal(device, sshUser);
-  const target = await getPrivateTarget(device);
+  await validateLocalSshHost(device.hostName);
   if (process.platform !== "win32") {
     throw Object.assign(new Error("Otwieranie tunelu w PowerShell jest dostępne tylko w systemie Windows."), { status: 501 });
   }
 
-  const args = vncTunnelArguments(device, target, sshUser);
+  const args = vncTunnelArguments(device, sshUser);
   await launchPowerShellWindow(powerShellScript(args));
   return { launched: true };
 }

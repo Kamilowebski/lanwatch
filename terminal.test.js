@@ -17,22 +17,26 @@ const terminal = {
 test("builds the requested PowerShell tunnel command", () => {
   const tunnelArguments = vncTunnelArguments(
     { ...terminal, hostName: "T104-0173" },
-    "192.168.10.17",
     "StarachowiceSWRBis",
   );
-  const forwardIndex = tunnelArguments.indexOf("-L");
-  assert.equal(tunnelArguments[forwardIndex + 1], "5900:localhost:5900");
-  assert.ok(tunnelArguments.includes("StarachowiceSWRBis@T104-0173"));
+  assert.deepEqual(tunnelArguments, [
+    "-L",
+    "5900:localhost:5900",
+    "StarachowiceSWRBis@T104-0173",
+  ]);
 
   const script = powerShellScript(tunnelArguments);
-  assert.ok(script.includes("ssh -L 5900:localhost:5900"));
-  assert.ok(script.includes("'StarachowiceSWRBis@T104-0173'"));
+  assert.ok(script.includes("Write-Host 'ssh -L 5900:localhost:5900 StarachowiceSWRBis@T104-0173'"));
+  assert.equal(
+    script.split(/\r?\n/)[1],
+    "ssh -L 5900:localhost:5900 StarachowiceSWRBis@T104-0173",
+  );
 });
 
 test("refuses PowerShell tunnels to non-local addresses", async () => {
   await assert.rejects(
-    startVncTunnel(terminal, "lanadmin"),
-    { status: 400, message: /wyłącznie do adresów lokalnych/ },
+    startVncTunnel({ ...terminal, hostName: "8.8.8.8" }, "lanadmin"),
+    { status: 400, message: /musi wskazywać na adres lokalny/ },
   );
 });
 
@@ -50,15 +54,16 @@ test("rejects unsafe SSH usernames and hostnames before launching PowerShell", a
   );
 });
 
-test("escapes string arguments in the PowerShell script", () => {
-  const script = powerShellScript(["-L", "5900:localhost:5900", "host'name"]);
-  assert.ok(script.includes("'host''name'"));
+test("rejects unsafe values in the PowerShell SSH command", () => {
+  assert.throws(
+    () => powerShellScript(["-L", "5900:localhost:5900", "host;malicious"]),
+    { status: 400, message: /Nieprawidłowe argumenty tunelu SSH/ },
+  );
 });
 
 test("launches the tunnel script in a separate visible PowerShell window", () => {
   const script = powerShellScript(vncTunnelArguments(
     { ...terminal, hostName: "T104-0173" },
-    "192.168.10.17",
     "StarachowiceSWRBis",
   ));
   const launcher = powerShellLauncherScript(
