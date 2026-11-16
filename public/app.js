@@ -4,8 +4,16 @@ const elements = {
   categoryList: document.getElementById("category-list"),
   categoryName: document.getElementById("category-name"),
   dependencyCount: document.getElementById("dependency-count"),
+  dependencyCreateField: document.getElementById("dependency-create-field"),
+  dependencyDialog: document.getElementById("dependency-dialog"),
+  dependencyDialogTitle: document.getElementById("dependency-dialog-title"),
   dependencyOptions: document.getElementById("dependency-options"),
   dependencySearch: document.getElementById("dependency-search"),
+  dependencyManagerSearch: document.getElementById("dependency-manager-search"),
+  dependencyCurrentList: document.getElementById("dependency-current-list"),
+  dependencyCandidateList: document.getElementById("dependency-candidate-list"),
+  dependencyManagerCount: document.getElementById("dependency-manager-count"),
+  saveDependencies: document.getElementById("save-dependencies"),
   deviceIp: document.getElementById("device-ip"),
   deviceHostName: document.getElementById("host-name"),
   deviceDialog: document.getElementById("device-dialog"),
@@ -16,6 +24,7 @@ const elements = {
   deviceDetailsList: document.getElementById("device-details-list"),
   deviceDetailsTitle: document.getElementById("device-details-title"),
   editDeviceFromDetails: document.getElementById("edit-device-from-details"),
+  manageDependenciesFromDetails: document.getElementById("manage-dependencies-from-details"),
   emptyState: document.getElementById("empty-state"),
   filterCategory: document.getElementById("filter-category"),
   filterLocation: document.getElementById("filter-location"),
@@ -76,6 +85,8 @@ let locationFilter = "";
 let statusFilter = "";
 let dependencyCurrentDeviceId = null;
 let selectedDependencyIds = new Set();
+let dependencyEditorDeviceId = null;
+let stagedDependencyIds = new Set();
 let statusExpiryTimer = null;
 const expandedGroups = new Set();
 const knownMonitorStatuses = new Map();
@@ -289,6 +300,130 @@ function renderDependencyOptions() {
 
 function renderDependencyCount() {
   elements.dependencyCount.textContent = `Wybrano ${selectedDependencyIds.size}`;
+}
+
+function renderDependencyManager() {
+  const devicesById = new Map(devices.map((device) => [device.id, device]));
+  elements.dependencyCurrentList.replaceChildren();
+  elements.dependencyCandidateList.replaceChildren();
+
+  const currentDependencies = [...stagedDependencyIds]
+    .map((id) => devicesById.get(id))
+    .filter(Boolean)
+    .sort((left, right) => left.hostName.localeCompare(right.hostName, "pl"));
+  if (!currentDependencies.length) {
+    const empty = document.createElement("p");
+    empty.className = "dependency-empty";
+    empty.textContent = "Nie wybrano zależności.";
+    elements.dependencyCurrentList.append(empty);
+  } else {
+    for (const device of currentDependencies) {
+      const item = document.createElement("div");
+      item.className = "dependency-manager-item";
+      item.setAttribute("role", "listitem");
+      const name = document.createElement("span");
+      name.textContent = device.hostName;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "dependency-remove-button";
+      remove.textContent = "Usuń";
+      remove.setAttribute("aria-label", `Usuń zależność ${device.hostName}`);
+      remove.addEventListener("click", () => {
+        stagedDependencyIds.delete(device.id);
+        renderDependencyManager();
+      });
+      item.append(name, remove);
+      elements.dependencyCurrentList.append(item);
+    }
+  }
+
+  const query = elements.dependencyManagerSearch.value.trim().toLocaleLowerCase("pl");
+  const candidates = devices
+    .filter((device) =>
+      device.id !== dependencyEditorDeviceId && !stagedDependencyIds.has(device.id))
+    .filter((device) => containsQuery(
+      [device.hostName, device.groupName, device.ip, device.location, device.category],
+      query,
+    ))
+    .sort((left, right) => left.hostName.localeCompare(right.hostName, "pl"));
+  if (!candidates.length) {
+    const empty = document.createElement("p");
+    empty.className = "dependency-empty";
+    empty.textContent = query
+      ? "Nie znaleziono pasujących maszyn."
+      : "Nie ma innych maszyn do dodania.";
+    elements.dependencyCandidateList.append(empty);
+  } else {
+    for (const device of candidates) {
+      const item = document.createElement("div");
+      item.className = "dependency-manager-item";
+      item.setAttribute("role", "listitem");
+      const details = document.createElement("span");
+      details.className = "dependency-manager-details";
+      const name = document.createElement("strong");
+      name.textContent = device.hostName;
+      const meta = document.createElement("small");
+      meta.textContent = [
+        device.groupName,
+        device.ip || "bez IP",
+        device.location,
+      ].filter(Boolean).join(" · ");
+      details.append(name, meta);
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "dependency-add-button";
+      add.textContent = "Dodaj";
+      add.setAttribute("aria-label", `Dodaj zależność ${device.hostName}`);
+      add.addEventListener("click", () => {
+        stagedDependencyIds.add(device.id);
+        renderDependencyManager();
+      });
+      item.append(details, add);
+      elements.dependencyCandidateList.append(item);
+    }
+  }
+
+  elements.dependencyManagerCount.textContent = stagedDependencyIds.size === 1
+    ? "1 zależność po zapisaniu"
+    : `${stagedDependencyIds.size} zależności po zapisaniu`;
+}
+
+function openDependencyManager(device) {
+  dependencyEditorDeviceId = device.id;
+  stagedDependencyIds = new Set(device.dependencyIds.map(Number));
+  elements.dependencyDialogTitle.textContent = device.hostName;
+  elements.dependencyManagerSearch.value = "";
+  renderDependencyManager();
+  if (elements.deviceDetailsDialog.open) elements.deviceDetailsDialog.close();
+  elements.dependencyDialog.showModal();
+}
+
+async function saveDeviceDependencies() {
+  if (!dependencyEditorDeviceId || elements.saveDependencies.disabled) return;
+  elements.saveDependencies.disabled = true;
+  elements.saveDependencies.textContent = "Zapisywanie…";
+  try {
+    const updatedDevice = await api(
+      `/api/devices/${dependencyEditorDeviceId}/dependencies`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ dependencyIds: [...stagedDependencyIds] }),
+      },
+    );
+    devices = devices.map((device) =>
+      device.id === updatedDevice.id
+        ? { ...device, dependencyIds: updatedDevice.dependencyIds }
+        : device,
+    );
+    renderDevices();
+    elements.dependencyDialog.close();
+    notify(`Zależności maszyny „${updatedDevice.hostName}” zostały zapisane.`);
+  } catch (error) {
+    notify(error.message, "danger");
+  } finally {
+    elements.saveDependencies.disabled = false;
+    elements.saveDependencies.textContent = "Zapisz zależności";
+  }
 }
 
 function containsQuery(values, query) {
@@ -531,6 +666,7 @@ function openDeviceDetails(device) {
     elements.deviceDetailsDialog.close();
     openDeviceForm(device);
   };
+  elements.manageDependenciesFromDetails.onclick = () => openDependencyManager(device);
   elements.deviceDetailsDialog.showModal();
 }
 
@@ -602,12 +738,17 @@ function renderDeviceRow(device, isGroupMember = false) {
   edit.type = "button";
   edit.textContent = "Edytuj";
   edit.addEventListener("click", () => openDeviceForm(device));
+  const manageDependencies = document.createElement("button");
+  manageDependencies.className = "row-action";
+  manageDependencies.type = "button";
+  manageDependencies.textContent = "Zależności";
+  manageDependencies.addEventListener("click", () => openDependencyManager(device));
   const remove = document.createElement("button");
   remove.className = "row-action row-action-danger";
   remove.type = "button";
   remove.textContent = "Usuń";
   remove.addEventListener("click", () => removeDevice(device));
-  actionsCell.append(edit, remove);
+  actionsCell.append(manageDependencies, edit, remove);
   row.append(actionsCell);
   return row;
 }
@@ -1008,6 +1149,7 @@ function openDeviceForm(device = null) {
   document.getElementById("device-id").value = device?.id || "";
   document.getElementById("device-dialog-title").textContent =
     device ? "Edytuj maszynę" : "Dodaj maszynę";
+  elements.dependencyCreateField.classList.toggle("d-none", Boolean(device));
   elements.deviceHostName.value = device?.hostName || "";
   elements.deviceIp.value = device?.ip || "";
   document.getElementById("group-name").value = device?.groupName || "";
@@ -1208,6 +1350,8 @@ elements.pageSize.addEventListener("change", () => {
   renderDevices();
 });
 elements.dependencySearch.addEventListener("input", renderDependencyOptions);
+elements.dependencyManagerSearch.addEventListener("input", renderDependencyManager);
+elements.saveDependencies.addEventListener("click", saveDeviceDependencies);
 elements.categoryForm.addEventListener("submit", (event) => saveNamedItem("category", event));
 elements.locationForm.addEventListener("submit", (event) => saveNamedItem("location", event));
 namedItemConfig.category.cancelButton.addEventListener("click", () => resetNamedItemEdit("category"));
@@ -1215,6 +1359,7 @@ namedItemConfig.location.cancelButton.addEventListener("click", () => resetNamed
 
 async function saveDevice(event) {
   event.preventDefault();
+  if (elements.saveDevice.disabled) return;
   updateDeviceIdentifierValidation();
   if (!elements.deviceForm.reportValidity()) {
     notify("Sprawdź wymagane pola i popraw wskazane wartości.", "warning");
@@ -1226,7 +1371,7 @@ async function saveDevice(event) {
     !id;
   const formData = new FormData(elements.deviceForm);
   const device = Object.fromEntries(formData.entries());
-  device.dependencyIds = Array.from(selectedDependencyIds);
+  if (!id) device.dependencyIds = Array.from(selectedDependencyIds);
   const nextDefaults = {
     groupName: device.groupName,
     location: device.location,
@@ -1261,7 +1406,6 @@ async function saveDevice(event) {
   }
 }
 
-elements.saveDevice.addEventListener("click", saveDevice);
 elements.deviceForm.addEventListener("submit", saveDevice);
 
 document.querySelectorAll("[data-close]").forEach((button) => {

@@ -415,7 +415,7 @@ function createDevice(device) {
       device.numerator,
     );
     const newId = Number(result.lastInsertRowid);
-    saveDependencies(newId, device.dependencyIds);
+    saveDependencies(newId, device.dependencyIds || []);
     return newId;
   });
   return getDevice(id);
@@ -451,11 +451,19 @@ function updateDevice(id, device) {
       device.numerator,
       id,
     );
-    saveDependencies(id, device.dependencyIds);
+    if (device.dependencyIds !== undefined) saveDependencies(id, device.dependencyIds);
     if (existing.hostName !== device.hostName || existing.ip !== device.ip) {
       database.prepare("DELETE FROM device_status WHERE device_id = ?").run(id);
     }
   });
+  return getDevice(id);
+}
+
+function updateDeviceDependencies(id, dependencyIds) {
+  if (!getDevice(id)) {
+    throw Object.assign(new Error("Nie znaleziono maszyny."), { status: 404 });
+  }
+  withTransaction(() => saveDependencies(id, dependencyIds));
   return getDevice(id);
 }
 
@@ -482,6 +490,7 @@ module.exports = {
   saveDeviceStatus,
   updateCategory,
   updateDevice,
+  updateDeviceDependencies,
   updateDeviceMonitor,
   updateLocation,
   updateSshUser,

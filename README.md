@@ -43,10 +43,13 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 
 - Dodawanie, edycja i usuwanie maszyn.
 - Dane maszyny: nazwa hosta, opcjonalny adres IP (np. dla urządzeń z DHCP),
-  opcjonalna nazwa urządzenia/grupy, lokalizacja, kategoria, opis, numer linii,
-  numerator i zależności od innych maszyn. Wspólna nazwa grupy łączy elementy
-  jednego urządzenia, np. głowice Bizerby; wyszukiwarka znajduje wszystkie
-  elementy tej grupy.
+  opcjonalna nazwa urządzenia/grupy, lokalizacja, kategoria, opis, numer linii
+  i numerator. Wspólna nazwa grupy łączy elementy jednego urządzenia, np.
+  głowice Bizerby; wyszukiwarka znajduje wszystkie elementy tej grupy.
+- Zależności można dodać podczas tworzenia maszyny. Dla istniejącej maszyny
+  przycisk „Zależności” otwiera osobny edytor, w którym można wyszukać i dodać
+  inne maszyny, usuwać obecne relacje oraz zapisać same zależności bez zmiany
+  pozostałych danych maszyny.
 - Nazwa hosta i niepusty adres IP muszą być unikalne (bez rozróżniania wielkości
   liter). Formularz sprawdza duplikaty podczas wpisywania, a serwer ponownie
   weryfikuje je przy zapisie.

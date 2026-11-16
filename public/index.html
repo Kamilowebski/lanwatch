@@ -295,7 +295,7 @@
             <label for="device-description">Opis</label>
             <textarea class="form-control" id="device-description" name="description" rows="3" maxlength="5000"></textarea>
           </div>
-          <div class="form-field form-field-wide">
+          <div class="form-field form-field-wide" id="dependency-create-field">
             <label for="dependency-search">Zależności od innych maszyn</label>
             <input class="form-control dependency-search" id="dependency-search" type="search" placeholder="Szukaj po nazwie, grupie, IP, typie lub lokalizacji">
             <div class="dependency-options" id="dependency-options" role="group" aria-label="Wybierz maszyny zależne"></div>
@@ -310,6 +310,33 @@
       </form>
     </dialog>
 
+    <dialog class="app-dialog dependency-manager-dialog" id="dependency-dialog">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">ZALEŻNOŚCI MASZYNY</p>
+          <h2 id="dependency-dialog-title"></h2>
+          <p class="dialog-subtitle">Wybierz maszyny, od których zależy ta maszyna. Zmiany zostaną zastosowane po zapisaniu.</p>
+        </div>
+        <button class="icon-button" type="button" data-close="dependency-dialog" aria-label="Zamknij">×</button>
+      </div>
+      <div class="dependency-manager-content">
+        <section>
+          <h3>Wybrane zależności</h3>
+          <div class="dependency-current-list" id="dependency-current-list" role="list"></div>
+        </section>
+        <section>
+          <label for="dependency-manager-search">Dodaj zależność</label>
+          <input class="form-control dependency-search" id="dependency-manager-search" type="search" placeholder="Szukaj po nazwie, grupie, IP, typie lub lokalizacji">
+          <div class="dependency-candidate-list" id="dependency-candidate-list" role="list"></div>
+        </section>
+        <small class="dependency-manager-count" id="dependency-manager-count"></small>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-outline-secondary" type="button" data-close="dependency-dialog">Anuluj</button>
+        <button class="btn btn-primary" id="save-dependencies" type="button">Zapisz zależności</button>
+      </div>
+    </dialog>
+
     <dialog class="app-dialog device-details-dialog" id="device-details-dialog">
       <div class="dialog-header">
         <div>
@@ -321,6 +348,7 @@
       <dl class="device-details-grid" id="device-details-list"></dl>
       <div class="dialog-actions">
         <button class="btn btn-outline-secondary" type="button" data-close="device-details-dialog">Zamknij</button>
+        <button class="btn btn-outline-secondary" id="manage-dependencies-from-details" type="button">Zależności</button>
         <button class="btn btn-primary" id="edit-device-from-details" type="button">Edytuj maszynę</button>
       </div>
     </dialog>

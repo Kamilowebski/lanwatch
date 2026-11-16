@@ -18,6 +18,7 @@ const {
   saveDeviceStatus,
   updateCategory,
   updateDevice,
+  updateDeviceDependencies,
   updateDeviceMonitor,
   updateLocation,
   updateSshUser,
@@ -109,15 +110,27 @@ function validateDevice(input) {
   }
   device.categoryId = categoryId;
 
-  const dependencyIds = input.dependencyIds === undefined ? [] : input.dependencyIds;
+  if (input.dependencyIds !== undefined) {
+    device.dependencyIds = validateDependencyIds(input.dependencyIds);
+  }
+  return device;
+}
+
+function validateDependencyIds(dependencyIds) {
   if (
     !Array.isArray(dependencyIds) ||
     dependencyIds.some((id) => !Number.isSafeInteger(Number(id)) || Number(id) < 1)
   ) {
     throw new HttpError(400, "Nieprawidłowa lista zależności.");
   }
-  device.dependencyIds = [...new Set(dependencyIds.map(Number))];
-  return device;
+  return [...new Set(dependencyIds.map(Number))];
+}
+
+function validateDependencyUpdate(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new HttpError(400, "Nieprawidłowa lista zależności.");
+  }
+  return validateDependencyIds(input.dependencyIds);
 }
 
 function validateNamedItem(input, label) {
@@ -404,6 +417,17 @@ async function handleApi(request, response, pathname) {
   if (monitorMatch && request.method === "PUT") {
     const settings = validateMonitorSettings(await readJson(request));
     sendJson(response, 200, updateDeviceMonitor(Number(monitorMatch[1]), settings));
+    return;
+  }
+
+  const dependenciesMatch = pathname.match(/^\/api\/devices\/(\d+)\/dependencies$/);
+  if (dependenciesMatch && request.method === "PUT") {
+    const dependencyIds = validateDependencyUpdate(await readJson(request));
+    sendJson(
+      response,
+      200,
+      updateDeviceDependencies(Number(dependenciesMatch[1]), dependencyIds),
+    );
     return;
   }
 

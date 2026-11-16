@@ -212,6 +212,47 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     first.result,
   );
   assert.equal(sameDeviceUpdate.status, 200);
+  assert.deepEqual(sameDeviceUpdate.result.dependencyIds, []);
+
+  const addedDependency = await request(
+    `/api/devices/${third.result.id}/dependencies`,
+    "PUT",
+    { dependencyIds: [second.result.id] },
+  );
+  assert.equal(addedDependency.status, 200);
+  assert.deepEqual(addedDependency.result.dependencyIds, [second.result.id]);
+  const editedWithoutDependencies = await request(
+    `/api/devices/${third.result.id}`,
+    "PUT",
+    { ...addedDependency.result, dependencyIds: undefined, description: "Opis po edycji" },
+  );
+  assert.equal(editedWithoutDependencies.status, 200);
+  assert.deepEqual(editedWithoutDependencies.result.dependencyIds, [second.result.id]);
+  const removedDependency = await request(
+    `/api/devices/${third.result.id}/dependencies`,
+    "PUT",
+    { dependencyIds: [] },
+  );
+  assert.equal(removedDependency.status, 200);
+  assert.deepEqual(removedDependency.result.dependencyIds, []);
+  const invalidSelfDependency = await request(
+    `/api/devices/${third.result.id}/dependencies`,
+    "PUT",
+    { dependencyIds: [third.result.id] },
+  );
+  assert.equal(invalidSelfDependency.status, 400);
+  const missingDependency = await request(
+    `/api/devices/${third.result.id}/dependencies`,
+    "PUT",
+    { dependencyIds: [Number.MAX_SAFE_INTEGER] },
+  );
+  assert.equal(missingDependency.status, 400);
+  const missingDeviceDependencies = await request(
+    "/api/devices/999999/dependencies",
+    "PUT",
+    { dependencyIds: [] },
+  );
+  assert.equal(missingDeviceDependencies.status, 404);
 
   const forbiddenTunnel = await request(
     `/api/devices/${first.result.id}/terminal/tunnel`,

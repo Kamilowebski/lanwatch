@@ -269,6 +269,21 @@ button, input, select, textarea { font: inherit; }
 .dependency-option-host { color: var(--text); font-size: 11px; font-weight: 600; }
 .dependency-option-meta { color: var(--muted); font-size: 9px; }
 .dependency-empty { margin: 0; padding: 13px 10px; color: var(--muted); font-size: 11px; }
+.dependency-manager-dialog { width: min(590px, calc(100vw - 48px)); }
+.dependency-manager-content { display: grid; gap: 17px; padding: 19px 24px; }
+.dependency-manager-content h3,
+.dependency-manager-content label { display: block; margin: 0 0 7px; color: var(--text); font-size: 11px; font-weight: 650; }
+.dependency-current-list,
+.dependency-candidate-list { max-height: 180px; overflow: auto; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+.dependency-manager-item { min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 11px; }
+.dependency-manager-item:last-child { border-bottom: 0; }
+.dependency-manager-details { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dependency-manager-details strong { overflow: hidden; color: var(--text); font-size: 11px; text-overflow: ellipsis; }
+.dependency-manager-details small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.dependency-add-button,
+.dependency-remove-button { flex: 0 0 auto; padding: 4px 7px; border: 0; border-radius: 5px; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 650; }
+.dependency-remove-button { background: transparent; color: #d76666; }
+.dependency-manager-count { color: var(--muted); font-size: 10px; }
 .dialog-actions { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 9px; padding: 15px 24px; border-top: 1px solid var(--border); background: var(--surface); }
 .dialog-actions .btn { font-size: 12px; }
 .settings-heading { margin-bottom: 25px; }
