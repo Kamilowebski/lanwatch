@@ -88,7 +88,7 @@ function launchPowerShellWindow(script) {
       child = spawn(
         executable,
         ["-NoLogo", "-NoProfile", "-Command", launcherScript],
-        { stdio: ["ignore", "ignore", "pipe"], windowsHide: true },
+        { stdio: ["ignore", "ignore", "pipe"], windowsHide: true, timeout: 10000 },
       );
     } catch (error) {
       reject(Object.assign(new Error(`Nie udało się otworzyć PowerShell: ${error.message}`), { status: 503 }));

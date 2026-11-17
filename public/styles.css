@@ -363,3 +363,52 @@ button, input, select, textarea { font: inherit; }
   .topbar { padding-right: calc((100vw - 1440px) / 2); padding-left: calc((100vw - 1440px) / 2); }
 }
 
+
+/* Availability history follows the inventory palette in both themes. */
+.device-details-dialog { width: min(860px, calc(100vw - 32px)); }
+.history-panel { margin: 8px 24px 24px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.history-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 20px 0; }
+.history-heading .eyebrow { margin: 0 0 5px; font-size: 9px; letter-spacing: 1.4px; }
+.history-heading h3 { margin: 0; color: var(--text); font-size: 17px; font-weight: 700; letter-spacing: -.4px; }
+.history-count { flex-shrink: 0; padding: 5px 9px; border-radius: 6px; color: var(--muted); background: var(--surface-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.history-caption { margin: 8px 20px 18px; color: var(--muted); font-size: 11px; }
+.history-table-wrap { max-height: 340px; overflow: auto; border-top: 1px solid var(--border); scrollbar-width: thin; }
+.history-table { width: 100%; border-collapse: collapse; color: var(--text); font-size: 12px; }
+.history-table th { position: sticky; top: 0; z-index: 1; padding: 10px 16px; background: var(--surface-muted); color: var(--muted); font-size: 10px; font-weight: 600; text-align: left; white-space: nowrap; }
+.history-table td { padding: 13px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.history-table tr:last-child td { border-bottom: 0; }
+.history-table tbody tr:hover { background: var(--surface-muted); }
+.history-table time { display: block; font-weight: 650; font-variant-numeric: tabular-nums; }
+.history-table small { display: block; max-width: 270px; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.history-target { font-family: ui-monospace, Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
+.history-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid; border-radius: 6px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.history-status::before { content: ""; width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.history-status.status-unknown { color: var(--muted); border-color: var(--border); background: var(--surface-muted); }
+.history-table .history-latency { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.history-table th:last-child { text-align: right; }
+.history-latency span { color: var(--muted); font-size: 10px; font-weight: 400; }
+.history-message { margin: 0; padding: 30px 24px; text-align: center; color: var(--muted); background: var(--surface-muted); font-size: 12px; line-height: 1.7; }
+.history-message[data-state="error"] { color: #bb4944; }
+:root[data-theme="dark"] .history-message[data-state="error"] { color: #f0918b; }
+.history-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.history-footer > span { color: var(--muted); font-size: 10px; }
+.history-footer .btn { font-size: 11px; }
+.history-panel [hidden] { display: none !important; }
+@media (max-width: 600px) {
+  .history-panel { margin: 8px 12px 16px; }
+  .history-heading { padding: 16px 12px 0; }
+  .history-caption { margin-left: 12px; margin-right: 12px; }
+  .history-table { min-width: 560px; }
+  .history-footer { flex-wrap: wrap; }
+}
+
+#device-form .dialog-actions { flex-wrap: wrap; }
+.device-save-error { flex-basis: 100%; margin: 0 0 6px; padding: 10px 12px; border: 1px solid #f0c4c0; border-radius: 7px; background: #fff2f1; color: #bb4944; font-size: 12px; line-height: 1.5; }
+:root[data-theme="dark"] .device-save-error { background: #452c30; border-color: #754343; color: #f0918b; }
+.device-save-error[hidden] { display: none; }
+
+.dialog-notifications { padding: 0 24px; }
+.dialog-notifications .notification { position: static; margin: 10px 0; }
+
+/* Keep tab visibility correct even if the Bootstrap CDN is unavailable. */
+.d-none { display: none !important; }

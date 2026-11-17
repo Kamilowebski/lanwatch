@@ -62,10 +62,18 @@ async function resolvePrivateAddress(target) {
   }
 
   let addresses;
+  let lookupTimer;
   try {
-    addresses = await dns.lookup(normalized, { all: true, verbatim: true });
+    addresses = await Promise.race([
+      dns.lookup(normalized, { all: true, verbatim: true }),
+      new Promise((_, reject) => {
+        lookupTimer = setTimeout(() => reject(new Error("DNS timeout")), 5000);
+      }),
+    ]);
   } catch {
     throw new Error("Nie można rozpoznać nazwy hosta w sieci lokalnej.");
+  } finally {
+    clearTimeout(lookupTimer);
   }
   const localAddress = addresses.find(({ address }) => isPrivateAddress(address));
   if (!localAddress) {

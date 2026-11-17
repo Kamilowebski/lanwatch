@@ -75,9 +75,17 @@ let devices = [];
 let categories = [];
 let locations = [];
 let sshUser = "";
+let sshSettingsDirty = false;
+let refreshVersion = 0;
 const editingIds = { category: null, location: null };
 const allowedPageSizes = [10, 20, 50, 100];
-const savedPageSize = Number(localStorage.getItem("lanwatch-page-size"));
+function readPreference(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function savePreference(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* Preferences are optional. */ }
+}
+const savedPageSize = Number(readPreference("lanwatch-page-size"));
 let pageSize = allowedPageSizes.includes(savedPageSize) ? savedPageSize : 20;
 let currentPage = 1;
 let categoryFilter = "";
@@ -90,20 +98,44 @@ let stagedDependencyIds = new Set();
 let statusExpiryTimer = null;
 const expandedGroups = new Set();
 const knownMonitorStatuses = new Map();
+const pendingMonitorUpdates = new Set();
 let hasLoadedMonitorStatuses = false;
 let visiblePageDeviceIds = [];
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers,
-    },
-  });
-  const result = response.status === 204 ? null : await response.json();
-  if (!response.ok) throw new Error(result?.error || "Nie udało się wykonać operacji.");
-  return result;
+  const { timeoutMs = 15000, ...fetchOptions } = options;
+  const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+  const started = performance.now();
+  let status;
+  const report = (event, details, level) => window.lanwatchDiagnostics?.report(event,
+    {requestId,url,method:options.method || "GET",durationMs:Math.round(performance.now()-started),...details},level);
+  const slowTimer = window.setTimeout(()=>report("api.waiting",{},"warn"),8000);
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...fetchOptions,
+      signal: controller.signal,
+      headers: {
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...options.headers,
+        "X-Request-ID": requestId,
+      },
+    });
+    status = response.status;
+    const result = response.status === 204 ? null : await response.json();
+    if (!response.ok) throw new Error(result?.error || "Nie udało się wykonać operacji.");
+    return result;
+  } catch (error) {
+    report(controller.signal.aborted ? "api.timeout" : "api.error",{status,message:error.message,stack:error.stack});
+    if (controller.signal.aborted) {
+      throw new Error("Serwer nie odpowiedział w wyznaczonym czasie. Sprawdź, czy aplikacja działa w PowerShell. Przed ponownym zapisem odśwież listę — zapis mógł już dojść do skutku.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+    window.clearTimeout(slowTimer);
+  }
 }
 
 function notify(message, type = "success") {
@@ -111,13 +143,23 @@ function notify(message, type = "success") {
   alert.className = `alert alert-${type} notification`;
   alert.setAttribute("role", "alert");
   alert.textContent = message;
-  elements.notifications.append(alert);
+  const dialog = [...document.querySelectorAll("dialog[open]")].pop();
+  if (dialog) {
+    let messages = dialog.querySelector(".dialog-notifications");
+    if (!messages) {
+      messages = document.createElement("div");
+      messages.className = "dialog-notifications";
+      messages.setAttribute("aria-live", "polite");
+      dialog.querySelector(".dialog-header").after(messages);
+    }
+    messages.append(alert);
+  } else elements.notifications.append(alert);
   window.setTimeout(() => alert.remove(), 4500);
 }
 
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem("lanwatch-theme", theme);
+  savePreference("lanwatch-theme", theme);
   document.getElementById("theme-label").textContent =
     theme === "dark" ? "Jasny motyw" : "Ciemny motyw";
 }
@@ -235,7 +277,7 @@ function renderSettings() {
     locationFilter,
   );
   elements.pageSize.value = String(pageSize);
-  if (document.activeElement !== elements.sshUser) elements.sshUser.value = sshUser;
+  if (!sshSettingsDirty && document.activeElement !== elements.sshUser) elements.sshUser.value = sshUser;
 }
 
 function renderDependencies(selectedIds = [], currentDeviceId = null) {
@@ -468,7 +510,7 @@ function scheduleStatusExpiry(ttlMs) {
   if (nextExpiry === undefined) return;
   statusExpiryTimer = window.setTimeout(() => {
     refresh().catch((error) => notify(error.message, "danger"));
-  }, Math.max(0, nextExpiry - Date.now() + 50));
+  }, Math.max(5000, nextExpiry - Date.now() + 50));
 }
 
 function makeCell(text, className = "") {
@@ -644,10 +686,17 @@ function openDeviceHistory(device) {
   const list = document.getElementById("history-list");
   const message = document.getElementById("history-message");
   const more = document.getElementById("history-more");
+  const panel = document.getElementById("history-table-wrap");
+  const count = document.getElementById("history-count");
   list.replaceChildren();
+  panel.hidden = true;
+  count.textContent = "0 wpisów";
   more.hidden = true;
   async function load(before) {
     more.disabled = true;
+    panel.setAttribute("aria-busy", "true");
+    message.dataset.state = "loading";
+    message.hidden = false;
     message.textContent = "Wczytywanie historii…";
     try {
       const page = await api(`/api/devices/${device.id}/history${before ? `?before=${before}` : ""}`);
@@ -655,22 +704,57 @@ function openDeviceHistory(device) {
       const labels = {online: "Online", offline: "Brak odpowiedzi", unknown: "Nieustalony"};
       for (const entry of page.items) {
         const row = document.createElement("tr");
-        for (const value of [new Date(entry.checkedAt).toLocaleString("pl-PL"), labels[entry.status],
-          entry.target, String(entry.replies), entry.latencyMs == null ? "—" : `${entry.latencyMs} ms`, entry.message]) {
-          row.append(makeCell(value));
+        const date = new Date(entry.checkedAt);
+        const timeCell = document.createElement("td");
+        const time = document.createElement("time");
+        time.dateTime = entry.checkedAt;
+        time.textContent = date.toLocaleTimeString("pl-PL");
+        const day = document.createElement("small");
+        day.textContent = date.toLocaleDateString("pl-PL", {day:"numeric", month:"short", year:"numeric"});
+        timeCell.append(time, day);
+        const statusCell = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = `history-status status-${entry.status}`;
+        badge.textContent = labels[entry.status] || "Nieustalony";
+        statusCell.append(badge);
+        const targetCell = document.createElement("td");
+        const target = document.createElement("span");
+        target.className = "history-target";
+        target.textContent = entry.target || "—";
+        const detail = document.createElement("small");
+        detail.textContent = entry.message || `Odpowiedzi ICMP: ${entry.replies}`;
+        targetCell.append(target, detail);
+        const latency = document.createElement("td");
+        latency.className = "history-latency";
+        latency.textContent = entry.latencyMs == null ? "—" : new Intl.NumberFormat("pl-PL", {maximumFractionDigits:2}).format(entry.latencyMs);
+        if (entry.latencyMs != null) {
+          const unit = document.createElement("span");
+          unit.textContent = " ms";
+          latency.append(unit);
         }
+        row.append(timeCell, statusCell, targetCell, latency);
         list.append(row);
       }
-      message.textContent = list.children.length ? "Ostatnie 1000 sprawdzeń; najnowsze na górze." : "Brak historii. Wykonaj ping lub włącz monitoring.";
+      panel.hidden = list.children.length === 0;
+      count.textContent = `Wyświetlono: ${list.children.length}`;
+      message.dataset.state = "empty";
+      message.hidden = list.children.length > 0;
+      message.textContent = "Jeszcze bez sprawdzeń. Wykonaj ping lub włącz monitoring — tutaj pojawią się wyniki.";
+      more.textContent = "Pokaż starsze wpisy";
       more.hidden = page.nextBefore === null;
       more.onclick = () => load(page.nextBefore);
     } catch (error) {
       if (version !== historyRequestVersion) return;
+      message.dataset.state = "error";
       message.textContent = error.message;
+      more.textContent = "Spróbuj ponownie";
       more.hidden = false;
       more.onclick = () => load(before);
     } finally {
-      if (version === historyRequestVersion) more.disabled = false;
+      if (version === historyRequestVersion) {
+        more.disabled = false;
+        panel.setAttribute("aria-busy", "false");
+      }
     }
   }
   load();
@@ -948,7 +1032,7 @@ function monitorToggle(device, property, label, disabled = false) {
   const input = document.createElement("input");
   input.type = "checkbox";
   input.checked = Boolean(device[property]);
-  input.disabled = disabled;
+  input.disabled = disabled || pendingMonitorUpdates.has(device.id);
   input.setAttribute("aria-label", `${label}: ${device.hostName}`);
   input.addEventListener("change", () => {
     saveMonitorSettings(device, {
@@ -1033,6 +1117,7 @@ function renderMonitor() {
     const disableMonitor = document.createElement("button");
     disableMonitor.className = "btn btn-sm btn-outline-secondary monitor-remove";
     disableMonitor.type = "button";
+    disableMonitor.disabled = pendingMonitorUpdates.has(device.id);
     disableMonitor.textContent = "Wyłącz";
     disableMonitor.setAttribute("aria-label", `Wyłącz monitor: ${device.hostName}`);
     disableMonitor.addEventListener("click", () => saveMonitorSettings(device, {
@@ -1116,6 +1201,7 @@ function inventoryMetadataChanged(nextDevices) {
 }
 
 async function refresh({ preserveInventory = false } = {}) {
+  const version = ++refreshVersion;
   const [nextDevices, nextCategories, nextLocations, summary, settings] = await Promise.all([
     api("/api/devices"),
     api("/api/categories"),
@@ -1123,6 +1209,7 @@ async function refresh({ preserveInventory = false } = {}) {
     api("/api/summary"),
     api("/api/settings"),
   ]);
+  if (version !== refreshVersion) return;
   const canPreserveInventory = preserveInventory && !statusFilter && !inventoryMetadataChanged(nextDevices);
   trackMonitorStatusChanges(nextDevices);
   devices = nextDevices;
@@ -1138,17 +1225,22 @@ async function refresh({ preserveInventory = false } = {}) {
 }
 
 async function saveMonitorSettings(device, settings) {
+  if (pendingMonitorUpdates.has(device.id)) return;
+  pendingMonitorUpdates.add(device.id);
+  renderMonitor();
   try {
-    let notificationPermissionFailed = false;
     if (
       (settings.notifyOnline || settings.notifyOffline) &&
       "Notification" in window &&
       Notification.permission === "default"
     ) {
       try {
-        await Notification.requestPermission();
+        // A browser permission prompt can remain unanswered indefinitely.
+        // Saving monitor settings must not wait for that prompt.
+        Promise.resolve(Notification.requestPermission()).catch((error) => {
+          console.error("Nie udało się poprosić o uprawnienie do powiadomień:", error);
+        });
       } catch (error) {
-        notificationPermissionFailed = true;
         console.error("Nie udało się poprosić o uprawnienie do powiadomień:", error);
       }
     }
@@ -1157,9 +1249,7 @@ async function saveMonitorSettings(device, settings) {
       body: JSON.stringify(settings),
     });
     await refresh();
-    notify(notificationPermissionFailed
-      ? "Ustawienia zapisano, ale nie udało się poprosić o powiadomienia systemowe."
-      : "Ustawienia monitorowania zostały zapisane.");
+    notify("Ustawienia monitorowania zostały zapisane.");
   } catch (error) {
     notify(error.message, "danger");
     try {
@@ -1167,6 +1257,9 @@ async function saveMonitorSettings(device, settings) {
     } catch (refreshError) {
       notify(`Nie udało się odświeżyć ustawień: ${refreshError.message}`, "danger");
     }
+  } finally {
+    pendingMonitorUpdates.delete(device.id);
+    renderMonitor();
   }
 }
 
@@ -1183,7 +1276,9 @@ function scheduleLiveRefresh() {
 }
 
 function openDeviceForm(device = null) {
+  if (elements.saveDevice.disabled) return;
   elements.deviceForm.reset();
+  document.getElementById("device-save-error").hidden = true;
   document.getElementById("save-and-add-next").classList.toggle("d-none", Boolean(device));
   document.getElementById("device-id").value = device?.id || "";
   document.getElementById("device-dialog-title").textContent =
@@ -1225,6 +1320,8 @@ async function saveNamedItem(type, event) {
   const config = namedItemConfig[type];
   const id = editingIds[type];
   const isEditing = id !== null;
+  if (config.saveButton.disabled) return;
+  config.saveButton.disabled = true;
   try {
     await api(
       isEditing ? `/api/${config.endpoint}/${id}` : `/api/${config.endpoint}`,
@@ -1240,6 +1337,8 @@ async function saveNamedItem(type, event) {
       : `${config.labelCapitalized} została dodana.`);
   } catch (error) {
     notify(error.message, "danger");
+  } finally {
+    config.saveButton.disabled = false;
   }
 }
 
@@ -1276,6 +1375,7 @@ async function saveSshSettings(event) {
     });
     sshUser = settings.sshUser;
     elements.sshUser.value = sshUser;
+    sshSettingsDirty = false;
     notify("Ustawienia SSH zostały zapisane.");
   } catch (error) {
     notify(error.message, "danger");
@@ -1297,10 +1397,15 @@ async function openTunnelInPowerShell(device, button) {
   }
 }
 
+function pingRequestTimeout() {
+  // Include queued monitoring and all potential group members/dependencies.
+  return 30000 + Math.ceil(devices.length / 8) * 12000;
+}
+
 async function pingDevice(device, button) {
   button.disabled = true;
   try {
-    await api(`/api/devices/${device.id}/ping`, { method: "POST" });
+    await api(`/api/devices/${device.id}/ping`, { method: "POST", timeoutMs: pingRequestTimeout() });
     await refresh({ preserveInventory: true });
   } catch (error) {
     notify(error.message, "danger");
@@ -1317,6 +1422,7 @@ async function pingVisibleDevices(button) {
     await api("/api/ping", {
       method: "POST",
       body: JSON.stringify({ deviceIds }),
+      timeoutMs: pingRequestTimeout(),
     });
     await refresh({ preserveInventory: true });
   } catch (error) {
@@ -1346,6 +1452,7 @@ document.getElementById("empty-add-device").addEventListener("click", () => open
 elements.deviceHostName.addEventListener("input", updateDeviceIdentifierValidation);
 elements.deviceIp.addEventListener("input", updateDeviceIdentifierValidation);
 elements.sshSettingsForm.addEventListener("submit", saveSshSettings);
+elements.sshUser.addEventListener("input", () => { sshSettingsDirty = true; });
 elements.search.addEventListener("input", () => {
   currentPage = 1;
   renderDevices();
@@ -1385,7 +1492,7 @@ elements.pageSize.addEventListener("change", () => {
   }
   pageSize = selectedSize;
   currentPage = 1;
-  localStorage.setItem("lanwatch-page-size", String(pageSize));
+  savePreference("lanwatch-page-size", String(pageSize));
   renderDevices();
 });
 elements.dependencySearch.addEventListener("input", renderDependencyOptions);
@@ -1416,14 +1523,28 @@ async function saveDevice(event) {
     location: device.location,
     categoryId: device.categoryId,
   };
+  const errorMessage = document.getElementById("device-save-error");
+  errorMessage.hidden = true;
   elements.saveDevice.disabled = true;
   elements.saveDevice.textContent = "Zapisywanie…";
+  document.getElementById("save-and-add-next").disabled = true;
   try {
     await api(id ? `/api/devices/${id}` : "/api/devices", {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(device),
     });
-    await refresh();
+    // The write has completed; a failed list refresh must not look like a failed write.
+    if (!addNext) elements.deviceDialog.close();
+    try {
+      await refresh();
+    } catch (error) {
+      const warning = `Maszyna została zapisana, ale nie udało się odświeżyć listy. ${error.message}`;
+      if (addNext) {
+        elements.deviceDialog.close();
+      }
+      notify(warning, "warning");
+      return;
+    }
     if (addNext) {
       elements.deviceForm.reset();
       document.getElementById("group-name").value = nextDefaults.groupName;
@@ -1438,10 +1559,13 @@ async function saveDevice(event) {
       notify(id ? "Zmiany maszyny zostały zapisane." : "Maszyna została dodana.");
     }
   } catch (error) {
-    notify(error.message, "danger");
+    errorMessage.textContent = error.message;
+    errorMessage.hidden = false;
+    errorMessage.scrollIntoView({ block: "nearest" });
   } finally {
     elements.saveDevice.disabled = false;
     elements.saveDevice.textContent = "Zapisz maszynę";
+    document.getElementById("save-and-add-next").disabled = false;
   }
 }
 
@@ -1453,7 +1577,7 @@ document.querySelectorAll("[data-close]").forEach((button) => {
   });
 });
 
-setTheme(localStorage.getItem("lanwatch-theme") || "light");
+setTheme(readPreference("lanwatch-theme") || "light");
 refresh()
   .then(scheduleLiveRefresh)
   .catch((error) => {

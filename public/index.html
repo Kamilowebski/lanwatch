@@ -303,6 +303,7 @@
           </div>
         </div>
         <div class="dialog-actions">
+          <p class="device-save-error" id="device-save-error" role="alert" hidden></p>
           <button class="btn btn-outline-secondary" type="button" data-close="device-dialog">Anuluj</button>
           <button class="btn btn-primary" id="save-device" type="submit">Zapisz maszynę</button>
           <button class="btn btn-outline-secondary d-none" id="save-and-add-next" type="submit">Zapisz i dodaj następną</button>
@@ -346,16 +347,23 @@
         <button class="icon-button" type="button" data-close="device-details-dialog" aria-label="Zamknij">×</button>
       </div>
       <dl class="device-details-grid" id="device-details-list"></dl>
-      <section aria-label="Historia dostępności">
-        <h3>Historia sprawdzeń</h3>
-        <p id="history-message" role="status"></p>
-        <div class="table-responsive">
-          <table class="table"><thead><tr>
-            <th scope="col">Czas</th><th scope="col">Status</th><th scope="col">Cel</th>
-            <th scope="col">Odpowiedzi</th><th scope="col">Opóźnienie</th><th scope="col">Komunikat</th>
+      <section class="history-panel" aria-labelledby="history-title">
+        <header class="history-heading">
+          <div><p class="eyebrow">DOSTĘPNOŚĆ URZĄDZENIA</p><h3 id="history-title">Historia sprawdzeń</h3></div>
+          <span class="history-count" id="history-count">0 wpisów</span>
+        </header>
+        <p class="history-caption">Wyniki ręcznych sprawdzeń i monitoringu · od najnowszych</p>
+        <div class="history-table-wrap" id="history-table-wrap" hidden>
+          <table class="history-table"><thead><tr>
+            <th scope="col">Data i godzina</th><th scope="col">Status</th>
+            <th scope="col">Cel sprawdzenia</th><th scope="col">Opóźnienie</th>
           </tr></thead><tbody id="history-list"></tbody></table>
         </div>
-        <button class="btn btn-outline-secondary" id="history-more" type="button" hidden>Pokaż starsze</button>
+        <p class="history-message" id="history-message" role="status"></p>
+        <footer class="history-footer">
+          <span>Zachowujemy ostatnie 1000 sprawdzeń</span>
+          <button class="btn btn-sm btn-outline-secondary" id="history-more" type="button" hidden>Pokaż starsze wpisy</button>
+        </footer>
       </section>
       <div class="dialog-actions">
         <button class="btn btn-outline-secondary" type="button" data-close="device-details-dialog">Zamknij</button>
@@ -364,6 +372,7 @@
       </div>
     </dialog>
 
+    <script src="/diagnostics.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
 </html>

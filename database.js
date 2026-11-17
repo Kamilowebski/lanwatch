@@ -8,6 +8,7 @@ const databasePath = process.env.DB_PATH
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 
 const database = new DatabaseSync(databasePath);
+database.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
 const hadCategories = Boolean(database.prepare(
   "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'categories'",
 ).get());
@@ -514,7 +515,12 @@ function deleteDevice(id) {
   }
 }
 
+function backupDatabase() {
+  return require("./backup").backupInWorker(databasePath);
+}
+
 module.exports = {
+  backupDatabase,
   getDeviceHistory,
   createCategory,
   createDevice,

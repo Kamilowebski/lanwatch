@@ -81,7 +81,7 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
       const file = `${databasePath}${suffix}`;
       if (fs.existsSync(file)) fs.unlinkSync(file);
     }
-    fs.rmdirSync(temporaryDirectory);
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   });
 
   await waitForServer(child, baseUrl);
@@ -110,6 +110,7 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
   );
   assert.equal(plainTextWrite.status, 415);
   const locationResponse = await request("/api/locations", "POST", { name: "Test lokalizacja" });
+  assert.equal(locationResponse.status, 201, JSON.stringify(locationResponse.result));
   const location = locationResponse.result;
   const initialSettings = await request("/api/settings");
   assert.deepEqual(initialSettings.result, { sshUser: "" });
@@ -147,7 +148,7 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     "POST",
     newDevice("Terminal A", "192.168.10.10"),
   );
-  assert.equal(first.status, 201);
+  assert.equal(first.status, 201, JSON.stringify(first.result));
   const emptyHistory = await request(`/api/devices/${first.result.id}/history`);
   assert.equal(emptyHistory.status, 200);
   assert.deepEqual(emptyHistory.result, {items: [], nextBefore: null});

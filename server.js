@@ -2,7 +2,12 @@ const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
+const { monitorEventLoopDelay } = require("node:perf_hooks");
+const databaseFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname,"data","lanwatch.sqlite");
+const diagnostics = require("./diagnostics").createLogger(path.join(path.dirname(databaseFile),"logs"));
 const {
+  backupDatabase,
   createCategory,
   createDevice,
   createLocation,
@@ -33,6 +38,7 @@ const MONITOR_POLL_INTERVAL_MS = 15 * 1000;
 const publicDirectory = path.join(__dirname, "public");
 const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
+  "/diagnostics.js": { file: "diagnostics.js", type: "text/javascript; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/styles.css": { file: "styles.css", type: "text/css; charset=utf-8" },
 };
@@ -42,6 +48,21 @@ let runningPings = 0;
 const pingWaiters = [];
 let monitorPollActive = false;
 let monitorTimer;
+let backupTimer;
+
+let backupActive = false;
+async function runBackup() {
+  if (backupActive) return;
+  backupActive = true;
+  const started = Date.now();
+  diagnostics.log("info","backup.started");
+  try {
+    await backupDatabase();
+    diagnostics.log("info","backup.finished",{durationMs:Date.now()-started});
+  }
+  catch (error) { diagnostics.log("error","backup.error",{message:error.message,stack:error.stack}); }
+  finally { backupActive = false; }
+}
 
 async function checkDevice(device) {
   const key = `${device.id}:${device.hostName}:${device.ip}`;
@@ -286,10 +307,18 @@ async function pingSelectedDevices(deviceIds) {
 async function pollMonitoredDevices() {
   if (monitorPollActive) return;
   monitorPollActive = true;
+  const started = Date.now();
   try {
-    await Promise.all(getDevices().filter((device) => device.monitorEnabled).map(checkDevice));
+    const monitored = getDevices().filter((device) => device.monitorEnabled);
+    if(monitored.length) diagnostics.log("info","monitor.started",{devices:monitored.length});
+    const results = await Promise.allSettled(monitored.map(checkDevice));
+    const failures = results.filter(result=>result.status === "rejected");
+    for(const failure of failures) diagnostics.log("error","monitor.device_error",{
+      message:failure.reason?.message,stack:failure.reason?.stack});
+    if(monitored.length) diagnostics.log("info","monitor.finished",{
+      devices:monitored.length,errors:failures.length,durationMs:Date.now()-started});
   } catch (error) {
-    console.error("Błąd cyklicznego monitorowania:", error);
+    diagnostics.log("error","monitor.error",{message:error.message,stack:error.stack});
   } finally {
     monitorPollActive = false;
   }
@@ -322,6 +351,20 @@ async function handleApi(request, response, pathname) {
     }
   }
 
+  if (pathname === "/api/client-errors" && request.method === "POST") {
+    assertLocalTerminalRequest(request);
+    const entry = await readJson(request);
+    if (!entry || typeof entry.event !== "string") throw new HttpError(400,"Nieprawidłowy wpis diagnostyczny.");
+    const fields = {};
+    for (const key of ["event","message","stack","file","line","requestId","url","method","status","durationMs","gapMs"]) {
+      if (["string","number"].includes(typeof entry[key])) fields[key] = String(entry[key]).slice(0,key === "stack" ? 6000 : 1000);
+    }
+    fields.clientEvent = fields.event;
+    delete fields.event;
+    diagnostics.log(entry.level === "warn" ? "warn" : "error", "client.report", fields);
+    sendJson(response,200,{ok:true});
+    return;
+  }
   if (pathname === "/api/settings" && request.method === "GET") {
     sendJson(response, 200, getAppSettings());
     return;
@@ -465,6 +508,27 @@ async function handleApi(request, response, pathname) {
 }
 
 const server = http.createServer(async (request, response) => {
+  const requestId = /^[A-Za-z0-9-]{1,80}$/.test(request.headers["x-request-id"] || "")
+    ? request.headers["x-request-id"] : randomUUID();
+  response.setHeader("X-Request-ID",requestId);
+  const start = performance.now();
+  const requestPath = String(request.url || "").split("?")[0].slice(0,300);
+  const info = {requestId, method:request.method, url:requestPath};
+  const isApi = requestPath.startsWith("/api/") && requestPath !== "/api/client-errors";
+  if(isApi) diagnostics.log("info","request.start",info);
+  const slowTimer = setTimeout(()=>{
+    diagnostics.log("warn","request.waiting",{...info,durationMs:Math.round(performance.now()-start),
+      activePings:activePings.size,queuedPings:pingWaiters.length,backupActive});
+  },8000);
+  response.once("finish",()=>{
+    clearTimeout(slowTimer);
+    if(isApi) diagnostics.log(response.statusCode>=500?"error":response.statusCode>=400?"warn":"info",
+      "request.finish",{...info,status:response.statusCode,durationMs:Math.round(performance.now()-start)});
+  });
+  response.once("close",()=>{
+    clearTimeout(slowTimer);
+    if(!response.writableFinished && isApi) diagnostics.log("warn","request.disconnected",info);
+  });
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) {
@@ -483,6 +547,8 @@ const server = http.createServer(async (request, response) => {
     });
     response.end(content);
   } catch (error) {
+    diagnostics.log(Number.isInteger(error.status) && error.status < 500 ? "warn" : "error",
+      "request.error",{...info,message:error.message,stack:error.stack});
     if (response.headersSent || response.destroyed) return;
     if (error instanceof HttpError || Number.isInteger(error.status)) {
       sendJson(response, error.status, { error: error.message });
@@ -496,12 +562,34 @@ const server = http.createServer(async (request, response) => {
 server.listen(port, host, () => {
   console.log(`Lanwatch działa pod adresem http://localhost:${port}`);
   console.log(`Nasłuchuje na interfejsie ${host}.`);
+  diagnostics.log("info","server.started",{port,host,node:process.version,pid:process.pid});
+  runBackup();
+  backupTimer = setInterval(runBackup, 60 * 60 * 1000);
   monitorTimer = setInterval(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);
 });
 
+const loopDelay = monitorEventLoopDelay({resolution:100});
+loopDelay.enable();
+const lagTimer = setInterval(()=>{
+  const maxMs = loopDelay.max / 1e6;
+  if(maxMs>2000) diagnostics.log("warn","server.event_loop_delayed",{maxMs:Math.round(maxMs),
+    activePings:activePings.size,queuedPings:pingWaiters.length,backupActive});
+  loopDelay.reset();
+},5000);
+lagTimer.unref();
+process.on("unhandledRejection",error=>{
+  diagnostics.log("error","server.unhandled_rejection",{message:String(error?.message || error),stack:error?.stack});
+});
+process.on("uncaughtExceptionMonitor",error=>{
+  diagnostics.log("error","server.uncaught_exception",{message:error.message,stack:error.stack});
+});
+
 function shutdown() {
+  clearInterval(lagTimer);
+  loopDelay.disable();
   clearInterval(monitorTimer);
-  server.close(() => process.exit(0));
+  clearInterval(backupTimer);
+  server.close(async () => { await diagnostics.flush(); process.exit(0); });
 }
 
 process.on("SIGINT", shutdown);

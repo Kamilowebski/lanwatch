@@ -156,3 +156,67 @@ Dla każdej maszyny zachowywane jest ostatnie 1000 wyników. Usunięcie maszyny
 usuwa jej historię. Zmiana IP zachowuje stare wpisy z poprzednim adresem.
 Wcześniejsze sprawdzenia nie są odtwarzane; historia zaczyna się po aktualizacji.
 Wygaśnięcie statusu Online nie tworzy wpisu, ponieważ nie wykonuje nowego pingu.
+
+Historia w szczegółach maszyny ma przewijaną tabelę ze stałym nagłówkiem,
+kolorowe etykiety statusów, osobne daty i godziny oraz wyrównane opóźnienia.
+Widok obsługuje jasny i ciemny motyw, stany ładowania, pustej historii i błędu z ponowieniem.
+
+## Automatyczne kopie bazy
+
+Aplikacja tworzy lokalną kopię SQLite przy pierwszym uruchomieniu danego dnia.
+Podczas pracy sprawdza co godzinę, czy rozpoczął się kolejny dzień; wtedy tworzy
+nową kopię. Gdy aplikacja jest wyłączona, kopie nie powstają.
+Kopia obejmuje całą bazę: ewidencję, ustawienia i historię sprawdzeń.
+
+Kopie znajdują się w `data/backups/lanwatch-RRRR-MM-DD.sqlite`.
+Przy własnym `DB_PATH` katalog `backups` powstaje obok pliku bazy.
+Zachowywanych jest siedem ostatnich dziennych kopii. Ponowny start tego samego
+dnia nie nadpisuje istniejącej kopii. Błąd kopii jest wypisywany w konsoli;
+aplikacja działa dalej i ponowi próbę przy następnym sprawdzeniu.
+Snapshot SQLite jest tworzony przez `VACUUM INTO`, a gotowy plik jest przenoszony
+na docelową nazwę przed usunięciem najstarszych kopii.
+
+Aby przywrócić dane: zatrzymaj aplikację, zachowaj kopię aktualnego katalogu
+`data`, zastąp `lanwatch.sqlite` wybraną kopią i usuń ewentualne pozostałe pliki
+`lanwatch.sqlite-wal` oraz `lanwatch.sqlite-shm` z katalogu roboczej bazy.
+Następnie uruchom aplikację ponownie. Dla `DB_PATH` wykonaj te kroki przy wskazanym pliku.
+
+Zapis maszyny ma limit oczekiwania na odpowiedź serwera (15 sekund).
+Błędy są pokazywane wewnątrz formularza, a przyciski są odblokowywane.
+Błąd odświeżenia listy po udanym zapisie jest zgłaszany osobno; nie wymaga ponownego dodania maszyny.
+
+## Odporność na zawieszenia
+
+Kopia bazy jest wykonywana w osobnym wątku z osobnym połączeniem SQLite.
+Baza pracuje w trybie WAL, aby kopia nie kolidowała z zapisem ewidencji i historii.
+Rozpoznawanie nazwy hosta ma limit 5 sekund, a uruchomienie okna PowerShell — 10 sekund.
+Dłuższe pingowanie wielu maszyn ma limit dopasowany do liczby maszyn i kolejki,
+nie krótki limit używany przy zwykłym zapisie danych.
+
+Starsze odpowiedzi odświeżania nie nadpisują nowszych danych. Przesunięcie zegara
+nie powoduje natychmiastowej pętli odświeżania. Odmowa dostępu do pamięci ustawień
+przeglądarki nie blokuje startu aplikacji. Błędy działań w otwartym oknie są
+pokazywane w tym oknie. Niezapisana nazwa użytkownika SSH nie znika przy odświeżaniu.
+Zapis ustawień monitora nie czeka na decyzję w oknie zgody na powiadomienia.
+
+## Diagnostyka zawieszeń
+
+Logi serwera znajdują się w `data/logs/lanwatch.log` (przy własnym `DB_PATH`:
+`logs` obok bazy). To pliki tekstowe JSON, jeden wpis na linię. Zapisywane są:
+rozpoczęcie i zakończenie żądania API, jego status HTTP, czas wykonania,
+błędy oraz ostrzeżenia po 8 sekundach oczekiwania. Wpisy `request.waiting`
+zawierają też długość kolejki pingowania i informację o trwającej kopii.
+`requestId` łączy wpisy przeglądarki i serwera. Treści formularzy nie są logowane.
+Logowanie plików jest asynchroniczne. Plik ma limit około 5 MB, zachowywanych
+jest maksymalnie 7 plików (bieżący i 6 poprzednich).
+
+Przeglądarka zgłasza błędy JavaScript, nieobsłużone odrzucenia Promise, błędy
+żądań API i przekroczenia czasu w konsoli F12. Próbuje również zapisać je
+na lokalnym serwerze; jeśli ten nie odpowiada, wpisy pozostają w konsoli
+i w pamięci sesji przeglądarki (`lanwatch-diagnostics`, maksymalnie 100 wpisów).
+Przesyłanie logów nie ponawia samo siebie przy błędzie.
+
+Opóźnienia pętli serwera powyżej 2 sekund oraz przeglądarki powyżej 10 sekund
+są zgłaszane po odzyskaniu możliwości wykonania kodu. Zamrożony proces nie może
+sam wypisać komunikatu w trakcie blokady. Po problemie zachowaj `data/logs`
+przed restartem; w F12 włącz zachowywanie dziennika przed odświeżeniem.
