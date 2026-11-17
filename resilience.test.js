@@ -61,3 +61,14 @@ test('an unanswered notification prompt does not block enabling or disabling mon
  await context.saveMonitorSettings({id:1},{enabled:true,notifyOnline:true,notifyOffline:false});
  assert.equal(saved,true);assert.equal(refreshed,true);assert.equal(context.pendingMonitorUpdates.size,0);
 });
+
+test('relative monitor time handles missing data, seconds, minutes and future clocks',()=>{
+ const context={};vm.createContext(context);
+ vm.runInContext(extract('function relativeCheckTime(', '\nfunction updateMonitorTime'),context);
+ const now=Date.parse('2026-11-17T12:00:00Z');
+ assert.equal(context.relativeCheckTime(null,now),'Nie sprawdzono');
+ assert.equal(context.relativeCheckTime('2026-11-17T11:59:48Z',now),'12 s temu');
+ assert.equal(context.relativeCheckTime('2026-11-17T11:58:00Z',now),'2 min temu');
+ assert.equal(context.relativeCheckTime('2026-11-17T11:00:00Z',now),'1 godz. temu');
+ assert.equal(context.relativeCheckTime('2026-11-18T12:00:00Z',now),'0 s temu');
+});

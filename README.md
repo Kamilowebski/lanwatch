@@ -246,3 +246,11 @@ Każda monitorowana maszyna ma osobną notatkę (do 1000 znaków), zapisywaną p
 „Zapisz notatkę”. Notatka przetrwa odświeżenie i restart aplikacji, dopóki maszyna jest
 monitorowana. Wyłączenie monitora usuwa ją; nie zmienia opisu w ewidencji ani historii.
 Monitor nie ma osobnej kolumny IP; adres pozostaje dostępny w szczegółach maszyny.
+
+Monitor pokazuje raport pod nazwą maszyny, a wyłączenie monitora na końcu wiersza.
+Notatka jest domyślnie tekstem; „Edytuj” lub „Dodaj notatkę” otwiera edytor z zapisem
+oraz anulowaniem. Odświeżanie zachowuje wpisywany tekst. Powiadomienia mają etykiety
+„Powrót online” i „Brak odpowiedzi”. Wiersze bez odpowiedzi są delikatnie wyróżniane;
+opcja „Bez odpowiedzi na początku” jest zapamiętywana w przeglądarce.
+Czas sprawdzenia ma postać względną (np. „12 s temu”) i aktualizuje się lokalnie
+co sekundę; dokładna data jest dostępna po najechaniu. Nie uruchamia to pingowania.

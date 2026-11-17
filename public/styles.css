@@ -468,3 +468,24 @@ button, input, select, textarea { font: inherit; }
 .monitor-table { width: 100%; }
 .monitor-table th { text-align: left; }
 .monitor-table .monitor-actions { min-width: 115px; }
+
+.monitor-text-action { padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; text-align: left; }
+.monitor-text-action:hover { text-decoration: underline; }
+.monitor-text-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+.monitor-text-action:disabled { opacity: .5; cursor: wait; }
+.monitor-report-link { display: block; margin-top: 7px; font-size: 10px; }
+.monitor-table .monitor-actions { width: 110px; min-width: 110px; text-align: right; }
+.monitor-table .monitor-remove { color: var(--muted); white-space: nowrap; font-size: 10px; }
+.monitor-table .monitor-remove:hover { color: #d65b57; }
+.monitor-table .monitor-notifications { min-width: 160px; }
+.monitor-note-preview { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.monitor-note-text { color: var(--text); font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.monitor-note-text.is-empty { color: var(--muted); }
+.monitor-note-edit { flex-shrink: 0; font-size: 10px; }
+.monitor-note-editor-actions { display: flex; align-items: center; gap: 12px; margin-top: 5px; }
+.monitor-note-editor-actions .monitor-note-save { margin: 0; }
+.monitor-note-preview[hidden], .monitor-note-editor[hidden] { display: none; }
+.monitor-row-offline { background: color-mix(in srgb, #d65b57 5%, var(--surface)); }
+.monitor-row-offline > td:first-child { box-shadow: inset 3px 0 #d65b57; }
+.monitor-sort-option { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; cursor: pointer; }
+.monitor-sort-option input { accent-color: var(--accent); }

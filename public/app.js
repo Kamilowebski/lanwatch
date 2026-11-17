@@ -113,6 +113,9 @@ const expandedGroups = new Set();
 const knownMonitorStatuses = new Map();
 const pendingMonitorUpdates = new Set();
 const monitorNoteDrafts = new Map();
+const monitorNoteEditing = new Set();
+const pendingNoteSaves = new Set();
+let offlineFirst = readPreference("lanwatch-monitor-offline-first") === "true";
 let hasLoadedMonitorStatuses = false;
 let visiblePageDeviceIds = [];
 
@@ -1089,6 +1092,82 @@ function monitorToggle(device, property, label, disabled = false) {
   return wrapper;
 }
 
+function relativeCheckTime(checkedAt, now = Date.now()) {
+  const timestamp = Date.parse(checkedAt);
+  if (!Number.isFinite(timestamp)) return "Nie sprawdzono";
+  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
+  if (seconds < 60) return `${seconds} s temu`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min temu`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} godz. temu`;
+  return `${Math.floor(seconds / 86400)} dni temu`;
+}
+
+function updateMonitorTime(element, checkedAt) {
+  const text = relativeCheckTime(checkedAt);
+  if (element.textContent !== text) element.textContent = text;
+  element.dataset.checkedAt = checkedAt || "";
+  element.title = Number.isFinite(Date.parse(checkedAt)) ? new Date(checkedAt).toLocaleString("pl-PL") : "Brak zapisanego sprawdzenia";
+}
+
+function updateMonitorNoteView(cell, device) {
+  const editing = monitorNoteEditing.has(device.id);
+  cell.querySelector(".monitor-note-preview").hidden = editing;
+  cell.querySelector(".monitor-note-editor").hidden = !editing;
+  const preview = cell.querySelector(".monitor-note-text");
+  preview.textContent = device.monitorNote || "Brak notatki";
+  preview.classList.toggle("is-empty", !device.monitorNote);
+  cell.querySelector(".monitor-note-edit").textContent = device.monitorNote ? "Edytuj" : "Dodaj notatkę";
+  const input = cell.querySelector(".monitor-note-input");
+  if (!monitorNoteDrafts.has(device.id)) input.value = device.monitorNote || "";
+  const saving = pendingNoteSaves.has(device.id);
+  input.disabled = saving;
+  cell.querySelectorAll(".monitor-note-save, .monitor-note-cancel").forEach(button => button.disabled = saving);
+  cell.querySelector(".monitor-note-save").textContent = saving ? "Zapisywanie…" : "Zapisz";
+}
+
+function createMonitorNoteCell(device) {
+  const cell = document.createElement("td");
+  cell.className = "monitor-note-cell";
+  const preview = document.createElement("div"); preview.className = "monitor-note-preview";
+  const text = document.createElement("span"); text.className = "monitor-note-text";
+  const edit = document.createElement("button"); edit.type = "button"; edit.className = "monitor-note-edit monitor-text-action";
+  edit.setAttribute("aria-label", `Edytuj notatkę: ${device.hostName}`);
+  preview.append(text, edit);
+  const editor = document.createElement("div"); editor.className = "monitor-note-editor";
+  const input = document.createElement("textarea"); input.className = "monitor-note-input";
+  input.rows = 2; input.maxLength = 1000;
+  input.setAttribute("aria-label", `Notatka monitora: ${device.hostName}`);
+  input.placeholder = "Notatka na czas monitorowania…";
+  input.value = monitorNoteDrafts.get(device.id) ?? device.monitorNote ?? "";
+  input.addEventListener("input", () => monitorNoteDrafts.set(device.id, input.value));
+  const actions = document.createElement("div"); actions.className = "monitor-note-editor-actions";
+  const save = document.createElement("button"); save.type = "button"; save.className = "monitor-action monitor-note-save";
+  const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "monitor-text-action monitor-note-cancel"; cancel.textContent = "Anuluj";
+  const current = () => devices.find(item => item.id === device.id) || device;
+  edit.addEventListener("click", () => {
+    monitorNoteEditing.add(device.id);
+    updateMonitorNoteView(cell, current()); input.focus();
+  });
+  cancel.addEventListener("click", () => {
+    monitorNoteEditing.delete(device.id); monitorNoteDrafts.delete(device.id);
+    updateMonitorNoteView(cell, current()); edit.focus();
+  });
+  save.addEventListener("click", async () => {
+    if (pendingNoteSaves.has(device.id)) return;
+    const value = input.value;
+    pendingNoteSaves.add(device.id); updateMonitorNoteView(cell, current());
+    try {
+      const result = await api(`/api/devices/${device.id}/monitor/note`, {method:"PUT",body:JSON.stringify({note:value})});
+      current().monitorNote = result.note;
+      monitorNoteDrafts.delete(device.id); monitorNoteEditing.delete(device.id);
+    } catch (error) { notify(error.message, "danger"); }
+    finally { pendingNoteSaves.delete(device.id); renderMonitor(); }
+  });
+  actions.append(save, cancel); editor.append(input, actions); cell.append(preview, editor);
+  updateMonitorNoteView(cell, current());
+  return cell;
+}
+
 function updateMonitorStatus(row, device) {
   const status = row.querySelector(".monitor-status");
   const label = {online: "Online", offline: "Brak odpowiedzi", unknown: "Nieustalony"}[device.status] || "Nieustalony";
@@ -1096,8 +1175,8 @@ function updateMonitorStatus(row, device) {
   if (status.className !== className) status.className = className;
   if (status.textContent !== label) status.textContent = label;
   const time = row.querySelector(".status-time");
-  const timeText = device.statusCheckedAt ? new Date(device.statusCheckedAt).toLocaleTimeString("pl-PL") : "\u00a0";
-  if (time.textContent !== timeText) time.textContent = timeText;
+  updateMonitorTime(time, device.statusCheckedAt);
+  row.classList.toggle("monitor-row-offline", device.status === "offline");
   const latency = row.querySelector(".monitor-latency-value");
   const latencyText = device.status === "online" && Number.isFinite(device.pingLatencyMs)
     ? `${device.pingLatencyMs < 1 ? "<1" : Number(device.pingLatencyMs.toFixed(1))} ms` : "—";
@@ -1108,11 +1187,14 @@ function updateMonitorStatus(row, device) {
 
 function renderMonitor() {
   const monitoredDevices = devices.filter((device) => device.monitorEnabled);
+  if (offlineFirst) monitoredDevices.sort((a, b) => Number(b.status === "offline") - Number(a.status === "offline"));
   const onlineCount = monitoredDevices.filter((device) => device.status === "online").length;
   const offlineCount = monitoredDevices.filter((device) => device.status === "offline").length;
   elements.monitorCount.textContent =
     `${monitoredDevices.length} aktywnych · ${onlineCount} online · ${offlineCount} bez odpowiedzi`;
-  for (const id of monitorNoteDrafts.keys()) if (!monitoredDevices.some(device => device.id === id)) monitorNoteDrafts.delete(id);
+  for (const set of [monitorNoteDrafts, monitorNoteEditing]) {
+    for (const id of set.keys()) if (!monitoredDevices.some(device => device.id === id)) set.delete(id);
+  }
   const previousRows = new Map([...elements.monitorList.rows].map(row => [row.dataset.deviceId, row]));
   const desiredRows = [];
 
@@ -1142,8 +1224,7 @@ function renderMonitor() {
     const existing = previousRows.get(String(device.id));
     if (existing && existing.dataset.metadata === metadata) {
       updateMonitorStatus(existing, device);
-      const note = existing.querySelector(".monitor-note-input");
-      if (note && !monitorNoteDrafts.has(device.id) && document.activeElement !== note) note.value = device.monitorNote || "";
+      updateMonitorNoteView(existing.querySelector(".monitor-note-cell"), device);
       desiredRows.push(existing);
       continue;
     }
@@ -1163,7 +1244,12 @@ function renderMonitor() {
     details.textContent = [device.groupName || device.category, device.location]
       .filter(Boolean)
       .join(" · ");
-    host.append(hostName, details);
+    const reportLink = document.createElement("button");
+    reportLink.type = "button"; reportLink.className = "monitor-text-action monitor-report-link";
+    reportLink.textContent = "Raport dostępności";
+    reportLink.setAttribute("aria-label", `Raport: ${device.hostName}`);
+    reportLink.addEventListener("click", () => window.openMonitorReport(device));
+    host.append(hostName, details, reportLink);
     row.append(host);
 
     const statusCell = document.createElement("td");
@@ -1173,7 +1259,7 @@ function renderMonitor() {
     statusCell.append(status);
     const checkedAt = document.createElement("small");
     checkedAt.className = "status-time";
-    checkedAt.textContent = device.statusCheckedAt ? new Date(device.statusCheckedAt).toLocaleTimeString("pl-PL") : "\u00a0";
+    updateMonitorTime(checkedAt, device.statusCheckedAt);
     statusCell.append(checkedAt);
     row.append(statusCell);
 
@@ -1202,61 +1288,32 @@ function renderMonitor() {
       notifyOffline: Boolean(device.notifyOffline),
     }));
     monitorCell.className = "monitor-actions";
-    const report = document.createElement("button");
-    report.type = "button";
-    report.className = "monitor-action monitor-action-primary";
-    report.textContent = "Raport";
-    report.addEventListener("click", () => window.openMonitorReport(device));
-    monitorCell.append(report, disableMonitor);
-    row.append(monitorCell);
+    disableMonitor.textContent = "Wyłącz monitor";
+    disableMonitor.className = "monitor-text-action monitor-remove";
+    monitorCell.append(disableMonitor);
 
     const notifications = document.createElement("td");
     notifications.className = "monitor-notifications";
     notifications.append(
-      monitorToggle(device, "notifyOnline", "Online", !device.monitorEnabled),
-      monitorToggle(device, "notifyOffline", "Offline", !device.monitorEnabled),
+      monitorToggle(device, "notifyOnline", "Powrót online", !device.monitorEnabled),
+      monitorToggle(device, "notifyOffline", "Brak odpowiedzi", !device.monitorEnabled),
     );
     row.append(notifications);
-    const noteCell = document.createElement("td");
-    noteCell.className = "monitor-note-cell";
-    const note = document.createElement("textarea");
-    note.className = "monitor-note-input";
-    note.rows = 2;
-    note.maxLength = 1000;
-    note.placeholder = "Notatka na czas monitorowania…";
-    note.setAttribute("aria-label", `Notatka monitora: ${device.hostName}`);
-    note.value = monitorNoteDrafts.get(device.id) ?? device.monitorNote ?? "";
-    note.addEventListener("input", () => monitorNoteDrafts.set(device.id, note.value));
-    const save = document.createElement("button");
-    save.className = "monitor-action monitor-note-save";
-    save.type = "button";
-    save.textContent = "Zapisz notatkę";
-    save.addEventListener("click", async () => {
-      if (save.disabled) return;
-      save.disabled = true;
-      const value = note.value;
-      save.textContent = "Zapisywanie…";
-      try {
-        const result = await api(`/api/devices/${device.id}/monitor/note`, {method:"PUT",body:JSON.stringify({note:value})});
-        const current = devices.find(item => item.id === device.id);
-        if (current) current.monitorNote = result.note;
-        if (note.value === value) {
-          monitorNoteDrafts.delete(device.id);
-          note.value = result.note;
-          save.textContent = "Zapisano";
-        } else save.textContent = "Zapisz zmiany";
-      } catch(error) { notify(error.message,"danger");save.textContent = "Ponów zapis"; }
-      finally {save.disabled = false;}
-    });
-    noteCell.append(note,save);
-    row.append(noteCell);
+    row.append(createMonitorNoteCell(device), monitorCell);
+    row.classList.toggle("monitor-row-offline", device.status === "offline");
     desiredRows.push(row);
   }
   const keep = new Set(desiredRows);
   for (const row of [...elements.monitorList.rows]) if (!keep.has(row)) row.remove();
+  const focused = elements.monitorList.contains(document.activeElement) ? document.activeElement : null;
+  const selection = focused && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
   desiredRows.forEach((row, index) => {
     if (elements.monitorList.rows[index] !== row) elements.monitorList.insertBefore(row, elements.monitorList.rows[index] || null);
   });
+  if (focused?.isConnected && document.activeElement !== focused) {
+    focused.focus({preventScroll:true});
+    if (selection) focused.setSelectionRange(...selection);
+  }
 }
 
 function notifyMonitorTransition(device, status) {
@@ -1586,6 +1643,17 @@ document.getElementById("add-device").addEventListener("click", () => openDevice
 document.getElementById("empty-add-device").addEventListener("click", () => openDeviceForm());
 elements.deviceHostName.addEventListener("input", updateDeviceIdentifierValidation);
 elements.deviceIp.addEventListener("input", updateDeviceIdentifierValidation);
+const monitorSort = document.getElementById("monitor-offline-first");
+monitorSort.checked = offlineFirst;
+monitorSort.addEventListener("change", () => {
+  offlineFirst = monitorSort.checked;
+  savePreference("lanwatch-monitor-offline-first", String(offlineFirst));
+  renderMonitor();
+});
+window.setInterval(() => {
+  if (document.getElementById("monitor-view").classList.contains("d-none") || document.hidden) return;
+  elements.monitorList.querySelectorAll(".status-time").forEach(element => updateMonitorTime(element, element.dataset.checkedAt));
+}, 1000);
 elements.sshSettingsForm.addEventListener("submit", saveSshSettings);
 elements.sshUser.addEventListener("input", () => { sshSettingsDirty = true; });
 elements.search.addEventListener("input", () => {
