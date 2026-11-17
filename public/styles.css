@@ -412,3 +412,19 @@ button, input, select, textarea { font: inherit; }
 
 /* Keep tab visibility correct even if the Bootstrap CDN is unavailable. */
 .d-none { display: none !important; }
+
+/* Reserve the timestamp and status width before the first ping. */
+.inventory-table .device-status-cell { width: 190px; min-width: 190px; }
+.device-status-cell .status-badge { min-height: 26px; white-space: nowrap; }
+.inventory-table .status-time { height: 14px; line-height: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.category-icon { width: 19px; height: 19px; flex: 0 0 19px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; color: var(--accent); }
+.host-detail-trigger, .group-title-with-icon { display: inline-flex; align-items: center; gap: 8px; }
+.monitor-host-name.host-detail-trigger { padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
+.monitor-host-name.host-detail-trigger:hover { color: var(--accent); }
+.host-detail-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+.connection-indicator small { display: block; margin-top: 2px; font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.connection-indicator { min-width: 155px; }
+.connection-indicator[data-state="waiting"] .live-dot { background: #d59a28; }
+.connection-indicator[data-state="disconnected"] .live-dot { background: #d65b57; }

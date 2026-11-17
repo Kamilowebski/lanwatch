@@ -77,6 +77,19 @@ let locations = [];
 let sshUser = "";
 let sshSettingsDirty = false;
 let refreshVersion = 0;
+let metadataRefreshedAt = 0;
+let onlineTtlMs = 300000;
+let lastSuccessfulRefresh = null;
+function setConnectionState(state) {
+  const indicator = document.getElementById("connection-indicator");
+  if (!indicator) return;
+  indicator.dataset.state = state;
+  document.getElementById("connection-label").textContent = {
+    connected: "Połączono", waiting: "Czekam na serwer", disconnected: "Utracono połączenie",
+  }[state];
+  document.getElementById("connection-time").textContent = lastSuccessfulRefresh
+    ? `Odświeżono: ${lastSuccessfulRefresh.toLocaleTimeString("pl-PL")}` : "Brak udanego odświeżenia";
+}
 const editingIds = { category: null, location: null };
 const allowedPageSizes = [10, 20, 50, 100];
 function readPreference(key) {
@@ -658,12 +671,11 @@ function appendStatusCell(row, relatedDevices, representative, subjectLabel) {
     .filter(Boolean)
     .sort()
     .pop();
-  if (latestCheck) {
-    const checkedAt = document.createElement("small");
-    checkedAt.className = "status-time";
-    checkedAt.textContent = new Date(latestCheck).toLocaleString("pl-PL");
-    cell.append(checkedAt);
-  }
+  cell.classList.add("device-status-cell");
+  const checkedAt = document.createElement("small");
+  checkedAt.className = "status-time";
+  checkedAt.textContent = latestCheck ? new Date(latestCheck).toLocaleString("pl-PL") : "\u00a0";
+  cell.append(checkedAt);
   row.append(cell);
 }
 
@@ -793,6 +805,30 @@ function openDeviceDetails(device) {
   elements.deviceDetailsDialog.showModal();
 }
 
+function categoryIcon(category) {
+  const icons = {
+    terminal: "M4 5h16v14H4z M7 9l3 3-3 3 M12 15h4",
+    komputer: "M3 4h18v13H3z M8 21h8 M12 17v4",
+    server: "M4 3h16v7H4z M4 14h16v7H4z M7 6h.01 M7 17h.01 M11 6h6 M11 17h6",
+    drukarka: "M6 8V3h12v5 M6 17H3V8h18v9h-3 M6 14h12v7H6z M17 11h.01",
+    "raspberry pi": "M6 6h12v12H6z M9 9h6v6H9z M9 3v3 M15 3v3 M9 18v3 M15 18v3 M3 9h3 M3 15h3 M18 9h3 M18 15h3",
+    kamera: "M3 7h12v11H3z M15 10l6-3v11l-6-3z",
+    detektor: "M12 11a1 1 0 1 0 0 2 1 1 0 1 0 0-2 M8 8a6 6 0 0 0 0 8 M16 8a6 6 0 0 1 0 8 M5 5a10 10 0 0 0 0 14 M19 5a10 10 0 0 1 0 14",
+    waga: "M12 3v17 M5 20h14 M4 7h16 M6 7l-4 8h8z M18 7l-4 8h8z",
+    bizerba: "M4 10h16v10H4z M7 3h10v7H7z M8 14h3 M8 17h8 M16 14h.01",
+    minebea: "M3 8h18v12H3z M7 3h10v5 M7 12h10 M7 16h4 M17 16h.01",
+  };
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  svg.classList.add("category-icon");
+  const path = document.createElementNS(svg.namespaceURI, "path");
+  path.setAttribute("d", icons[String(category || "").toLocaleLowerCase("pl").trim()] || "M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z");
+  svg.append(path);
+  return svg;
+}
+
 function renderDeviceRow(device, isGroupMember = false) {
   const row = document.createElement("tr");
   row.dataset.deviceIds = String(device.id);
@@ -804,6 +840,7 @@ function renderDeviceRow(device, isGroupMember = false) {
   hostName.type = "button";
   hostName.className = "host-detail-trigger";
   hostName.textContent = device.hostName;
+  hostName.prepend(categoryIcon(device.category));
   hostName.addEventListener("click", () => openDeviceDetails(device));
   hostCell.append(hostName);
   if (device.lineNumber) {
@@ -884,6 +921,9 @@ function renderGroupSummaryRow(group) {
   hostCell.className = "host-cell group-summary-cell";
   const name = document.createElement("span");
   name.textContent = group.relatedName || group.groupName;
+  name.className = "group-title-with-icon";
+  const categories = new Set(group.devices.map(device => device.category));
+  name.prepend(categoryIcon(categories.size === 1 ? group.devices[0].category : ""));
   const count = document.createElement("small");
   count.className = "group-name-cell";
   count.textContent = group.related
@@ -1016,7 +1056,7 @@ function updateVisibleDeviceStatuses() {
       }
       checkedAt.textContent = new Date(latestCheck).toLocaleString("pl-PL");
     } else {
-      checkedAt?.remove();
+      if (checkedAt) checkedAt.textContent = "\u00a0";
     }
   }
 
@@ -1048,15 +1088,35 @@ function monitorToggle(device, property, label, disabled = false) {
   return wrapper;
 }
 
+function updateMonitorStatus(row, device) {
+  const status = row.querySelector(".monitor-status");
+  const label = {online: "Online", offline: "Brak odpowiedzi", unknown: "Nieustalony"}[device.status] || "Nieustalony";
+  const className = `status-badge monitor-status status-${device.status}`;
+  if (status.className !== className) status.className = className;
+  if (status.textContent !== label) status.textContent = label;
+  const time = row.querySelector(".status-time");
+  const timeText = device.statusCheckedAt ? new Date(device.statusCheckedAt).toLocaleTimeString("pl-PL") : "\u00a0";
+  if (time.textContent !== timeText) time.textContent = timeText;
+  const latency = row.querySelector(".monitor-latency-value");
+  const latencyText = device.status === "online" && Number.isFinite(device.pingLatencyMs)
+    ? `${device.pingLatencyMs < 1 ? "<1" : Number(device.pingLatencyMs.toFixed(1))} ms` : "—";
+  if (latency.textContent !== latencyText) latency.textContent = latencyText;
+  const latencyClass = device.status === "online" ? "monitor-latency-value monitor-latency-online" : "monitor-latency-value";
+  if (latency.className !== latencyClass) latency.className = latencyClass;
+}
+
 function renderMonitor() {
   const monitoredDevices = devices.filter((device) => device.monitorEnabled);
   const onlineCount = monitoredDevices.filter((device) => device.status === "online").length;
   const offlineCount = monitoredDevices.filter((device) => device.status === "offline").length;
   elements.monitorCount.textContent =
     `${monitoredDevices.length} aktywnych · ${onlineCount} online · ${offlineCount} bez odpowiedzi`;
-  elements.monitorList.replaceChildren();
+  const previousRows = new Map([...elements.monitorList.rows].map(row => [row.dataset.deviceId, row]));
+  const desiredRows = [];
 
   if (!monitoredDevices.length) {
+    if (elements.monitorList.querySelector(".monitor-empty-cell")) return;
+    elements.monitorList.replaceChildren();
     const row = document.createElement("tr");
     const empty = makeCell(
       "Brak aktywnych maszyn. Włącz monitorowanie przy wybranych maszynach w zakładce Maszyny.",
@@ -1074,12 +1134,26 @@ function renderMonitor() {
     unknown: "Nieustalony",
   };
   for (const device of monitoredDevices) {
+    const metadata = JSON.stringify([device.id, device.hostName, device.ip, device.category,
+      device.groupName, device.location, device.notifyOnline, device.notifyOffline,
+      pendingMonitorUpdates.has(device.id)]);
+    const existing = previousRows.get(String(device.id));
+    if (existing && existing.dataset.metadata === metadata) {
+      updateMonitorStatus(existing, device);
+      desiredRows.push(existing);
+      continue;
+    }
     const row = document.createElement("tr");
+    row.dataset.deviceId = String(device.id);
+    row.dataset.metadata = metadata;
     const host = document.createElement("td");
     host.className = "host-cell";
-    const hostName = document.createElement("span");
-    hostName.className = "monitor-host-name";
+    const hostName = document.createElement("button");
+    hostName.type = "button";
+    hostName.className = "monitor-host-name host-detail-trigger";
     hostName.textContent = device.hostName;
+    hostName.prepend(categoryIcon(device.category));
+    hostName.addEventListener("click", () => openDeviceDetails(devices.find(item => item.id === device.id) || device));
     const details = document.createElement("small");
     details.className = "monitor-device-meta";
     details.textContent = [device.groupName || device.category, device.location]
@@ -1093,12 +1167,10 @@ function renderMonitor() {
     status.className = `status-badge monitor-status status-${device.status}`;
     status.textContent = statusLabels[device.status] || statusLabels.unknown;
     statusCell.append(status);
-    if (device.statusCheckedAt) {
-      const checkedAt = document.createElement("small");
-      checkedAt.className = "status-time";
-      checkedAt.textContent = new Date(device.statusCheckedAt).toLocaleTimeString("pl-PL");
-      statusCell.append(checkedAt);
-    }
+    const checkedAt = document.createElement("small");
+    checkedAt.className = "status-time";
+    checkedAt.textContent = device.statusCheckedAt ? new Date(device.statusCheckedAt).toLocaleTimeString("pl-PL") : "\u00a0";
+    statusCell.append(checkedAt);
     row.append(statusCell);
 
     const latency = device.status === "online" && Number.isFinite(device.pingLatencyMs)
@@ -1135,8 +1207,13 @@ function renderMonitor() {
       monitorToggle(device, "notifyOffline", "Offline", !device.monitorEnabled),
     );
     row.append(notifications);
-    elements.monitorList.append(row);
+    desiredRows.push(row);
   }
+  const keep = new Set(desiredRows);
+  for (const row of [...elements.monitorList.rows]) if (!keep.has(row)) row.remove();
+  desiredRows.forEach((row, index) => {
+    if (elements.monitorList.rows[index] !== row) elements.monitorList.insertBefore(row, elements.monitorList.rows[index] || null);
+  });
 }
 
 function notifyMonitorTransition(device, status) {
@@ -1202,26 +1279,41 @@ function inventoryMetadataChanged(nextDevices) {
 
 async function refresh({ preserveInventory = false } = {}) {
   const version = ++refreshVersion;
-  const [nextDevices, nextCategories, nextLocations, summary, settings] = await Promise.all([
-    api("/api/devices"),
-    api("/api/categories"),
-    api("/api/locations"),
-    api("/api/summary"),
-    api("/api/settings"),
-  ]);
-  if (version !== refreshVersion) return;
-  const canPreserveInventory = preserveInventory && !statusFilter && !inventoryMetadataChanged(nextDevices);
-  trackMonitorStatusChanges(nextDevices);
-  devices = nextDevices;
-  categories = nextCategories;
-  locations = nextLocations;
-  sshUser = settings.sshUser;
-  renderSettings();
-  if (canPreserveInventory) updateVisibleDeviceStatuses();
-  else renderDevices();
-  renderMonitor();
-  scheduleStatusExpiry(summary.onlineTtlMs);
-  if (elements.deviceDialog.open) updateDeviceIdentifierValidation();
+  const loadMetadata = !preserveInventory || Date.now() - metadataRefreshedAt >= 60000;
+  const waitingTimer = window.setTimeout(() => {
+    if (version === refreshVersion) setConnectionState("waiting");
+  }, 2000);
+  try {
+    const [nextDevices, nextCategories, nextLocations, summary, settings] = await Promise.all([
+      api("/api/devices"),
+      loadMetadata ? api("/api/categories") : categories,
+      loadMetadata ? api("/api/locations") : locations,
+      loadMetadata ? api("/api/summary") : {onlineTtlMs},
+      loadMetadata ? api("/api/settings") : {sshUser},
+    ]);
+    if (version !== refreshVersion) return;
+    const canPreserveInventory = preserveInventory && !statusFilter && !inventoryMetadataChanged(nextDevices);
+    trackMonitorStatusChanges(nextDevices);
+    devices = nextDevices;
+    if (loadMetadata) {
+      categories = nextCategories;
+      locations = nextLocations;
+      sshUser = settings.sshUser;
+      onlineTtlMs = summary.onlineTtlMs;
+      metadataRefreshedAt = Date.now();
+      renderSettings();
+    }
+    if (canPreserveInventory) updateVisibleDeviceStatuses();
+    else renderDevices();
+    renderMonitor();
+    scheduleStatusExpiry(onlineTtlMs);
+    if (elements.deviceDialog.open) updateDeviceIdentifierValidation();
+    lastSuccessfulRefresh = new Date();
+    setConnectionState("connected");
+  } catch (error) {
+    if (version === refreshVersion) setConnectionState("disconnected");
+    throw error;
+  } finally { window.clearTimeout(waitingTimer); }
 }
 
 async function saveMonitorSettings(device, settings) {

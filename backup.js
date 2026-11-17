@@ -34,19 +34,19 @@ function backupInWorker(databasePath) {
   const { Worker } = require("node:worker_threads");
   return new Promise((resolve, reject) => {
     const worker = new Worker(__filename, { workerData: { databasePath } });
-    let result;
     const timer = setTimeout(() => {
       worker.terminate();
       reject(new Error("Przekroczono czas wykonywania kopii bazy."));
     }, 120000);
-    worker.once("message", (message) => { result = message; });
+    worker.once("message", (result) => {
+      clearTimeout(timer);
+      if (result.error) reject(new Error(result.error));
+      else resolve(result.path);
+    });
     worker.once("error", (error) => { clearTimeout(timer); reject(error); });
     worker.once("exit", (code) => {
       clearTimeout(timer);
       if (code !== 0) reject(new Error(`Proces kopii zakończył się kodem ${code}.`));
-      else if (!result) reject(new Error("Proces kopii zakończył się bez wyniku."));
-      else if (result.error) reject(new Error(result.error));
-      else resolve(result.path);
     });
   });
 }

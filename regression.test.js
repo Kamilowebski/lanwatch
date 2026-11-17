@@ -24,7 +24,7 @@ test('live refresh rebuilds status-filtered inventory when a device changes stat
   let fullRenders = 0;
   let incrementalRenders = 0;
   const context = {
-    refreshVersion: 0, statusFilter: 'online', inventoryMetadataChanged: () => false,
+    refreshVersion: 0, metadataRefreshedAt:0, categories:[],locations:[],onlineTtlMs:300000,sshUser:"",window:{setTimeout,clearTimeout},setConnectionState(){}, statusFilter: 'online', inventoryMetadataChanged: () => false,
     api: async (url) => url === '/api/devices' ? [{ id: 1, status: 'offline' }] : {},
     trackMonitorStatusChanges() {}, renderSettings() {}, renderMonitor() {}, scheduleStatusExpiry() {},
     renderDevices() { fullRenders++; }, updateVisibleDeviceStatuses() { incrementalRenders++; },
@@ -84,4 +84,22 @@ test('history persists, paginates, retains 1000 entries and cascades on deletion
     assert.equal(data.first.items[0].latencyMs,12);
     assert.equal(run(`const d=require('./database'); d.deleteDevice(d.getDevices()[0].id); const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync(process.env.DB_PATH); console.log(db.prepare('SELECT COUNT(*) AS n FROM device_history').get().n); db.close();`),'0');
   } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('manual requests promote queued monitoring without duplicate probes', async () => {
+ const source=fs.readFileSync(path.join(__dirname,'server.js'),'utf8');
+ const context={getDevice:id=>devices[id],saveDeviceStatus(){},pingLocalTarget:target=>{
+   started.push(target);return new Promise(resolve=>releases.push(()=>resolve({status:'online'})));
+ }};
+ const started=[],releases=[];
+ const devices=Array.from({length:10},(_,id)=>({id,hostName:`host${id}`,ip:`192.168.1.${id+1}`}));
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('const activePings'),source.indexOf('\nclass HttpError')),context);
+ const pending=devices.map(device=>context.checkDevice(device));
+ const manual=context.checkDevice(devices[9],true);
+ releases[0]();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(started[8],devices[9].ip);
+ releases[1]();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(started[9],devices[8].ip);
+ for(const release of releases)release();
+ await Promise.all([...pending,manual]);assert.equal(started.length,10);
 });

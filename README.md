@@ -220,3 +220,14 @@ Opóźnienia pętli serwera powyżej 2 sekund oraz przeglądarki powyżej 10 sek
 są zgłaszane po odzyskaniu możliwości wykonania kodu. Zamrożony proces nie może
 sam wypisać komunikatu w trakcie blokady. Po problemie zachowaj `data/logs`
 przed restartem; w F12 włącz zachowywanie dziennika przed odświeżeniem.
+
+Kolumna statusu rezerwuje miejsce na datę jeszcze przed pierwszym pingiem, aby wynik nie zmieniał wysokości wiersza ani szerokości kolumny.
+
+Nazwy maszyn mają lokalne ikony SVG odpowiadające kategorii (bez pobierania ikon z internetu). Nieznane kategorie i grupy mieszane mają ikonę ogólną. Kliknięcie nazwy w monitorze otwiera szczegóły i historię sprawdzeń; działa też z klawiatury.
+
+Monitor zachowuje niezmienione wiersze i aktualizuje status, czas oraz opóźnienie bez przebudowy tabeli.
+Co 5 sekund pobierana jest lista maszyn. Kategorie, lokalizacje i ustawienia są
+pobierane przy pełnym odświeżeniu po operacji oraz co minutę podczas pracy w tle.
+Nagłówek pokazuje stan połączenia i czas ostatniego udanego odświeżenia.
+Ręczny ping wyprzedza oczekujące sprawdzenia automatyczne; nie przerywa trwających prób.
+Ponowne żądanie dla maszyny już w kolejce podnosi jej priorytet bez dublowania próby.

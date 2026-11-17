@@ -21,7 +21,7 @@
           <button class="main-nav-button" type="button" data-view="settings-view">Ustawienia</button>
         </nav>
         <div class="topbar-actions">
-          <span class="network-label"><span class="live-dot"></span> Ewidencja lokalna</span>
+          <span class="network-label connection-indicator" id="connection-indicator" data-state="waiting" role="status" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span><span id="connection-label">Łączenie…</span><small id="connection-time">Brak udanego odświeżenia</small></span></span>
           <button class="btn theme-toggle" id="theme-toggle" type="button" aria-label="Przełącz motyw">
             <span id="theme-label">Ciemny motyw</span>
           </button>

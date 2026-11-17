@@ -8,7 +8,7 @@ function extract(start,end){return app.slice(app.indexOf(start),app.indexOf(end,
 
 test('an older refresh cannot replace the results of a newer refresh',async()=>{
  const pending=[];
- const context={refreshVersion:0, statusFilter:'', elements:{deviceDialog:{open:false}},
+ const context={refreshVersion:0, metadataRefreshedAt:0, categories:[],locations:[],onlineTtlMs:300000,sshUser:"",window:{setTimeout,clearTimeout},setConnectionState(){}, statusFilter:'', elements:{deviceDialog:{open:false}},
  api:url=>url==='/api/devices'?new Promise(resolve=>pending.push(resolve)):Promise.resolve({}),
  inventoryMetadataChanged:()=>true,trackMonitorStatusChanges(){},renderSettings(){},renderDevices(){},renderMonitor(){},scheduleStatusExpiry(){}};
  vm.createContext(context);vm.runInContext(extract('async function refresh(', '\nasync function saveMonitorSettings'),context);

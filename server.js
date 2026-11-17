@@ -64,12 +64,27 @@ async function runBackup() {
   finally { backupActive = false; }
 }
 
-async function checkDevice(device) {
+async function checkDevice(device, priority = false) {
   const key = `${device.id}:${device.hostName}:${device.ip}`;
-  if (activePings.has(key)) return activePings.get(key);
+  if (activePings.has(key)) {
+    if (priority) {
+      const index = pingWaiters.findIndex(item => item.key === key);
+      if (index >= 0 && !pingWaiters[index].priority) {
+        const [item] = pingWaiters.splice(index, 1);
+        item.priority = true;
+        const firstAutomatic = pingWaiters.findIndex(entry => !entry.priority);
+        pingWaiters.splice(firstAutomatic < 0 ? pingWaiters.length : firstAutomatic, 0, item);
+      }
+    }
+    return activePings.get(key);
+  }
   const job = (async () => {
     if (runningPings >= MAX_CONCURRENT_PINGS) {
-      await new Promise((resolve) => pingWaiters.push(resolve));
+      await new Promise((resolve) => {
+        const item = {key, resolve, priority};
+        const firstAutomatic = priority ? pingWaiters.findIndex(entry => !entry.priority) : -1;
+        pingWaiters.splice(firstAutomatic < 0 ? pingWaiters.length : firstAutomatic, 0, item);
+      });
     } else {
       runningPings += 1;
     }
@@ -86,7 +101,7 @@ async function checkDevice(device) {
       return checkedResult;
     } finally {
       const next = pingWaiters.shift();
-      if (next) next();
+      if (next) next.resolve();
       else runningPings -= 1;
     }
   })();
@@ -290,7 +305,7 @@ async function pingDeviceAndDependencies(deviceId) {
     ...groupMembers.flatMap((item) => item.dependencyIds),
   ];
   const targets = [...new Set(targetIds)].map((id) => devicesById.get(id)).filter(Boolean);
-  return Promise.all(targets.map(checkDevice));
+  return Promise.all(targets.map(target => checkDevice(target, true)));
 }
 
 async function pingSelectedDevices(deviceIds) {
@@ -300,7 +315,7 @@ async function pingSelectedDevices(deviceIds) {
     throw new HttpError(404, "Nie znaleziono jednej z wybranych maszyn.");
   }
 
-  await Promise.all(deviceIds.map((id) => checkDevice(devicesById.get(id))));
+  await Promise.all(deviceIds.map((id) => checkDevice(devicesById.get(id), true)));
   return { checked: deviceIds.length };
 }
 
@@ -311,7 +326,7 @@ async function pollMonitoredDevices() {
   try {
     const monitored = getDevices().filter((device) => device.monitorEnabled);
     if(monitored.length) diagnostics.log("info","monitor.started",{devices:monitored.length});
-    const results = await Promise.allSettled(monitored.map(checkDevice));
+    const results = await Promise.allSettled(monitored.map(device => checkDevice(device)));
     const failures = results.filter(result=>result.status === "rejected");
     for(const failure of failures) diagnostics.log("error","monitor.device_error",{
       message:failure.reason?.message,stack:failure.reason?.stack});
