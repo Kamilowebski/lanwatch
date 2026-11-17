@@ -638,7 +638,46 @@ function appendDependencyCell(row, relatedDevices) {
   row.append(makeCell(dependencyNames(relatedDevices), "dependency-cell"));
 }
 
+let historyRequestVersion = 0;
+function openDeviceHistory(device) {
+  const version = ++historyRequestVersion;
+  const list = document.getElementById("history-list");
+  const message = document.getElementById("history-message");
+  const more = document.getElementById("history-more");
+  list.replaceChildren();
+  more.hidden = true;
+  async function load(before) {
+    more.disabled = true;
+    message.textContent = "Wczytywanie historii…";
+    try {
+      const page = await api(`/api/devices/${device.id}/history${before ? `?before=${before}` : ""}`);
+      if (version !== historyRequestVersion) return;
+      const labels = {online: "Online", offline: "Brak odpowiedzi", unknown: "Nieustalony"};
+      for (const entry of page.items) {
+        const row = document.createElement("tr");
+        for (const value of [new Date(entry.checkedAt).toLocaleString("pl-PL"), labels[entry.status],
+          entry.target, String(entry.replies), entry.latencyMs == null ? "—" : `${entry.latencyMs} ms`, entry.message]) {
+          row.append(makeCell(value));
+        }
+        list.append(row);
+      }
+      message.textContent = list.children.length ? "Ostatnie 1000 sprawdzeń; najnowsze na górze." : "Brak historii. Wykonaj ping lub włącz monitoring.";
+      more.hidden = page.nextBefore === null;
+      more.onclick = () => load(page.nextBefore);
+    } catch (error) {
+      if (version !== historyRequestVersion) return;
+      message.textContent = error.message;
+      more.hidden = false;
+      more.onclick = () => load(before);
+    } finally {
+      if (version === historyRequestVersion) more.disabled = false;
+    }
+  }
+  load();
+}
+
 function openDeviceDetails(device) {
+  openDeviceHistory(device);
   elements.deviceDetailsTitle.textContent = device.hostName;
   elements.deviceDetailsList.replaceChildren();
   const devicesById = new Map(devices.map((item) => [item.id, item]));
@@ -1084,7 +1123,7 @@ async function refresh({ preserveInventory = false } = {}) {
     api("/api/summary"),
     api("/api/settings"),
   ]);
-  const canPreserveInventory = preserveInventory && !inventoryMetadataChanged(nextDevices);
+  const canPreserveInventory = preserveInventory && !statusFilter && !inventoryMetadataChanged(nextDevices);
   trackMonitorStatusChanges(nextDevices);
   devices = nextDevices;
   categories = nextCategories;
@@ -1421,3 +1460,4 @@ refresh()
     notify(error.message, "danger");
     scheduleLiveRefresh();
   });
+

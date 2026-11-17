@@ -11,6 +11,7 @@ const {
   deleteLocation,
   getCategories,
   getDevice,
+  getDeviceHistory,
   getDevices,
   getLocations,
   getAppSettings,
@@ -27,7 +28,7 @@ const { pingLocalTarget } = require("./ping");
 const { startVncTunnel } = require("./terminal");
 
 const port = Number(process.env.PORT) || 3000;
-const host = process.env.HOST || "0.0.0.0";
+const host = "127.0.0.1";
 const MONITOR_POLL_INTERVAL_MS = 15 * 1000;
 const publicDirectory = path.join(__dirname, "public");
 const staticFiles = {
@@ -35,7 +36,43 @@ const staticFiles = {
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/styles.css": { file: "styles.css", type: "text/css; charset=utf-8" },
 };
-let pingJobActive = false;
+const activePings = new Map();
+const MAX_CONCURRENT_PINGS = 8;
+let runningPings = 0;
+const pingWaiters = [];
+let monitorPollActive = false;
+let monitorTimer;
+
+async function checkDevice(device) {
+  const key = `${device.id}:${device.hostName}:${device.ip}`;
+  if (activePings.has(key)) return activePings.get(key);
+  const job = (async () => {
+    if (runningPings >= MAX_CONCURRENT_PINGS) {
+      await new Promise((resolve) => pingWaiters.push(resolve));
+    } else {
+      runningPings += 1;
+    }
+    try {
+      const result = await pingLocalTarget(device.ip || device.hostName);
+      const checkedResult = {
+        ...result, deviceId: device.id, hostName: device.hostName,
+        checkedAt: new Date().toISOString(),
+      };
+      const current = getDevice(device.id);
+      if (current && current.hostName === device.hostName && current.ip === device.ip) {
+        saveDeviceStatus(device.id, checkedResult);
+      }
+      return checkedResult;
+    } finally {
+      const next = pingWaiters.shift();
+      if (next) next();
+      else runningPings -= 1;
+    }
+  })();
+  activePings.set(key, job);
+  try { return await job; }
+  finally { activePings.delete(key); }
+}
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -221,7 +258,6 @@ async function pingDeviceAndDependencies(deviceId) {
   const devicesById = new Map(devices.map((device) => [device.id, device]));
   const device = devicesById.get(deviceId);
   if (!device) throw new HttpError(404, "Nie znaleziono maszyny.");
-  if (pingJobActive) throw new HttpError(409, "Inne sprawdzanie ping jest już w toku.");
 
   const groupName = device.groupName.trim().toLocaleLowerCase("pl");
   const groupMembers = groupName
@@ -233,24 +269,7 @@ async function pingDeviceAndDependencies(deviceId) {
     ...groupMembers.flatMap((item) => item.dependencyIds),
   ];
   const targets = [...new Set(targetIds)].map((id) => devicesById.get(id)).filter(Boolean);
-  pingJobActive = true;
-  try {
-    const results = [];
-    for (const target of targets) {
-      const result = await pingLocalTarget(target.ip || target.hostName);
-      const checkedResult = {
-        ...result,
-        deviceId: target.id,
-        hostName: target.hostName,
-        checkedAt: new Date().toISOString(),
-      };
-      if (getDevice(target.id)) saveDeviceStatus(target.id, checkedResult);
-      results.push(checkedResult);
-    }
-    return results;
-  } finally {
-    pingJobActive = false;
-  }
+  return Promise.all(targets.map(checkDevice));
 }
 
 async function pingSelectedDevices(deviceIds) {
@@ -259,53 +278,50 @@ async function pingSelectedDevices(deviceIds) {
   if (deviceIds.some((id) => !devicesById.has(id))) {
     throw new HttpError(404, "Nie znaleziono jednej z wybranych maszyn.");
   }
-  if (pingJobActive) throw new HttpError(409, "Inne sprawdzanie ping jest już w toku.");
 
-  pingJobActive = true;
-  try {
-    for (const id of deviceIds) {
-      const device = devicesById.get(id);
-      const result = await pingLocalTarget(device.ip || device.hostName);
-      if (getDevice(device.id)) {
-        saveDeviceStatus(device.id, {
-          ...result,
-          checkedAt: new Date().toISOString(),
-        });
-      }
-    }
-    return { checked: deviceIds.length };
-  } finally {
-    pingJobActive = false;
-  }
+  await Promise.all(deviceIds.map((id) => checkDevice(devicesById.get(id))));
+  return { checked: deviceIds.length };
 }
 
 async function pollMonitoredDevices() {
+  if (monitorPollActive) return;
+  monitorPollActive = true;
   try {
-    const monitoredDevices = getDevices().filter((device) => device.monitorEnabled);
-    if (!pingJobActive && monitoredDevices.length) {
-      pingJobActive = true;
-      try {
-        for (const device of monitoredDevices) {
-          const result = await pingLocalTarget(device.ip || device.hostName);
-          if (getDevice(device.id)) {
-            saveDeviceStatus(device.id, {
-              ...result,
-              checkedAt: new Date().toISOString(),
-            });
-          }
-        }
-      } finally {
-        pingJobActive = false;
-      }
-    }
+    await Promise.all(getDevices().filter((device) => device.monitorEnabled).map(checkDevice));
   } catch (error) {
     console.error("Błąd cyklicznego monitorowania:", error);
   } finally {
-    setTimeout(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);
+    monitorPollActive = false;
   }
 }
 
 async function handleApi(request, response, pathname) {
+  const historyMatch = pathname.match(/^\/api\/devices\/(\d+)\/history$/);
+  if (historyMatch && request.method === "GET") {
+    const url = new URL(request.url, "http://localhost");
+    const before = url.searchParams.has("before") ? Number(url.searchParams.get("before")) : Number.MAX_SAFE_INTEGER;
+    if (!Number.isSafeInteger(before) || before < 1) {
+      throw new HttpError(400, "Nieprawidłowa strona historii.");
+    }
+    sendJson(response, 200, getDeviceHistory(Number(historyMatch[1]), before));
+    return;
+  }
+
+  if (!["GET", "HEAD"].includes(request.method)) {
+    const origin = request.headers.origin;
+    if (origin && origin !== `http://${request.headers.host}`) {
+      throw new HttpError(403, "Żądanie pochodzi z innej witryny.");
+    }
+    if (request.headers["sec-fetch-site"] === "cross-site") {
+      throw new HttpError(403, "Żądanie pochodzi z innej witryny.");
+    }
+    if (["PUT", "POST"].includes(request.method) &&
+        (Number(request.headers["content-length"]) > 0 || request.headers["transfer-encoding"]) &&
+        request.headers["content-type"]?.split(";")[0].trim().toLowerCase() !== "application/json") {
+      throw new HttpError(415, "Wymagany format application/json.");
+    }
+  }
+
   if (pathname === "/api/settings" && request.method === "GET") {
     sendJson(response, 200, getAppSettings());
     return;
@@ -480,12 +496,14 @@ const server = http.createServer(async (request, response) => {
 server.listen(port, host, () => {
   console.log(`Lanwatch działa pod adresem http://localhost:${port}`);
   console.log(`Nasłuchuje na interfejsie ${host}.`);
-  setTimeout(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);
+  monitorTimer = setInterval(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);
 });
 
 function shutdown() {
+  clearInterval(monitorTimer);
   server.close(() => process.exit(0));
 }
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+

@@ -40,3 +40,17 @@ test("marks a completed ping with no replies as offline", () => {
 test("keeps command failures unknown rather than reporting the device offline", () => {
   assert.equal(classifyPingResult("ping failed", 2).status, "unknown");
 });
+
+
+test("does not treat Windows unreachable with exit zero as an echo reply", () => {
+  const result = classifyPingResult("Reply from 192.168.1.1: Destination host unreachable.", 0);
+  assert.equal(result.status, "offline");
+  assert.equal(result.replies, 0);
+});
+
+test("reads Polish Windows latency and IPv6 replies", () => {
+  assert.equal(classifyPingResult("Odpowiedź z 192.168.1.5: bajtów=32 czas=12ms TTL=64", 0).latencyMs, 12);
+  const result = classifyPingResult("Reply from fd12::1: time=2ms", 0);
+  assert.equal(result.status, "online");
+  assert.equal(result.replies, 1);
+});

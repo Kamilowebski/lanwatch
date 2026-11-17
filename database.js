@@ -8,6 +8,9 @@ const databasePath = process.env.DB_PATH
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 
 const database = new DatabaseSync(databasePath);
+const hadCategories = Boolean(database.prepare(
+  "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'categories'",
+).get());
 const ONLINE_STATUS_TTL_MINUTES = 5;
 const ONLINE_STATUS_TTL_MS = ONLINE_STATUS_TTL_MINUTES * 60 * 1000;
 const onlineStatusExpression = `
@@ -67,6 +70,17 @@ database.exec(`
     message TEXT NOT NULL DEFAULT '',
     latency_ms REAL
   );
+  CREATE TABLE IF NOT EXISTS device_history (
+    id INTEGER PRIMARY KEY,
+    device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('online', 'offline', 'unknown')),
+    checked_at TEXT NOT NULL,
+    replies INTEGER NOT NULL,
+    target TEXT NOT NULL,
+    message TEXT NOT NULL,
+    latency_ms REAL
+  );
+  CREATE INDEX IF NOT EXISTS device_history_device_id ON device_history(device_id, id DESC);
   CREATE TABLE IF NOT EXISTS device_monitor (
     device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
     enabled INTEGER NOT NULL DEFAULT 0,
@@ -103,7 +117,9 @@ const defaultCategories = [
   "inne",
 ];
 const insertCategory = database.prepare("INSERT OR IGNORE INTO categories (name) VALUES (?)");
-for (const name of defaultCategories) insertCategory.run(name);
+if (!hadCategories) {
+  for (const name of defaultCategories) insertCategory.run(name);
+}
 
 function getCategory(id) {
   return database.prepare("SELECT id, name FROM categories WHERE id = ?").get(id);
@@ -246,6 +262,7 @@ function updateSshUser(sshUser) {
 }
 
 function saveDeviceStatus(deviceId, result) {
+  withTransaction(() => {
   database.prepare(`
     INSERT INTO device_status (device_id, status, checked_at, replies, target, message, latency_ms)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -265,6 +282,29 @@ function saveDeviceStatus(deviceId, result) {
     result.message,
     result.latencyMs ?? null,
   );
+  database.prepare(`
+    INSERT INTO device_history (device_id, status, checked_at, replies, target, message, latency_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(deviceId, result.status, result.checkedAt, result.replies, result.target,
+    result.message, result.latencyMs ?? null);
+  database.prepare(`
+    DELETE FROM device_history WHERE device_id = ? AND id NOT IN (
+      SELECT id FROM device_history WHERE device_id = ? ORDER BY id DESC LIMIT 1000
+    )
+  `).run(deviceId, deviceId);
+  });
+}
+
+function getDeviceHistory(deviceId, before = Number.MAX_SAFE_INTEGER) {
+  if (!getDevice(deviceId)) {
+    throw Object.assign(new Error("Nie znaleziono maszyny."), { status: 404 });
+  }
+  const rows = database.prepare(`
+    SELECT id, status, checked_at AS checkedAt, replies, target, message, latency_ms AS latencyMs
+    FROM device_history WHERE device_id = ? AND id < ? ORDER BY id DESC LIMIT 51
+  `).all(deviceId, before);
+  const items = rows.slice(0, 50);
+  return { items, nextBefore: rows.length > 50 ? items[items.length - 1].id : null };
 }
 
 function updateDeviceMonitor(deviceId, settings) {
@@ -475,6 +515,7 @@ function deleteDevice(id) {
 }
 
 module.exports = {
+  getDeviceHistory,
   createCategory,
   createDevice,
   createLocation,
@@ -495,3 +536,4 @@ module.exports = {
   updateLocation,
   updateSshUser,
 };
+

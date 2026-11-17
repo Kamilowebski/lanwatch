@@ -95,8 +95,20 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     return { status: response.status, result };
   }
 
+  const missingHistory = await request("/api/devices/999999/history");
+  assert.equal(missingHistory.status, 404);
+  const invalidHistoryPage = await request("/api/devices/1/history?before=invalid");
+  assert.equal(invalidHistoryPage.status, 400);
   const categories = await request("/api/categories");
   const terminalCategory = categories.result.find((category) => category.name === "Terminal");
+  const crossSiteWrite = await request(
+    "/api/locations", "POST", { name: "Forbidden" }, { Origin: "http://attacker.example" },
+  );
+  assert.equal(crossSiteWrite.status, 403);
+  const plainTextWrite = await request(
+    "/api/locations", "POST", { name: "Forbidden" }, { "Content-Type": "text/plain" },
+  );
+  assert.equal(plainTextWrite.status, 415);
   const locationResponse = await request("/api/locations", "POST", { name: "Test lokalizacja" });
   const location = locationResponse.result;
   const initialSettings = await request("/api/settings");
@@ -136,6 +148,10 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     newDevice("Terminal A", "192.168.10.10"),
   );
   assert.equal(first.status, 201);
+  const emptyHistory = await request(`/api/devices/${first.result.id}/history`);
+  assert.equal(emptyHistory.status, 200);
+  assert.deepEqual(emptyHistory.result, {items: [], nextBefore: null});
+
   assert.equal("sshUser" in first.result, false);
   assert.equal(first.result.monitorEnabled, false);
   const invalidMonitorSettings = await request(
@@ -324,3 +340,4 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     database.close();
   }
 });
+

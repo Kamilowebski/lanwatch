@@ -76,3 +76,4 @@ test("launches the tunnel script in a separate visible PowerShell window", () =>
   assert.ok(launcher.includes("-WindowStyle Normal"));
   assert.equal(Buffer.from(encodedScript, "base64").toString("utf16le"), script);
 });
+

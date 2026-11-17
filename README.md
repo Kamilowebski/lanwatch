@@ -21,11 +21,9 @@ npm start
 
 Testy można uruchomić poleceniem `npm test`.
 
-Otwórz `http://localhost:3000`. Serwer domyślnie nasłuchuje na wszystkich
-interfejsach sieciowych, więc można też otworzyć aplikację z innego urządzenia
-w zaufanej sieci lokalnej, używając adresu IP komputera z serwerem.
+Otwórz `http://localhost:3000`. Serwer domyślnie nasłuchuje tylko na `127.0.0.1`. Dostęp przez LAN jest wyłączony; zmienna `HOST` jest ignorowana.
 
-Port można zmienić przez `PORT`, a interfejs nasłuchiwania przez `HOST`.
+Port można zmienić przez `PORT`. Interfejs jest na stałe ustawiony na `127.0.0.1`.
 Przykład w PowerShell:
 
 ```powershell
@@ -88,8 +86,11 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Monitoring pojedynczej maszyny włącza się przyciskiem „Monitor” w jej wierszu
   zakładki „Maszyny”; nie włącza on monitorowania grupy ani zależności. Zakładka
   „Monitor” pokazuje tylko wybrane maszyny, ich status i opóźnienie. Aktywne
-  maszyny są sprawdzane co 15 sekund,
-  a widok odświeża się co 5 sekund. Dla każdej maszyny można osobno włączyć
+  maszyny są sprawdzane w cyklach uruchamianych co 15 sekund,
+  z limitem 8 równoczesnych prób. Długi cykl nie nakłada się na następny;
+  przy dużej liczbie maszyn odstęp między próbami może przekroczyć 15 sekund.
+  Ręczne próby korzystają z tej samej kolejki, a trwająca próba dla tej samej
+  maszyny jest współdzielona. Widok odświeża się co 5 sekund. Dla każdej maszyny można osobno włączyć
   powiadomienia o przejściu online i braku odpowiedzi. Powiadomienia wymagają
   otwartej karty Lanwatch, a systemowe dodatkowo zgody przeglądarki.
 - Dla kategorii „Terminal” wspólnego użytkownika SSH konfiguruje się w
@@ -120,9 +121,9 @@ skanowania portów.
 
 ## Bezpieczeństwo
 
-Aplikacja nie ma logowania ani kontroli dostępu. Udostępniaj ją tylko w zaufanej
-sieci; aby ograniczyć dostęp do komputera lokalnego, ustaw `HOST` na
-`127.0.0.1`. Uruchamianie tunelu SSH i zmiana globalnego użytkownika SSH
+Aplikacja nie ma logowania ani kontroli dostępu. Domyślnie jest dostępna
+wyłącznie na komputerze serwera. Żądania zmieniające dane z innego źródła
+przeglądarki są odrzucane; dane w treści żądania wymagają `application/json`. Serwer jest na stałe ograniczony do `127.0.0.1`; nie udostępnia API przez LAN. Uruchamianie tunelu SSH i zmiana globalnego użytkownika SSH
 odrzucają żądania spoza loopbacku i żądania bez lokalnego źródła przeglądarki.
 Używaj adresu `http://localhost:3000`, aby otwierać okna PowerShell z tunelami.
 
@@ -130,3 +131,28 @@ Używaj adresu `http://localhost:3000`, aby otwierać okna PowerShell z tunelami
 
 Przy każdej zmianie funkcjonalności lub dodaniu elementu projektu zaktualizuj
 ten plik README, aby opisywał aktualny sposób działania i uruchamiania aplikacji.
+
+
+## Poprawki niezawodności i testy
+
+Kategorie domyślne są dodawane tylko podczas tworzenia tabeli kategorii.
+Usunięcie lub zmiana nazwy pozostaje zachowana po restarcie, także w istniejącej bazie.
+Parser ping nie uznaje samego kodu zakończenia 0 za odpowiedź hosta;
+obsługuje opóźnienie `czas=` polskiego Windows oraz odpowiedzi IPv6.
+Automatyczne odświeżanie przelicza listę i stronicowanie przy aktywnym filtrze statusu.
+Wynik próby dla poprzedniego hosta lub IP nie nadpisuje statusu zmienionej maszyny.
+
+GitHub Actions uruchamia testy na Windows i Linux z Node.js 22 i 24.
+Testy interfejsu sprawdzają logikę odświeżania bez przeglądarki;
+nie zastępują sprawdzenia wyglądu i rzeczywistego tunelu PowerShell na Windows.
+
+## Historia dostępności
+
+W szczegółach maszyny znajduje się historia rzeczywistych sprawdzeń ping:
+czas, status, docelowy adres, liczba odpowiedzi, opóźnienie i komunikat.
+Zapisywane są próby ręczne i monitoring. Historia jest trwała w SQLite,
+wyświetlana od najnowszych po 50 wpisów z przyciskiem „Pokaż starsze”.
+Dla każdej maszyny zachowywane jest ostatnie 1000 wyników. Usunięcie maszyny
+usuwa jej historię. Zmiana IP zachowuje stare wpisy z poprzednim adresem.
+Wcześniejsze sprawdzenia nie są odtwarzane; historia zaczyna się po aktualizacji.
+Wygaśnięcie statusu Online nie tworzy wpisu, ponieważ nie wykonuje nowego pingu.
