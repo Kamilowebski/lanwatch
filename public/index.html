@@ -154,11 +154,11 @@
                 <thead>
                   <tr>
                     <th scope="col">Maszyna</th>
-                    <th scope="col">Adres IP</th>
                     <th scope="col">Status</th>
                     <th scope="col">Opóźnienie</th>
-                    <th scope="col">Akcja</th>
+                    <th scope="col">Raport i monitoring</th>
                     <th scope="col">Powiadomienia</th>
+                    <th scope="col">Notatka monitora</th>
                   </tr>
                 </thead>
                 <tbody id="monitor-list"></tbody>
@@ -372,8 +372,20 @@
       </div>
     </dialog>
 
+    <dialog class="app-dialog monitor-report-dialog" id="monitor-report-dialog">
+      <div class="dialog-header"><div><p class="eyebrow">RAPORT DOSTĘPNOŚCI</p><h2 id="monitor-report-title"></h2></div><button type="button" class="icon-button" data-close="monitor-report-dialog" aria-label="Zamknij raport">×</button></div>
+      <div class="monitor-report-body">
+        <div class="report-toolbar"><label>Zakres <select class="form-select" id="report-range"><option value="1">Ostatnia godzina</option><option value="24" selected>Ostatnie 24 godziny</option><option value="168">Ostatnie 7 dni</option><option value="all">Cała zachowana historia</option></select></label><button type="button" class="monitor-action" id="report-refresh">Odśwież raport</button></div>
+        <p id="report-message" role="status"></p>
+        <div id="report-content" hidden><div id="report-stats" class="report-stats"></div>
+        <section class="report-chart-panel"><h3>Dostępność w czasie</h3><p>Każdy punkt to jedno sprawdzenie. Przerwy między punktami nie potwierdzają stanu urządzenia.</p><div id="report-chart"></div></section>
+        <p id="report-coverage" class="report-footnote"></p></div>
+      </div><div class="dialog-actions"><button type="button" class="monitor-action" data-close="monitor-report-dialog">Zamknij</button></div>
+    </dialog>
+
     <script src="/diagnostics.js" defer></script>
     <script src="/app.js" defer></script>
+    <script src="/report.js" defer></script>
   </body>
 </html>
 

@@ -112,6 +112,7 @@ let statusExpiryTimer = null;
 const expandedGroups = new Set();
 const knownMonitorStatuses = new Map();
 const pendingMonitorUpdates = new Set();
+const monitorNoteDrafts = new Map();
 let hasLoadedMonitorStatuses = false;
 let visiblePageDeviceIds = [];
 
@@ -1111,6 +1112,7 @@ function renderMonitor() {
   const offlineCount = monitoredDevices.filter((device) => device.status === "offline").length;
   elements.monitorCount.textContent =
     `${monitoredDevices.length} aktywnych · ${onlineCount} online · ${offlineCount} bez odpowiedzi`;
+  for (const id of monitorNoteDrafts.keys()) if (!monitoredDevices.some(device => device.id === id)) monitorNoteDrafts.delete(id);
   const previousRows = new Map([...elements.monitorList.rows].map(row => [row.dataset.deviceId, row]));
   const desiredRows = [];
 
@@ -1140,6 +1142,8 @@ function renderMonitor() {
     const existing = previousRows.get(String(device.id));
     if (existing && existing.dataset.metadata === metadata) {
       updateMonitorStatus(existing, device);
+      const note = existing.querySelector(".monitor-note-input");
+      if (note && !monitorNoteDrafts.has(device.id) && document.activeElement !== note) note.value = device.monitorNote || "";
       desiredRows.push(existing);
       continue;
     }
@@ -1153,14 +1157,14 @@ function renderMonitor() {
     hostName.className = "monitor-host-name host-detail-trigger";
     hostName.textContent = device.hostName;
     hostName.prepend(categoryIcon(device.category));
-    hostName.addEventListener("click", () => openDeviceDetails(devices.find(item => item.id === device.id) || device));
+    hostName.addEventListener("click", () => window.openMonitorReport(devices.find(item => item.id === device.id) || device));
     const details = document.createElement("small");
     details.className = "monitor-device-meta";
     details.textContent = [device.groupName || device.category, device.location]
       .filter(Boolean)
       .join(" · ");
     host.append(hostName, details);
-    row.append(host, makeCell(device.ip, "ip-cell"));
+    row.append(host);
 
     const statusCell = document.createElement("td");
     const status = document.createElement("span");
@@ -1187,7 +1191,7 @@ function renderMonitor() {
     row.append(latencyCell);
     const monitorCell = document.createElement("td");
     const disableMonitor = document.createElement("button");
-    disableMonitor.className = "btn btn-sm btn-outline-secondary monitor-remove";
+    disableMonitor.className = "monitor-action monitor-remove";
     disableMonitor.type = "button";
     disableMonitor.disabled = pendingMonitorUpdates.has(device.id);
     disableMonitor.textContent = "Wyłącz";
@@ -1197,7 +1201,13 @@ function renderMonitor() {
       notifyOnline: Boolean(device.notifyOnline),
       notifyOffline: Boolean(device.notifyOffline),
     }));
-    monitorCell.append(disableMonitor);
+    monitorCell.className = "monitor-actions";
+    const report = document.createElement("button");
+    report.type = "button";
+    report.className = "monitor-action monitor-action-primary";
+    report.textContent = "Raport";
+    report.addEventListener("click", () => window.openMonitorReport(device));
+    monitorCell.append(report, disableMonitor);
     row.append(monitorCell);
 
     const notifications = document.createElement("td");
@@ -1207,6 +1217,39 @@ function renderMonitor() {
       monitorToggle(device, "notifyOffline", "Offline", !device.monitorEnabled),
     );
     row.append(notifications);
+    const noteCell = document.createElement("td");
+    noteCell.className = "monitor-note-cell";
+    const note = document.createElement("textarea");
+    note.className = "monitor-note-input";
+    note.rows = 2;
+    note.maxLength = 1000;
+    note.placeholder = "Notatka na czas monitorowania…";
+    note.setAttribute("aria-label", `Notatka monitora: ${device.hostName}`);
+    note.value = monitorNoteDrafts.get(device.id) ?? device.monitorNote ?? "";
+    note.addEventListener("input", () => monitorNoteDrafts.set(device.id, note.value));
+    const save = document.createElement("button");
+    save.className = "monitor-action monitor-note-save";
+    save.type = "button";
+    save.textContent = "Zapisz notatkę";
+    save.addEventListener("click", async () => {
+      if (save.disabled) return;
+      save.disabled = true;
+      const value = note.value;
+      save.textContent = "Zapisywanie…";
+      try {
+        const result = await api(`/api/devices/${device.id}/monitor/note`, {method:"PUT",body:JSON.stringify({note:value})});
+        const current = devices.find(item => item.id === device.id);
+        if (current) current.monitorNote = result.note;
+        if (note.value === value) {
+          monitorNoteDrafts.delete(device.id);
+          note.value = result.note;
+          save.textContent = "Zapisano";
+        } else save.textContent = "Zapisz zmiany";
+      } catch(error) { notify(error.message,"danger");save.textContent = "Ponów zapis"; }
+      finally {save.disabled = false;}
+    });
+    noteCell.append(note,save);
+    row.append(noteCell);
     desiredRows.push(row);
   }
   const keep = new Set(desiredRows);

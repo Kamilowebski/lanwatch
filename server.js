@@ -8,6 +8,7 @@ const databaseFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : p
 const diagnostics = require("./diagnostics").createLogger(path.join(path.dirname(databaseFile),"logs"));
 const {
   backupDatabase,
+  updateMonitorNote, getDeviceReport,
   createCategory,
   createDevice,
   createLocation,
@@ -38,6 +39,7 @@ const MONITOR_POLL_INTERVAL_MS = 15 * 1000;
 const publicDirectory = path.join(__dirname, "public");
 const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
+  "/report.js": {file:"report.js",type:"text/javascript; charset=utf-8"},
   "/diagnostics.js": { file: "diagnostics.js", type: "text/javascript; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/styles.css": { file: "styles.css", type: "text/css; charset=utf-8" },
@@ -378,6 +380,20 @@ async function handleApi(request, response, pathname) {
     delete fields.event;
     diagnostics.log(entry.level === "warn" ? "warn" : "error", "client.report", fields);
     sendJson(response,200,{ok:true});
+    return;
+  }
+  const reportMatch = pathname.match(/^\/api\/devices\/(\d+)\/report$/);
+  if (reportMatch && request.method === "GET") {
+    const range = new URL(request.url,"http://localhost").searchParams.get("hours") || "all";
+    if (!["1","24","168","all"].includes(range)) throw new HttpError(400,"Nieprawidłowy zakres raportu.");
+    sendJson(response,200,{items:getDeviceReport(Number(reportMatch[1]),range === "all" ? null : Number(range))});
+    return;
+  }
+  const noteMatch = pathname.match(/^\/api\/devices\/(\d+)\/monitor\/note$/);
+  if (noteMatch && request.method === "PUT") {
+    const body = await readJson(request);
+    if (!body || typeof body.note !== "string" || body.note.length > 1000) throw new HttpError(400,"Notatka może mieć do 1000 znaków.");
+    sendJson(response,200,updateMonitorNote(Number(noteMatch[1]),body.note.trim()));
     return;
   }
   if (pathname === "/api/settings" && request.method === "GET") {

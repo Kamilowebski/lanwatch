@@ -231,3 +231,18 @@ pobierane przy pełnym odświeżeniu po operacji oraz co minutę podczas pracy w
 Nagłówek pokazuje stan połączenia i czas ostatniego udanego odświeżenia.
 Ręczny ping wyprzedza oczekujące sprawdzenia automatyczne; nie przerywa trwających prób.
 Ponowne żądanie dla maszyny już w kolejce podnosi jej priorytet bez dublowania próby.
+
+## Raport i notatki monitora
+
+Przycisk „Raport” i nazwa maszyny w Monitorze otwierają raport jednej maszyny.
+Zakresy: 1 godzina, 24 godziny, 7 dni oraz cała zachowana historia (do 1000 wyników).
+Wykres pokazuje faktyczne chwile sprawdzeń i ich statusy. Karty pokazują procent
+sprawdzeń Online, bez odpowiedzi i nieustalonych oraz średnie opóźnienie Online.
+Procenty nie oznaczają czasu działania — przerwy między pomiarami nie są mierzone.
+Raport obejmuje zarówno ręczne sprawdzenia, jak i monitoring. Odświeża się przy otwarciu,
+zmianie zakresu lub po użyciu przycisku „Odśwież raport”.
+
+Każda monitorowana maszyna ma osobną notatkę (do 1000 znaków), zapisywaną przyciskiem
+„Zapisz notatkę”. Notatka przetrwa odświeżenie i restart aplikacji, dopóki maszyna jest
+monitorowana. Wyłączenie monitora usuwa ją; nie zmienia opisu w ewidencji ani historii.
+Monitor nie ma osobnej kolumny IP; adres pozostaje dostępny w szczegółach maszyny.

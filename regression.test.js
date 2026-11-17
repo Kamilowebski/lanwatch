@@ -103,3 +103,14 @@ test('manual requests promote queued monitoring without duplicate probes', async
  for(const release of releases)release();
  await Promise.all([...pending,manual]);assert.equal(started.length,10);
 });
+
+test('monitor notes persist until disabled and reports contain recorded samples',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lanwatch-notes-'));
+ const env={...process.env,DB_PATH:path.join(dir,'test.sqlite')};
+ const run=script=>execFileSync(process.execPath,['-e',script],{cwd:__dirname,env,encoding:'utf8'}).trim();
+ try {
+  run(`const d=require('./database');d.createLocation('Test');const v=d.createDevice({hostName:'note-host',ip:'',groupName:'',location:'Test',categoryId:d.getCategories()[0].id,description:'Permanent',lineNumber:'',numerator:''});d.updateDeviceMonitor(v.id,{enabled:true,notifyOnline:false,notifyOffline:false});d.updateMonitorNote(v.id,'Temporary');d.saveDeviceStatus(v.id,{status:'online',checkedAt:new Date().toISOString(),replies:3,target:'192.168.1.1',message:'',latencyMs:10});`);
+  const data=JSON.parse(run(`const d=require('./database');const v=d.getDevices()[0];const before=v.monitorNote;const report=d.getDeviceReport(v.id,24);d.updateDeviceMonitor(v.id,{enabled:false,notifyOnline:false,notifyOffline:false});const after=d.getDevice(v.id);console.log(JSON.stringify({before,after:after.monitorNote,description:after.description,report}));`));
+  assert.equal(data.before,'Temporary');assert.equal(data.after,'');assert.equal(data.description,'Permanent');assert.equal(data.report.length,1);assert.equal(data.report[0].latencyMs,10);
+ } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});

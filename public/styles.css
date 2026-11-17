@@ -428,3 +428,43 @@ button, input, select, textarea { font: inherit; }
 .connection-indicator { min-width: 155px; }
 .connection-indicator[data-state="waiting"] .live-dot { background: #d59a28; }
 .connection-indicator[data-state="disconnected"] .live-dot { background: #d65b57; }
+/* Monitoring controls share the app's compact accent palette. */
+.monitor-action { display: inline-flex; align-items: center; justify-content: center; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.monitor-action:hover { background: var(--surface-muted); border-color: var(--accent); }
+.monitor-action:focus-visible, .monitor-note-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.monitor-action:disabled { opacity: .5; cursor: wait; }
+.monitor-action-primary { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.monitor-actions .monitor-action + .monitor-action { margin-top: 6px; }
+.monitor-actions { width: 115px; }
+.monitor-actions .monitor-action { display: flex; width: 100%; }
+.monitor-table .monitor-notifications { min-width: 120px; }
+.monitor-table .monitor-toggle { display: flex; align-items: center; gap: 7px; margin: 6px 0; font-size: 11px; color: var(--muted); cursor: pointer; }
+.monitor-table .monitor-toggle input { appearance: none; width: 28px; height: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-muted); position: relative; flex: 0 0 28px; cursor: pointer; }
+.monitor-table .monitor-toggle input::after { content: ''; position: absolute; width: 10px; height: 10px; left: 2px; top: 2px; border-radius: 50%; background: var(--muted); transition: transform .15s; }
+.monitor-table .monitor-toggle input:checked { background: var(--accent-soft); border-color: var(--accent); }
+.monitor-table .monitor-toggle input:checked::after { background: var(--accent); transform: translateX(12px); }
+.monitor-table .monitor-toggle input:disabled { opacity: .5; cursor: wait; }
+.monitor-note-cell { min-width: 210px; width: 28%; }
+.monitor-note-input { display: block; width: 100%; resize: vertical; min-height: 48px; max-height: 160px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); color: var(--text); font: inherit; font-size: 11px; line-height: 1.5; }
+.monitor-note-input::placeholder { color: var(--muted); }
+.monitor-note-save { margin-top: 5px; padding: 4px 8px; font-size: 10px; }
+.monitor-report-dialog { width: min(1000px, calc(100vw - 32px)); }
+.monitor-report-body { padding: 22px 24px; }
+.report-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.report-toolbar label { font-size: 11px; color: var(--muted); }
+.report-toolbar select { display: block; margin-top: 6px; padding: 8px 12px; }
+.report-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 16px 0 20px; }
+.report-stat { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-muted); }
+.report-stat span, .report-stat small { font-size: 11px; color: var(--muted); }
+.report-stat strong { font-size: 26px; letter-spacing: -.7px; font-variant-numeric: tabular-nums; }
+.report-stat-online strong { color: #37a875; }.report-stat-offline strong { color: #d65b57; }.report-stat-unknown strong { color: #9a91d7; }
+.report-chart-panel { padding: 18px; border: 1px solid var(--border); border-radius: 10px; }
+.report-chart-panel h3 { margin: 0 0 8px; font-size: 14px; }
+.report-chart-panel p, .report-footnote { color: var(--muted); font-size: 11px; line-height: 1.6; }
+#report-chart { overflow-x: auto; }#report-chart svg { display: block; width: 100%; min-width: 580px; }
+#report-chart text { font-size: 11px; font-family: inherit; }.report-grid { stroke: var(--border); }.report-axis { fill: var(--muted); }
+.report-footnote { margin: 16px 0 0; }
+@media(max-width:650px) { .report-stats { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.monitor-table { width: 100%; }
+.monitor-table th { text-align: left; }
+.monitor-table .monitor-actions { min-width: 115px; }

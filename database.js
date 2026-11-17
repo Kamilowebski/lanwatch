@@ -90,6 +90,10 @@ database.exec(`
   );
 `);
 
+const monitorColumns = database.prepare("PRAGMA table_info(device_monitor)").all();
+if (!monitorColumns.some(column => column.name === "note")) {
+  database.exec("ALTER TABLE device_monitor ADD COLUMN note TEXT NOT NULL DEFAULT ''");
+}
 const deviceColumns = database.prepare("PRAGMA table_info(devices)").all();
 if (!deviceColumns.some((column) => column.name === "group_name")) {
   database.exec("ALTER TABLE devices ADD COLUMN group_name TEXT NOT NULL DEFAULT ''");
@@ -144,7 +148,7 @@ function getDevice(id) {
       ${statusMessageExpression} AS statusMessage, s.latency_ms AS pingLatencyMs,
       COALESCE(m.enabled, 0) AS monitorEnabled,
       COALESCE(m.notify_online, 0) AS notifyOnline,
-      COALESCE(m.notify_offline, 0) AS notifyOffline
+      COALESCE(m.notify_offline, 0) AS notifyOffline, COALESCE(m.note, '') AS monitorNote
     FROM devices d
     JOIN categories c ON c.id = d.category_id
     JOIN locations l ON l.name = d.location COLLATE NOCASE
@@ -209,7 +213,7 @@ function getDevices() {
       ${statusMessageExpression} AS statusMessage, s.latency_ms AS pingLatencyMs,
       COALESCE(m.enabled, 0) AS monitorEnabled,
       COALESCE(m.notify_online, 0) AS notifyOnline,
-      COALESCE(m.notify_offline, 0) AS notifyOffline
+      COALESCE(m.notify_offline, 0) AS notifyOffline, COALESCE(m.note, '') AS monitorNote
     FROM devices d
     JOIN categories c ON c.id = d.category_id
     JOIN locations l ON l.name = d.location COLLATE NOCASE
@@ -318,7 +322,8 @@ function updateDeviceMonitor(deviceId, settings) {
     ON CONFLICT(device_id) DO UPDATE SET
       enabled = excluded.enabled,
       notify_online = excluded.notify_online,
-      notify_offline = excluded.notify_offline
+      notify_offline = excluded.notify_offline,
+      note = CASE WHEN excluded.enabled = 0 THEN '' ELSE device_monitor.note END
   `).run(deviceId, Number(settings.enabled), Number(settings.notifyOnline), Number(settings.notifyOffline));
   const saved = database.prepare(`
     SELECT enabled, notify_online AS notifyOnline, notify_offline AS notifyOffline
@@ -329,6 +334,21 @@ function updateDeviceMonitor(deviceId, settings) {
     notifyOnline: Boolean(saved.notifyOnline),
     notifyOffline: Boolean(saved.notifyOffline),
   };
+}
+
+function updateMonitorNote(id, note) {
+  const device = getDevice(id);
+  if (!device) throw Object.assign(new Error("Nie znaleziono maszyny."), {status:404});
+  if (!device.monitorEnabled) throw Object.assign(new Error("Maszyna nie jest monitorowana."), {status:409});
+  database.prepare("UPDATE device_monitor SET note = ? WHERE device_id = ?").run(note, id);
+  return {note};
+}
+
+function getDeviceReport(id, hours) {
+  if (!getDevice(id)) throw Object.assign(new Error("Nie znaleziono maszyny."), {status:404});
+  const since = hours ? new Date(Date.now() - hours * 3600000).toISOString() : "";
+  return database.prepare(`SELECT id, status, checked_at AS checkedAt, latency_ms AS latencyMs, target
+    FROM device_history WHERE device_id = ? AND checked_at >= ? ORDER BY id ASC`).all(id, since);
 }
 
 function assertDeviceIdentifiersUnique(device, excludedId = null) {
@@ -520,6 +540,7 @@ function backupDatabase() {
 }
 
 module.exports = {
+  updateMonitorNote, getDeviceReport,
   backupDatabase,
   getDeviceHistory,
   createCategory,
