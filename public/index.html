@@ -18,7 +18,8 @@
         <nav class="main-nav" aria-label="Nawigacja główna">
           <button class="main-nav-button active" type="button" data-view="inventory-view">Maszyny</button>
           <button class="main-nav-button" type="button" data-view="monitor-view">Monitor</button>
-          <button class="main-nav-button" type="button" data-view="settings-view">Ustawienia</button>
+          <button class="main-nav-button" type="button" data-view="snippets-view">Komendy</button>
+          <button class="main-nav-button" type="button" data-view="settings-view">Konfiguracja</button>
         </nav>
         <div class="topbar-actions">
           <span class="network-label connection-indicator" id="connection-indicator" data-state="waiting" role="status" aria-live="polite"><span class="live-dot" aria-hidden="true"></span><span><span id="connection-label">Łączenie…</span><small id="connection-time">Brak udanego odświeżenia</small></span></span>
@@ -72,6 +73,11 @@
             </div>
           </div>
 
+          <div class="inventory-quick-filters" role="group" aria-label="Szybkie filtry maszyn">
+            <button type="button" data-quick-filter="all">Wszystkie <span></span></button>
+            <button type="button" data-quick-filter="offline">Bez odpowiedzi <span></span></button>
+            <button type="button" data-quick-filter="monitored">Monitorowane <span></span></button>
+          </div>
           <div class="table-toolbar">
             <div class="table-filters">
               <label class="search-box" for="device-search">
@@ -168,16 +174,26 @@
           </section>
         </section>
 
+        <section class="view-panel d-none" id="snippets-view">
+          <div class="welcome-row"><div><p class="eyebrow">LOKALNA BIBLIOTEKA</p><h1>Komendy i snippety</h1><p class="page-subtitle">Znajdź, skopiuj, użyj we własnej konsoli. Aplikacja nie uruchamia komend.</p></div><button type="button" class="monitor-action monitor-action-primary" id="snippet-add">＋ Dodaj wpis</button></div>
+          <section class="snippet-library">
+            <div class="snippet-toolbar"><input class="form-control" type="search" id="snippet-search" aria-label="Szukaj komend" placeholder="Szukaj nazwy, opisu, treści lub tagów…"><select class="form-select" id="snippet-platform" aria-label="System"><option value="">Wszystkie systemy</option><option>Windows</option><option>Linux</option><option>macOS</option><option>Uniwersalne</option></select><select class="form-select" id="snippet-category" aria-label="Kategoria"><option value="">Wszystkie kategorie</option></select><label class="snippet-favorites"><input type="checkbox" id="snippet-favorites"> Ulubione</label></div>
+            <div class="snippet-library-actions"><span id="snippet-count"></span><div><button class="monitor-action" id="snippet-import" type="button">Import JSON</button><input type="file" accept="application/json,.json" id="snippet-file" hidden><button class="monitor-action" id="snippet-export" type="button">Eksport JSON</button><button class="monitor-action" id="snippet-refresh" type="button">Odśwież</button></div></div>
+            <p id="snippet-message" role="status"></p><div class="snippet-grid" id="snippet-list"></div>
+          </section>
+        </section>
+
         <section class="view-panel d-none" id="settings-view">
           <section class="settings-heading">
             <div>
               <p class="eyebrow">KONFIGURACJA</p>
-              <h1>Ustawienia</h1>
+              <h1>Konfiguracja</h1>
               <p class="page-subtitle">Zarządzaj kategoriami maszyn i lokalizacjami.</p>
             </div>
           </section>
+          <nav class="settings-section-nav" aria-label="Sekcje konfiguracji"><a href="#settings-categories">Kategorie</a><a href="#settings-locations">Lokalizacje</a><a href="#settings-ssh">SSH</a><a href="#settings-appearance">Wygląd</a><a href="#settings-backups">Kopie zapasowe</a></nav>
           <div class="settings-grid">
-            <section class="settings-card">
+            <section class="settings-card" id="settings-categories">
               <div class="settings-card-heading">
                 <div>
                   <h2>Kategorie</h2>
@@ -194,7 +210,7 @@
               </form>
               <div class="settings-list" id="category-list"></div>
             </section>
-            <section class="settings-card">
+            <section class="settings-card" id="settings-locations">
               <div class="settings-card-heading">
                 <div>
                   <h2>Lokalizacje</h2>
@@ -211,14 +227,15 @@
               </form>
               <div class="settings-list" id="location-list"></div>
             </section>
-            <section class="settings-card settings-preference-card">
+            <section class="settings-card settings-preference-card" id="settings-appearance">
               <div class="settings-card-heading">
                 <div>
-                  <h2>Widok listy</h2>
+                  <h2>Wygląd i widok listy</h2>
                   <p>Ustaw liczbę pozycji wyświetlanych na stronie</p>
                 </div>
               </div>
               <div class="settings-form">
+                <label for="settings-theme">Motyw</label><select class="form-select" id="settings-theme"><option value="light">Jasny</option><option value="dark">Ciemny</option></select>
                 <label for="page-size-setting">Pozycji na stronie</label>
                 <select class="form-select page-size-select" id="page-size-setting">
                   <option value="10">10</option>
@@ -228,7 +245,7 @@
                 </select>
               </div>
             </section>
-            <section class="settings-card settings-preference-card">
+            <section class="settings-card settings-preference-card" id="settings-ssh">
               <div class="settings-card-heading">
                 <div>
                   <h2>Dostęp SSH</h2>
@@ -241,13 +258,20 @@
                   <input class="form-control" id="ssh-user-setting" maxlength="64" autocomplete="username" placeholder="Użytkownik SSH">
                   <button class="btn btn-primary" type="submit">Zapisz</button>
                 </div>
+                <p id="ssh-save-state" class="settings-save-state" role="status">Ustawienia wczytane</p>
                 <small>Połączenie używa formatu użytkownik@nazwa-hosta. Ustawienie można zmienić tylko na komputerze z serwerem.</small>
               </form>
+            </section>
+            <section class="settings-card settings-backup-card" id="settings-backups">
+              <div class="settings-card-heading"><div><h2>Kopie zapasowe</h2><p>Cała baza, lokalnie · do 7 dziennych kopii</p></div><button type="button" class="monitor-action" id="backup-status-refresh">Odśwież status</button></div>
+              <p id="backup-state" class="settings-save-state" role="status">Wczytywanie statusu…</p>
+              <dl class="backup-details"><dt>Ostatnia udana kopia</dt><dd id="backup-last">—</dd><dt>Lokalizacja</dt><dd id="backup-path">—</dd><dt>Zachowane kopie</dt><dd id="backup-count">—</dd></dl>
+              <p class="settings-help">Kopia powstaje przy pierwszym uruchomieniu danego dnia. Podczas pracy aplikacja co godzinę sprawdza, czy potrzebna jest kolejna. Przywracanie opisano w README.</p>
             </section>
           </div>
         </section>
       </main>
-      <footer class="app-footer">Lanwatch <span>·</span> Ewidencja infrastruktury</footer>
+      <footer class="app-footer">Lanwatch <span class="app-version">v{{APP_VERSION}}</span> <span>·</span> Ewidencja infrastruktury</footer>
     </div>
 
     <div class="alert-stack" id="notifications" aria-live="polite"></div>
@@ -259,15 +283,16 @@
           <button class="icon-button" type="button" data-close="device-dialog" aria-label="Zamknij">×</button>
         </div>
         <input id="device-id" type="hidden">
-        <div class="form-grid">
+        <div class="device-form-sections"><fieldset class="form-grid form-section"><legend><span>01</span> Dane podstawowe</legend>
           <div class="form-field">
             <label for="host-name">Nazwa hosta <span>*</span></label>
             <input class="form-control" id="host-name" name="hostName" maxlength="255" required>
             <small class="field-validation" id="host-name-feedback" aria-live="polite"></small>
+            <div class="host-category-hint"><small id="host-category-hint" aria-live="polite">Podpowiedź kategorii: T — terminal, D/N — komputer, P/Z — drukarka.</small><button type="button" id="apply-host-category" class="monitor-text-action" hidden>Zastosuj podpowiedź</button></div>
           </div>
           <div class="form-field">
-            <label for="device-ip">Adres IP</label>
-            <input class="form-control" id="device-ip" name="ip" maxlength="255" placeholder="Opcjonalny — np. urządzenie z DHCP">
+            <label for="device-ip">Adres IPv4</label>
+            <input class="form-control" id="device-ip" name="ip" inputmode="decimal" aria-describedby="device-ip-feedback" maxlength="255" placeholder="Opcjonalny — np. urządzenie z DHCP">
             <small class="field-validation" id="device-ip-feedback" aria-live="polite"></small>
           </div>
           <div class="form-field form-field-wide">
@@ -275,6 +300,7 @@
             <input class="form-control" id="group-name" name="groupName" maxlength="255" placeholder="Np. Bizerba 01">
             <small>Wpisz tę samą nazwę dla wszystkich elementów jednego urządzenia, np. jego głowic.</small>
           </div>
+        </fieldset><fieldset class="form-grid form-section"><legend><span>02</span> Lokalizacja i klasyfikacja</legend>
           <div class="form-field">
             <label for="device-location">Lokalizacja <span>*</span></label>
             <select class="form-select" id="device-location" name="location" required></select>
@@ -284,6 +310,7 @@
             <label for="device-category">Kategoria <span>*</span></label>
             <select class="form-select" id="device-category" name="categoryId" required></select>
           </div>
+        </fieldset><fieldset class="form-grid form-section"><legend><span>03</span> Dane dodatkowe</legend>
           <div class="form-field">
             <label for="line-number">Nr linii</label>
             <input class="form-control" id="line-number" name="lineNumber" maxlength="255">
@@ -302,7 +329,7 @@
             <div class="dependency-options" id="dependency-options" role="group" aria-label="Wybierz maszyny zależne"></div>
             <small id="dependency-count">Wybrano 0</small>
           </div>
-        </div>
+        </fieldset></div>
         <div class="dialog-actions">
           <p class="device-save-error" id="device-save-error" role="alert" hidden></p>
           <button class="btn btn-outline-secondary" type="button" data-close="device-dialog">Anuluj</button>
@@ -384,9 +411,25 @@
       </div><div class="dialog-actions"><button type="button" class="monitor-action" data-close="monitor-report-dialog">Zamknij</button></div>
     </dialog>
 
+    <dialog class="app-dialog snippet-dialog" id="snippet-dialog">
+      <form id="snippet-form"><div class="dialog-header"><div><p class="eyebrow">BIBLIOTEKA KOMEND</p><h2 id="snippet-dialog-title">Dodaj wpis</h2></div><button type="button" class="icon-button" data-close="snippet-dialog" aria-label="Zamknij">×</button></div>
+        <div class="form-grid"><div class="form-field form-field-wide"><label for="snippet-title">Nazwa *</label><input class="form-control" id="snippet-title" name="title" required maxlength="120"></div>
+        <div class="form-field"><label for="snippet-edit-platform">System *</label><select class="form-select" id="snippet-edit-platform" name="platform"><option>Windows</option><option>Linux</option><option>macOS</option><option>Uniwersalne</option></select></div>
+        <div class="form-field"><label for="snippet-shell">Powłoka *</label><input class="form-control" id="snippet-shell" name="shell" list="snippet-shells" required maxlength="50" placeholder="PowerShell, CMD, Bash…"><datalist id="snippet-shells"><option>PowerShell</option><option>CMD</option><option>Bash</option><option>Zsh</option><option>SSH</option></datalist></div>
+        <div class="form-field"><label for="snippet-edit-category">Kategoria *</label><input class="form-control" id="snippet-edit-category" name="category" required maxlength="80" placeholder="Sieć, usługi, pliki…"></div>
+        <div class="form-field"><label for="snippet-tags">Tagi</label><input class="form-control" id="snippet-tags" name="tags" maxlength="200" placeholder="Oddziel przecinkami"></div>
+        <div class="form-field form-field-wide"><label for="snippet-description">Opis</label><textarea class="form-control" id="snippet-description" name="description" maxlength="2000" rows="2"></textarea></div>
+        <div class="form-field form-field-wide"><label for="snippet-command">Treść komendy *</label><textarea class="form-control snippet-code-input" id="snippet-command" name="command" maxlength="20000" rows="6" required spellcheck="false"></textarea><small>Kopiowana dosłownie. Zastąp oznaczenia HOST i UZYTKOWNIK przed użyciem w swojej konsoli.</small></div>
+        <label class="snippet-favorites"><input type="checkbox" id="snippet-edit-favorite"> Ulubiony wpis</label></div>
+        <div class="dialog-actions"><p class="device-save-error" id="snippet-form-error" role="alert" hidden></p><button type="button" class="monitor-action" data-close="snippet-dialog">Anuluj</button><button type="submit" class="monitor-action monitor-action-primary" id="snippet-save">Zapisz wpis</button></div>
+      </form>
+    </dialog>
+
     <script src="/diagnostics.js" defer></script>
+    <script src="/ipv4.js" defer></script>
     <script src="/app.js" defer></script>
     <script src="/report.js" defer></script>
+    <script src="/snippets.js" defer></script>
   </body>
 </html>
 

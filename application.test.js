@@ -99,6 +99,17 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
   assert.equal(missingHistory.status, 404);
   const invalidHistoryPage = await request("/api/devices/1/history?before=invalid");
   assert.equal(invalidHistoryPage.status, 400);
+  const backupStatus = await request("/api/backups/status");
+  assert.equal(backupStatus.status, 200);
+  assert.equal(typeof backupStatus.result.active, "boolean");
+  assert.equal(typeof backupStatus.result.count, "number");
+  assert.equal(path.dirname(backupStatus.result.directory), temporaryDirectory);
+  const home = await fetch(baseUrl);
+  const markup = await home.text();
+  const expectedVersion = require("./package.json").version;
+  assert.equal(home.headers.get("x-lanwatch-version"), expectedVersion);
+  assert.ok(markup.includes(`v${expectedVersion}`));
+  assert.equal(markup.includes("{{APP_VERSION}}"), false);
   const categories = await request("/api/categories");
   const terminalCategory = categories.result.find((category) => category.name === "Terminal");
   const crossSiteWrite = await request(
@@ -143,6 +154,12 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
     categoryId: terminalCategory.id,
     dependencyIds: [],
   });
+  for (const ip of ["192.168.1.999", "192.168.1", "192.168.001.1", "::1", "fd12::1", "host.local", "192.168.1.1/24", "192.168.1.1:22"]) {
+    const rejected = await request("/api/devices", "POST", newDevice("Invalid IP", ip));
+    assert.equal(rejected.status, 400, ip);
+    assert.match(rejected.result.error, /IPv4/);
+  }
+  assert.equal((await request("/api/devices")).result.length, 0);
   const first = await request(
     "/api/devices",
     "POST",
@@ -153,6 +170,12 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
   assert.equal(emptyHistory.status, 200);
   assert.deepEqual(emptyHistory.result, {items: [], nextBefore: null});
 
+  const badIpUpdate = await request(`/api/devices/${first.result.id}`, "PUT", {...first.result, ip:"::1"});
+  assert.equal(badIpUpdate.status, 400);
+  assert.equal((await request("/api/devices")).result.find(item=>item.id===first.result.id).ip,"192.168.10.10");
+  const trimmedIpUpdate = await request(`/api/devices/${first.result.id}`, "PUT", {...first.result, ip:" 192.168.10.10 "});
+  assert.equal(trimmedIpUpdate.status,200);
+  assert.equal(trimmedIpUpdate.result.ip,"192.168.10.10");
   assert.equal("sshUser" in first.result, false);
   assert.equal(first.result.monitorEnabled, false);
   const invalidMonitorSettings = await request(

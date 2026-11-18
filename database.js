@@ -539,7 +539,10 @@ function backupDatabase() {
   return require("./backup").backupInWorker(databasePath);
 }
 
+const snippetStore = require("./snippets").createSnippetStore(database);
+
 module.exports = {
+  snippetStore,
   updateMonitorNote, getDeviceReport,
   backupDatabase,
   getDeviceHistory,

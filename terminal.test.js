@@ -26,10 +26,10 @@ test("builds the requested PowerShell tunnel command", () => {
   ]);
 
   const script = powerShellScript(tunnelArguments);
-  assert.ok(script.includes("Write-Host 'ssh -L 5900:localhost:5900 testuser@T104-0173'"));
+  assert.ok(script.includes("Write-Host 'ssh -4 -L 5900:localhost:5900 testuser@T104-0173'"));
   assert.equal(
     script.split(/\r?\n/)[1],
-    "ssh -L 5900:localhost:5900 testuser@T104-0173",
+    "ssh -4 -L 5900:localhost:5900 testuser@T104-0173",
   );
 });
 

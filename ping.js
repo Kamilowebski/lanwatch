@@ -1,6 +1,7 @@
 const { spawn } = require("node:child_process");
 const dns = require("node:dns").promises;
 const net = require("node:net");
+const { isValidIPv4 } = require("./public/ipv4");
 
 const ATTEMPTS = 3;
 const REPLY_TIMEOUT_MS = 1000;
@@ -17,18 +18,8 @@ function isPrivateIPv4(address) {
     (octets[0] === 169 && octets[1] === 254);
 }
 
-function isPrivateIPv6(address) {
-  const normalized = address.split("%")[0].toLowerCase();
-  const mappedIPv4 = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
-  if (mappedIPv4) return isPrivateIPv4(mappedIPv4[1]);
-  return /^f[cd]/.test(normalized) || /^fe[89ab]/.test(normalized);
-}
-
 function isPrivateAddress(address) {
-  const version = net.isIP(address.split("%")[0]);
-  if (version === 4) return isPrivateIPv4(address.split("%")[0]);
-  if (version === 6) return isPrivateIPv6(address);
-  return false;
+  return isValidIPv4(address) && isPrivateIPv4(address);
 }
 
 function classifyPingResult(output, exitCode) {
@@ -55,7 +46,13 @@ async function resolvePrivateAddress(target) {
   }
 
   const normalized = target.trim();
-  const version = net.isIP(normalized.split("%")[0]);
+  if (normalized.includes(":") || normalized.includes("%")) {
+    throw new Error("Obsługiwane są wyłącznie adresy IPv4; IPv6 nie jest obsługiwany.");
+  }
+  if (/^[0-9.]+$/.test(normalized) && !isValidIPv4(normalized)) {
+    throw new Error("Nieprawidłowy adres IPv4.");
+  }
+  const version = net.isIP(normalized);
   if (version) {
     if (isPrivateAddress(normalized)) return normalized;
     throw new Error("Ping jest dozwolony wyłącznie do adresów lokalnych.");
@@ -65,7 +62,7 @@ async function resolvePrivateAddress(target) {
   let lookupTimer;
   try {
     addresses = await Promise.race([
-      dns.lookup(normalized, { all: true, verbatim: true }),
+      dns.lookup(normalized, { family: 4, all: true, verbatim: true }),
       new Promise((_, reject) => {
         lookupTimer = setTimeout(() => reject(new Error("DNS timeout")), 5000);
       }),

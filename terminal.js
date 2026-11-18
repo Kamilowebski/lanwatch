@@ -43,7 +43,7 @@ function powerShellScript(args) {
   ) {
     throw Object.assign(new Error("Nieprawidłowe argumenty tunelu SSH."), { status: 400 });
   }
-  const command = `ssh ${args.join(" ")}`;
+  const command = `ssh -4 ${args.join(" ")}`;
   return [
     `Write-Host ${quotePowerShell(command)}`,
     command,

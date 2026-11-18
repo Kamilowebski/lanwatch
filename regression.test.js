@@ -24,7 +24,7 @@ test('live refresh rebuilds status-filtered inventory when a device changes stat
   let fullRenders = 0;
   let incrementalRenders = 0;
   const context = {
-    refreshVersion: 0, metadataRefreshedAt:0, categories:[],locations:[],onlineTtlMs:300000,sshUser:"",window:{setTimeout,clearTimeout},setConnectionState(){}, statusFilter: 'online', inventoryMetadataChanged: () => false,
+    refreshVersion: 0, quickFilter:"all", document:{getElementById:()=>({classList:{contains:()=>true}})}, metadataRefreshedAt:0, categories:[],locations:[],onlineTtlMs:300000,sshUser:"",window:{setTimeout,clearTimeout},setConnectionState(){}, statusFilter: 'online', inventoryMetadataChanged: () => false,
     api: async (url) => url === '/api/devices' ? [{ id: 1, status: 'offline' }] : {},
     trackMonitorStatusChanges() {}, renderSettings() {}, renderMonitor() {}, scheduleStatusExpiry() {},
     renderDevices() { fullRenders++; }, updateVisibleDeviceStatuses() { incrementalRenders++; },

@@ -1,13 +1,16 @@
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
+const { isValidIPv4 } = require("./public/ipv4");
 const path = require("node:path");
+const { version: appVersion } = require("./package.json");
 const { randomUUID } = require("node:crypto");
 const { monitorEventLoopDelay } = require("node:perf_hooks");
 const databaseFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname,"data","lanwatch.sqlite");
 const diagnostics = require("./diagnostics").createLogger(path.join(path.dirname(databaseFile),"logs"));
 const {
   backupDatabase,
+  snippetStore,
   updateMonitorNote, getDeviceReport,
   createCategory,
   createDevice,
@@ -39,6 +42,8 @@ const MONITOR_POLL_INTERVAL_MS = 15 * 1000;
 const publicDirectory = path.join(__dirname, "public");
 const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
+  "/ipv4.js": {file:"ipv4.js",type:"text/javascript; charset=utf-8"},
+  "/snippets.js": {file:"snippets.js",type:"text/javascript; charset=utf-8"},
   "/report.js": {file:"report.js",type:"text/javascript; charset=utf-8"},
   "/diagnostics.js": { file: "diagnostics.js", type: "text/javascript; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
@@ -53,6 +58,7 @@ let monitorTimer;
 let backupTimer;
 
 let backupActive = false;
+let lastBackupError = null;
 async function runBackup() {
   if (backupActive) return;
   backupActive = true;
@@ -60,9 +66,10 @@ async function runBackup() {
   diagnostics.log("info","backup.started");
   try {
     await backupDatabase();
+    lastBackupError = null;
     diagnostics.log("info","backup.finished",{durationMs:Date.now()-started});
   }
-  catch (error) { diagnostics.log("error","backup.error",{message:error.message,stack:error.stack}); }
+  catch (error) { lastBackupError = error.message; diagnostics.log("error","backup.error",{message:error.message,stack:error.stack}); }
   finally { backupActive = false; }
 }
 
@@ -179,6 +186,9 @@ function validateDevice(input) {
     device[field] = value.trim();
   }
 
+  if (device.ip && !isValidIPv4(device.ip)) {
+    throw new HttpError(400, "Podaj poprawny adres IPv4, np. 192.168.1.10, albo pozostaw pole puste. IPv6 nie jest obsługiwany.");
+  }
   const categoryId = Number(input.categoryId);
   if (!Number.isSafeInteger(categoryId) || categoryId < 1) {
     throw new HttpError(400, "Wybierz prawidłową kategorię.");
@@ -396,6 +406,27 @@ async function handleApi(request, response, pathname) {
     sendJson(response,200,updateMonitorNote(Number(noteMatch[1]),body.note.trim()));
     return;
   }
+  if (pathname === "/api/snippets" && request.method === "GET") { sendJson(response,200,snippetStore.list());return; }
+  if (pathname === "/api/snippets" && request.method === "POST") { sendJson(response,201,snippetStore.create(await readJson(request)));return; }
+  if (pathname === "/api/snippets/import" && request.method === "POST") { sendJson(response,200,snippetStore.import(await readJson(request)));return; }
+  const snippetMatch = pathname.match(/^\/api\/snippets\/(\d+)(\/favorite)?$/);
+  if (snippetMatch && request.method === "PUT") {
+    const body=await readJson(request);
+    sendJson(response,200,snippetMatch[2] ? snippetStore.favorite(Number(snippetMatch[1]),body?.favorite) : snippetStore.update(Number(snippetMatch[1]),body));return;
+  }
+  if (snippetMatch && !snippetMatch[2] && request.method === "DELETE") {snippetStore.remove(Number(snippetMatch[1]));sendJson(response,200,{ok:true});return;}
+  if (pathname === "/api/backups/status" && request.method === "GET") {
+    const directory = path.join(path.dirname(databaseFile),"backups");
+    let names;
+    try { names = await fs.promises.readdir(directory); }
+    catch (error) { if (error.code !== "ENOENT") throw error; names = []; }
+    names = names.filter(name => /^lanwatch-\d{4}-\d{2}-\d{2}\.sqlite$/.test(name)).sort().reverse();
+    const latest = names[0] ? path.join(directory,names[0]) : null;
+    const stat = latest ? await fs.promises.stat(latest) : null;
+    sendJson(response,200,{active:backupActive,error:lastBackupError,count:names.length,directory,
+      latestFile:latest,lastSuccessAt:stat?.mtime.toISOString() || null});
+    return;
+  }
   if (pathname === "/api/settings" && request.method === "GET") {
     sendJson(response, 200, getAppSettings());
     return;
@@ -542,6 +573,7 @@ const server = http.createServer(async (request, response) => {
   const requestId = /^[A-Za-z0-9-]{1,80}$/.test(request.headers["x-request-id"] || "")
     ? request.headers["x-request-id"] : randomUUID();
   response.setHeader("X-Request-ID",requestId);
+  response.setHeader("X-Lanwatch-Version",appVersion);
   const start = performance.now();
   const requestPath = String(request.url || "").split("?")[0].slice(0,300);
   const info = {requestId, method:request.method, url:requestPath};
@@ -571,7 +603,8 @@ const server = http.createServer(async (request, response) => {
     if (request.method !== "GET" || !asset) {
       throw new HttpError(404, "Nie znaleziono żądanego zasobu.");
     }
-    const content = fs.readFileSync(path.join(publicDirectory, asset.file));
+    let content = fs.readFileSync(path.join(publicDirectory, asset.file));
+    if (asset.file === "index.html") content = content.toString("utf8").replaceAll("{{APP_VERSION}}", appVersion);
     response.writeHead(200, {
       "Content-Type": asset.type,
       "Cache-Control": "no-cache",
@@ -591,9 +624,9 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Lanwatch działa pod adresem http://localhost:${port}`);
+  console.log(`Lanwatch v${appVersion} działa pod adresem http://localhost:${port}`);
   console.log(`Nasłuchuje na interfejsie ${host}.`);
-  diagnostics.log("info","server.started",{port,host,node:process.version,pid:process.pid});
+  diagnostics.log("info","server.started",{version:appVersion,port,host,node:process.version,pid:process.pid});
   runBackup();
   backupTimer = setInterval(runBackup, 60 * 60 * 1000);
   monitorTimer = setInterval(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);

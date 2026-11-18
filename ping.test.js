@@ -3,10 +3,10 @@ const test = require("node:test");
 const { classifyPingResult, isPrivateAddress, pingLocalTarget } = require("./ping");
 
 test("accepts private and link-local network addresses only", () => {
-  for (const address of ["10.0.0.1", "172.20.1.2", "192.168.1.5", "169.254.10.2", "fd12::1", "fe80::1"]) {
+  for (const address of ["10.0.0.1", "172.20.1.2", "192.168.1.5", "169.254.10.2"]) {
     assert.equal(isPrivateAddress(address), true, `${address} should be local`);
   }
-  for (const address of ["8.8.8.8", "172.32.0.1", "192.0.2.1", "127.0.0.1", "::1", "2001:4860:4860::8888"]) {
+  for (const address of ["fd12::1", "fe80::1", "::ffff:192.168.1.1", "192.168.1.1%eth0", "8.8.8.8", "172.32.0.1", "192.0.2.1", "127.0.0.1", "::1", "2001:4860:4860::8888"]) {
     assert.equal(isPrivateAddress(address), false, `${address} should not be probed`);
   }
 });
@@ -48,9 +48,18 @@ test("does not treat Windows unreachable with exit zero as an echo reply", () =>
   assert.equal(result.replies, 0);
 });
 
-test("reads Polish Windows latency and IPv6 replies", () => {
+test("reads Polish Windows latency and reply counts", () => {
   assert.equal(classifyPingResult("Odpowiedź z 192.168.1.5: bajtów=32 czas=12ms TTL=64", 0).latencyMs, 12);
-  const result = classifyPingResult("Reply from fd12::1: time=2ms", 0);
+  const result = classifyPingResult("Reply from 192.168.1.5: time=2ms", 0);
   assert.equal(result.status, "online");
   assert.equal(result.replies, 1);
+});
+
+test("refuses IPv6 targets without sending ICMP", async () => {
+  for (const target of ["fd12::1", "fe80::1%12", "::ffff:192.168.1.1"]) {
+    const result = await pingLocalTarget(target);
+    assert.equal(result.attempts, 0);
+    assert.equal(result.status, "unknown");
+    assert.match(result.message, /IPv6/);
+  }
 });

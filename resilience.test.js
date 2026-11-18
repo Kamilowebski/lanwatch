@@ -8,7 +8,7 @@ function extract(start,end){return app.slice(app.indexOf(start),app.indexOf(end,
 
 test('an older refresh cannot replace the results of a newer refresh',async()=>{
  const pending=[];
- const context={refreshVersion:0, metadataRefreshedAt:0, categories:[],locations:[],onlineTtlMs:300000,sshUser:"",window:{setTimeout,clearTimeout},setConnectionState(){}, statusFilter:'', elements:{deviceDialog:{open:false}},
+ const context={refreshVersion:0, quickFilter:"all", document:{getElementById:()=>({classList:{contains:()=>true}})}, metadataRefreshedAt:0, categories:[],locations:[],onlineTtlMs:300000,sshUser:"",window:{setTimeout,clearTimeout},setConnectionState(){}, statusFilter:'', elements:{deviceDialog:{open:false}},
  api:url=>url==='/api/devices'?new Promise(resolve=>pending.push(resolve)):Promise.resolve({}),
  inventoryMetadataChanged:()=>true,trackMonitorStatusChanges(){},renderSettings(){},renderDevices(){},renderMonitor(){},scheduleStatusExpiry(){}};
  vm.createContext(context);vm.runInContext(extract('async function refresh(', '\nasync function saveMonitorSettings'),context);
@@ -71,4 +71,21 @@ test('relative monitor time handles missing data, seconds, minutes and future cl
  assert.equal(context.relativeCheckTime('2026-11-17T11:58:00Z',now),'2 min temu');
  assert.equal(context.relativeCheckTime('2026-11-17T11:00:00Z',now),'1 godz. temu');
  assert.equal(context.relativeCheckTime('2026-11-18T12:00:00Z',now),'0 s temu');
+});
+
+test('hostname category suggestions cover requested prefixes and ignore case',()=>{
+ const context={};vm.createContext(context);
+ vm.runInContext(extract('function suggestedHostCategory(', '\nfunction updateHostCategoryHint'),context);
+ for(const [host,expected] of [['T001','Terminal'],['t01','Terminal'],['D01','Komputer'],['n01','Komputer'],['P01','drukarka'],['z01','drukarka'],['  T01','Terminal'],['X01',null],['',null]]) {
+  assert.equal(context.suggestedHostCategory(host),expected,host);
+ }
+});
+
+
+test('hostname resolution explicitly requests IPv4',async()=>{
+ let options;
+ const context={require:name=>name==='node:dns'?{promises:{lookup:async(host,input)=>{options=input;return [{address:'192.168.1.10',family:4}];}}}:require(name),module:{exports:{}},setTimeout,clearTimeout};
+ vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'ping.js'),'utf8'),context);
+ assert.equal(await context.module.exports.resolvePrivateAddress('host.local'),'192.168.1.10');
+ assert.equal(options.family,4);
 });

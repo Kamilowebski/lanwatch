@@ -100,16 +100,21 @@ function savePreference(key, value) {
 }
 const savedPageSize = Number(readPreference("lanwatch-page-size"));
 let pageSize = allowedPageSizes.includes(savedPageSize) ? savedPageSize : 20;
-let currentPage = 1;
-let categoryFilter = "";
-let locationFilter = "";
-let statusFilter = "";
+let savedInventoryView = {};
+try { savedInventoryView = JSON.parse(readPreference("lanwatch-inventory-view") || "{}") || {}; } catch {}
+let currentPage = Number.isSafeInteger(savedInventoryView.page) && savedInventoryView.page > 0 ? savedInventoryView.page : 1;
+let categoryFilter = typeof savedInventoryView.category === "string" ? savedInventoryView.category : "";
+let locationFilter = typeof savedInventoryView.location === "string" ? savedInventoryView.location : "";
+let statusFilter = ["online","offline","unknown"].includes(savedInventoryView.status) ? savedInventoryView.status : "";
+let quickFilter = ["offline","monitored"].includes(savedInventoryView.quick) ? savedInventoryView.quick : "all";
+elements.search.value = typeof savedInventoryView.query === "string" ? savedInventoryView.query : "";
+elements.filterStatus.value = statusFilter;
 let dependencyCurrentDeviceId = null;
 let selectedDependencyIds = new Set();
 let dependencyEditorDeviceId = null;
 let stagedDependencyIds = new Set();
 let statusExpiryTimer = null;
-const expandedGroups = new Set();
+const expandedGroups = new Set(Array.isArray(savedInventoryView.expanded) ? savedInventoryView.expanded.filter(value => typeof value === "string").slice(0,500) : []);
 const knownMonitorStatuses = new Map();
 const pendingMonitorUpdates = new Set();
 const monitorNoteDrafts = new Map();
@@ -177,6 +182,8 @@ function notify(message, type = "success") {
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
   savePreference("lanwatch-theme", theme);
+  const setting = document.getElementById("settings-theme");
+  if (setting) setting.value = theme;
   document.getElementById("theme-label").textContent =
     theme === "dark" ? "Jasny motyw" : "Ciemny motyw";
 }
@@ -244,7 +251,13 @@ function renderNamedItems(type, items) {
     row.className = "category-row";
     const name = document.createElement("span");
     name.className = "category-name";
+    const usage = devices.filter(device => type === "category" ? device.categoryId === item.id : device.location.toLocaleLowerCase("pl") === item.name.toLocaleLowerCase("pl")).length;
     name.textContent = item.name;
+    const usageLabel = document.createElement("small");
+    usageLabel.className = "named-item-usage";
+    usageLabel.textContent = `Przypisane maszyny: ${usage}`;
+    const info = document.createElement("div"); info.className = "named-item-info";
+    info.append(name, usageLabel);
     const actions = document.createElement("div");
     actions.className = "category-actions";
     const edit = document.createElement("button");
@@ -257,8 +270,13 @@ function renderNamedItems(type, items) {
     remove.type = "button";
     remove.textContent = "Usuń";
     remove.addEventListener("click", () => removeNamedItem(type, item));
+    if (usage) {
+      remove.disabled = true;
+      remove.title = `Najpierw zmień przypisanie ${usage} maszyn.`;
+      usageLabel.textContent += " · usunięcie wymaga zmiany przypisań";
+    }
     actions.append(edit, remove);
-    row.append(name, actions);
+    row.append(info, actions);
     config.list.append(row);
   }
 }
@@ -504,7 +522,9 @@ function updateDeviceIdentifierValidation() {
     device.ip.trim().toLocaleLowerCase("pl") === ip,
   );
   const hostMessage = duplicateHost ? "Ta nazwa hosta jest już przypisana do innej maszyny." : "";
-  const ipMessage = duplicateIp ? "Ten adres IP jest już przypisany do innej maszyny." : "";
+  const ipMessage = ip && !isValidIPv4(ip)
+    ? "Podaj poprawny IPv4, np. 192.168.1.10, lub pozostaw pole puste. IPv6 nie jest obsługiwany."
+    : duplicateIp ? "Ten adres IP jest już przypisany do innej maszyny." : "";
   elements.deviceHostName.setCustomValidity(hostMessage);
   elements.deviceIp.setCustomValidity(ipMessage);
   elements.deviceHostName.setAttribute("aria-invalid", String(Boolean(hostMessage)));
@@ -624,7 +644,9 @@ function searchRelatedGroups(query) {
 }
 
 function matchesDeviceFilters(group) {
-  return (!categoryFilter || group.devices.some((device) => String(device.categoryId) === categoryFilter))
+  return (quickFilter !== "offline" || group.devices.some(device => device.status === "offline"))
+    && (quickFilter !== "monitored" || group.devices.some(device => device.monitorEnabled))
+    && (!categoryFilter || group.devices.some((device) => String(device.categoryId) === categoryFilter))
     && (!locationFilter || group.devices.some((device) => device.location === locationFilter))
     && (!statusFilter || group.devices.some((device) => device.status === statusFilter));
 }
@@ -913,6 +935,34 @@ function renderDeviceRow(device, isGroupMember = false) {
   remove.textContent = "Usuń";
   remove.addEventListener("click", () => removeDevice(device));
   actionsCell.append(manageDependencies, edit, remove);
+  const menu = document.createElement("div");
+  menu.className = "device-action-menu";
+  menu.setAttribute("popover", "auto");
+  menu.id = `device-actions-${device.id}`;
+  menu.setAttribute("aria-label", `Akcje maszyny ${device.hostName}`);
+  menu.append(...actionsCell.children);
+  const more = document.createElement("button");
+  more.type = "button"; more.className = "inventory-more"; more.textContent = "⋯";
+  more.setAttribute("aria-label", `Więcej akcji: ${device.hostName}`);
+  more.setAttribute("aria-expanded", "false");
+  more.setAttribute("aria-controls", menu.id);
+  const close = () => {
+    if (menu.matches(":popover-open")) menu.hidePopover();
+    more.setAttribute("aria-expanded", "false");
+  };
+  more.addEventListener("click", () => {
+    if (menu.matches(":popover-open")) { close(); return; }
+    const rect = more.getBoundingClientRect();
+    menu.style.left = `${Math.max(8,Math.min(rect.right - 180, window.innerWidth - 188))}px`;
+    menu.style.top = `${Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 260))}px`;
+    menu.showPopover(); more.setAttribute("aria-expanded", "true");
+  });
+  menu.addEventListener("toggle", () => more.setAttribute("aria-expanded",String(menu.matches(":popover-open"))));
+  menu.addEventListener("click", event => { if (event.target.closest("button")) close(); });
+  const details = document.createElement("button");
+  details.type = "button"; details.className = "inventory-details"; details.textContent = "Szczegóły";
+  details.addEventListener("click", () => openDeviceDetails(device));
+  actionsCell.append(details, more, menu);
   row.append(actionsCell);
   return row;
 }
@@ -969,6 +1019,11 @@ function renderGroupSummaryRow(group) {
 }
 
 function renderDevices() {
+  for (const button of document.querySelectorAll("[data-quick-filter]")) {
+    const key = button.dataset.quickFilter;
+    button.setAttribute("aria-pressed", String(key === quickFilter));
+    button.querySelector("span").textContent = devices.filter(device => key === "all" || (key === "offline" ? device.status === "offline" : device.monitorEnabled)).length;
+  }
   const query = elements.search.value.trim().toLocaleLowerCase("pl");
   const filteredGroups = searchRelatedGroups(query).filter(matchesDeviceFilters);
   const pageCount = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
@@ -1001,7 +1056,7 @@ function renderDevices() {
     }
   }
 
-  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter);
+  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all");
   renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
   document.getElementById("result-count").textContent =
     hasFilters ? `${filteredGroups.length} wyników` : "";
@@ -1019,9 +1074,15 @@ function renderDevices() {
     ? "Zmień wyszukiwanie lub filtry i spróbuj ponownie."
     : "Dodaj pierwszą maszynę, aby rozpocząć tworzenie ewidencji.";
   document.getElementById("empty-add-device").classList.toggle("d-none", devices.length > 0);
+  savePreference("lanwatch-inventory-view", JSON.stringify({query:elements.search.value,category:categoryFilter,
+    location:locationFilter,status:statusFilter,quick:quickFilter,page:currentPage,expanded:[...expandedGroups]}));
 }
 
 function updateVisibleDeviceStatuses() {
+  for (const button of document.querySelectorAll("[data-quick-filter]")) {
+    const key=button.dataset.quickFilter;
+    button.querySelector("span").textContent=devices.filter(device=>key === "all" || (key === "offline" ? device.status === "offline" : device.monitorEnabled)).length;
+  }
   const devicesById = new Map(devices.map((device) => [device.id, device]));
   for (const row of elements.deviceList.rows) {
     const relatedDevices = row.dataset.deviceIds
@@ -1066,7 +1127,7 @@ function updateVisibleDeviceStatuses() {
 
   const query = elements.search.value.trim().toLocaleLowerCase("pl");
   const filteredGroups = searchRelatedGroups(query).filter(matchesDeviceFilters);
-  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter);
+  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all");
   renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
 }
 
@@ -1392,7 +1453,7 @@ async function refresh({ preserveInventory = false } = {}) {
       loadMetadata ? api("/api/settings") : {sshUser},
     ]);
     if (version !== refreshVersion) return;
-    const canPreserveInventory = preserveInventory && !statusFilter && !inventoryMetadataChanged(nextDevices);
+    const canPreserveInventory = preserveInventory && !statusFilter && quickFilter !== "offline" && !inventoryMetadataChanged(nextDevices);
     trackMonitorStatusChanges(nextDevices);
     devices = nextDevices;
     if (loadMetadata) {
@@ -1402,12 +1463,18 @@ async function refresh({ preserveInventory = false } = {}) {
       onlineTtlMs = summary.onlineTtlMs;
       metadataRefreshedAt = Date.now();
       renderSettings();
+      if (!document.getElementById("settings-view").classList.contains("d-none")) refreshBackupStatus();
+    } else if (!canPreserveInventory) {
+      renderNamedItems("category",categories); renderNamedItems("location",locations);
     }
     if (canPreserveInventory) updateVisibleDeviceStatuses();
     else renderDevices();
     renderMonitor();
     scheduleStatusExpiry(onlineTtlMs);
-    if (elements.deviceDialog.open) updateDeviceIdentifierValidation();
+    if (elements.deviceDialog.open) {
+      updateDeviceIdentifierValidation();
+      updateHostCategoryHint();
+    }
     lastSuccessfulRefresh = new Date();
     setConnectionState("connected");
   } catch (error) {
@@ -1467,6 +1534,46 @@ function scheduleLiveRefresh() {
   }, 5000);
 }
 
+let categorySelectionManual = false;
+let initialCategoryValue = "";
+let automaticCategoryValue = null;
+
+function suggestedHostCategory(hostName) {
+  const prefix = String(hostName || "").trim().charAt(0).toUpperCase();
+  return {T:"Terminal",D:"Komputer",N:"Komputer",P:"drukarka",Z:"drukarka"}[prefix] || null;
+}
+
+function updateHostCategoryHint(apply = false) {
+  const name = suggestedHostCategory(elements.deviceHostName.value);
+  const hint = document.getElementById("host-category-hint");
+  const button = document.getElementById("apply-host-category");
+  button.hidden = true;
+  if (!name) {
+    if (apply && !categorySelectionManual && automaticCategoryValue !== null) {
+      elements.categories.value = initialCategoryValue;
+      automaticCategoryValue = null;
+    }
+    hint.textContent = "Podpowiedź kategorii: T — terminal, D/N — komputer, P/Z — drukarka.";
+    return;
+  }
+  const category = categories.find(item => item.name.trim().toLocaleLowerCase("pl") === name.toLocaleLowerCase("pl"));
+  if (!category) {
+    if (apply && !categorySelectionManual && automaticCategoryValue !== null) {
+      elements.categories.value = initialCategoryValue;
+      automaticCategoryValue = null;
+    }
+    hint.textContent = `Podpowiedź: ${name}. Dodaj tę kategorię w Konfiguracji lub wybierz inną ręcznie.`;
+    return;
+  }
+  if (apply && !categorySelectionManual) {
+    elements.categories.value = String(category.id);
+    automaticCategoryValue = String(category.id);
+  }
+  const selected = elements.categories.value === String(category.id);
+  hint.textContent = selected ? `Kategoria zgodna z nazwą hosta: ${category.name}.` : `Sugerowana kategoria: ${category.name}. Zachowano Twój wybór.`;
+  button.hidden = selected;
+}
+
 function openDeviceForm(device = null) {
   if (elements.saveDevice.disabled) return;
   elements.deviceForm.reset();
@@ -1484,6 +1591,10 @@ function openDeviceForm(device = null) {
   document.getElementById("numerator").value = device?.numerator || "";
   document.getElementById("device-description").value = device?.description || "";
   elements.categories.value = device?.categoryId || categories[0]?.id || "";
+  categorySelectionManual = Boolean(device);
+  initialCategoryValue = elements.categories.value;
+  automaticCategoryValue = null;
+  updateHostCategoryHint();
   updateDeviceIdentifierValidation();
   renderDependencies(device?.dependencyIds || [], device?.id || null);
   elements.deviceDialog.showModal();
@@ -1558,20 +1669,36 @@ async function removeDevice(device) {
   }
 }
 
+async function refreshBackupStatus() {
+  const label = document.getElementById("backup-state");
+  label.textContent = "Sprawdzanie kopii…";
+  try {
+    const status = await api("/api/backups/status");
+    label.dataset.state = status.error ? "error" : "saved";
+    label.textContent = status.error ? `Ostatnia próba nieudana: ${status.error}` : status.active ? "Trwa wykonywanie kopii…" : status.lastSuccessAt ? "Kopia zapasowa jest dostępna" : "Nie ma jeszcze ukończonej kopii";
+    document.getElementById("backup-last").textContent = status.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleString("pl-PL") : "—";
+    document.getElementById("backup-path").textContent = status.latestFile || status.directory;
+    document.getElementById("backup-count").textContent = `${status.count} / 7`;
+  } catch (error) { label.dataset.state = "error"; label.textContent = error.message; }
+}
+
 async function saveSshSettings(event) {
   event.preventDefault();
+  const button = elements.sshSettingsForm.querySelector("button[type=submit]");
+  if (button.disabled) return;
+  const status = document.getElementById("ssh-save-state");
+  const draft = elements.sshUser.value;
+  button.disabled = true; status.textContent = "Zapisywanie…"; status.dataset.state = "saving";
   try {
-    const settings = await api("/api/settings", {
-      method: "PUT",
-      body: JSON.stringify({ sshUser: elements.sshUser.value.trim() }),
-    });
+    const settings = await api("/api/settings", {method:"PUT",body:JSON.stringify({sshUser:draft.trim()})});
     sshUser = settings.sshUser;
-    elements.sshUser.value = sshUser;
-    sshSettingsDirty = false;
-    notify("Ustawienia SSH zostały zapisane.");
+    if (elements.sshUser.value === draft) {
+      elements.sshUser.value = sshUser; sshSettingsDirty = false;
+      status.textContent = "Zapisano";status.dataset.state = "saved";
+    } else { status.textContent = "Niezapisane zmiany";status.dataset.state = "dirty"; }
   } catch (error) {
-    notify(error.message, "danger");
-  }
+    status.textContent = error.message;status.dataset.state = "error";
+  } finally { button.disabled = false; }
 }
 
 async function openTunnelInPowerShell(device, button) {
@@ -1636,12 +1763,28 @@ document.querySelectorAll(".main-nav-button").forEach((button) => {
     document.querySelectorAll(".view-panel").forEach((view) => {
       view.classList.toggle("d-none", view.id !== button.dataset.view);
     });
+    if (button.dataset.view === "settings-view") {
+      renderNamedItems("category",categories);renderNamedItems("location",locations);
+      refreshBackupStatus();
+    }
   });
 });
 
 document.getElementById("add-device").addEventListener("click", () => openDeviceForm());
 document.getElementById("empty-add-device").addEventListener("click", () => openDeviceForm());
-elements.deviceHostName.addEventListener("input", updateDeviceIdentifierValidation);
+elements.deviceHostName.addEventListener("input", () => {
+  updateDeviceIdentifierValidation();
+  updateHostCategoryHint(true);
+});
+elements.categories.addEventListener("change", () => {
+  categorySelectionManual = true;
+  automaticCategoryValue = null;
+  updateHostCategoryHint();
+});
+document.getElementById("apply-host-category").addEventListener("click", () => {
+  categorySelectionManual = false;
+  updateHostCategoryHint(true);
+});
 elements.deviceIp.addEventListener("input", updateDeviceIdentifierValidation);
 const monitorSort = document.getElementById("monitor-offline-first");
 monitorSort.checked = offlineFirst;
@@ -1655,7 +1798,15 @@ window.setInterval(() => {
   elements.monitorList.querySelectorAll(".status-time").forEach(element => updateMonitorTime(element, element.dataset.checkedAt));
 }, 1000);
 elements.sshSettingsForm.addEventListener("submit", saveSshSettings);
-elements.sshUser.addEventListener("input", () => { sshSettingsDirty = true; });
+elements.sshUser.addEventListener("input", () => {
+  sshSettingsDirty = true;
+  const status=document.getElementById("ssh-save-state");status.textContent="Niezapisane zmiany";status.dataset.state="dirty";
+});
+document.getElementById("settings-theme").addEventListener("change",event => setTheme(event.target.value));
+document.getElementById("backup-status-refresh").addEventListener("click",refreshBackupStatus);
+document.querySelectorAll("[data-quick-filter]").forEach(button => button.addEventListener("click",()=>{
+  quickFilter=button.dataset.quickFilter;statusFilter="";elements.filterStatus.value="";currentPage=1;renderDevices();
+}));
 elements.search.addEventListener("input", () => {
   currentPage = 1;
   renderDevices();
@@ -1675,6 +1826,7 @@ elements.filterLocation.addEventListener("change", () => {
 });
 elements.filterStatus.addEventListener("change", () => {
   statusFilter = elements.filterStatus.value;
+  if (quickFilter === "offline") quickFilter = "all";
   currentPage = 1;
   renderDevices();
 });
@@ -1753,6 +1905,10 @@ async function saveDevice(event) {
       document.getElementById("group-name").value = nextDefaults.groupName;
       elements.locations.value = nextDefaults.location;
       elements.categories.value = nextDefaults.categoryId;
+      categorySelectionManual = false;
+      initialCategoryValue = elements.categories.value;
+      automaticCategoryValue = null;
+      updateHostCategoryHint();
       updateDeviceIdentifierValidation();
       renderDependencies();
       elements.deviceHostName.focus();

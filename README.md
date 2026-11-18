@@ -1,5 +1,7 @@
 # Lanwatch
 
+Aktualna wersja: **1.2.0**. Zmiany opisuje [CHANGELOG.md](CHANGELOG.md).
+
 Lanwatch to desktopowa aplikacja do prowadzenia ewidencji maszyn w lokalnej
 sieci. Serwer działa w Node.js, interfejs korzysta z HTML, JavaScript i
 Bootstrap, a dane są przechowywane w SQLite.
@@ -101,7 +103,7 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Przycisk „Tunel VNC” otwiera okno PowerShell i uruchamia w nim OpenSSH;
   przeglądarka nie wykonuje poleceń SSH ani nie pokazuje zdalnego terminala.
   Uruchamiana komenda SSH zawiera tylko przekierowanie i cel, np.
-  `ssh -L 5900:localhost:5900 użytkownik@nazwa-hosta`; połączenie
+  `ssh -4 -L 5900:localhost:5900 użytkownik@nazwa-hosta`; połączenie
   pozostaje interaktywne w PowerShell. Mały komunikat w aplikacji potwierdza
   uruchomienie okna. Zamknij okno PowerShell, aby zakończyć tunel. TigerVNC
   uruchom na tym samym komputerze i połącz z `127.0.0.1:5900`.
@@ -113,8 +115,7 @@ Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez G
 - Jasny i ciemny motyw zapamiętywany w przeglądarce.
 
 Ping jest uruchamiany po kliknięciu lub cyklicznie dla maszyn z włączonym
-monitoringiem, wyłącznie do adresów lokalnych: prywatnych adresów IPv4,
-lokalnych adresów IPv6 lub nazw hostów rozpoznanych na taki adres. Bez adresu
+monitoringiem, wyłącznie do adresów lokalnych: prywatnych i link-local adresów IPv4 lub nazw hostów rozpoznanych na taki adres IPv4. Bez adresu
 IP systemowy resolver rozpoznaje nazwę hosta (może użyć DNS); same próby
 diagnostyczne są wyłącznie ICMP. Aplikacja nie wykonuje sond TCP/UDP ani
 skanowania portów.
@@ -254,3 +255,66 @@ oraz anulowaniem. Odświeżanie zachowuje wpisywany tekst. Powiadomienia mają e
 opcja „Bez odpowiedzi na początku” jest zapamiętywana w przeglądarce.
 Czas sprawdzenia ma postać względną (np. „12 s temu”) i aktualizuje się lokalnie
 co sekundę; dokładna data jest dostępna po najechaniu. Nie uruchamia to pingowania.
+
+## Maszyny i konfiguracja
+
+Tabela maszyn oferuje szybkie filtry Wszystkie / Bez odpowiedzi / Monitorowane z licznikami
+maszyn (grupy pozostają wyświetlane w całości). Przeglądarka zapamiętuje wyszukiwanie,
+filtry, stronę i rozwinięte grupy. „Szczegóły” jest główną akcją wiersza, a menu „⋯”
+zawiera monitoring, tunel VNC dla terminali, zależności, edycję i usuwanie.
+Formularz dzieli się na dane podstawowe, lokalizację i klasyfikację oraz dane dodatkowe.
+
+Konfiguracja ma sekcje kategorii, lokalizacji, SSH, wyglądu i kopii zapasowych.
+Kategorie i lokalizacje pokazują liczbę przypisanych maszyn. Usuwanie używanych pozycji
+jest zablokowane z wyjaśnieniem; serwer nadal niezależnie sprawdza ograniczenie.
+SSH sygnalizuje niezapisane zmiany, zapis, sukces i błąd. Pole nie traci nowego wpisu,
+jeśli użytkownik zmieni go w trakcie zapisu. Motyw i rozmiar strony są ustawieniami
+przeglądarki. Sekcja kopii pokazuje czas i lokalizację ostatniego gotowego pliku oraz
+liczbę kopii, odświeżaną przy otwarciu Konfiguracji, pełnym odświeżeniu i na żądanie.
+
+Przy dodawaniu maszyny pierwsza litera nazwy hosta automatycznie podpowiada kategorię:
+T — Terminal, D/N — Komputer, P/Z — drukarka (bez rozróżniania wielkości liter).
+Ręczny wybór ma pierwszeństwo. „Zastosuj podpowiedź” pozwala ponownie użyć sugestii.
+Przy edycji istniejącej maszyny kategoria nie zmienia się automatycznie.
+Brak kategorii w konfiguracji wyświetla komunikat; aplikacja jej sama nie tworzy.
+
+## Komendy i snippety — wyłącznie kopiowanie
+
+Zakładka „Komendy” to lokalna biblioteka tekstów w SQLite: nazwa, opis, system,
+powłoka, kategoria, tagi, treść oraz ulubione. Dostępne są wyszukiwanie, filtry,
+dodawanie, edycja, usuwanie oraz „Kopiuj”. Komenda jest kopiowana dosłownie;
+aplikacja nigdy nie uruchamia wpisów z biblioteki ani nie podmienia ich parametrów.
+Przykładowe HOST i UZYTKOWNIK należy zmienić samodzielnie przed użyciem w konsoli.
+Sześć przykładowych wpisów jest tworzonych tylko przy pierwszej inicjalizacji biblioteki.
+
+Eksport JSON zapisuje całą bibliotekę, niezależnie od aktywnych filtrów.
+Import JSON wersji 1 dopisuje do 200 wpisów (plik do 900 KB); nie nadpisuje istniejących.
+Wszystkie wpisy są walidowane przed transakcyjnym importem. Ponowny import może
+utworzyć duplikaty. Biblioteka jest objęta automatyczną kopią całej bazy SQLite.
+
+## Wersje i aktualizacja
+
+Obecne pełne wydanie to `lanwatch-1.2.0.zip`. Wersja w `package.json` jest
+źródłem numeru pokazywanego w stopce, komunikacie startowym PowerShell,
+logu `server.started` i nagłówku HTTP `X-Lanwatch-Version`.
+Schemat: `1.1.1` — poprawki, `1.2.0` — nowe funkcje, `2.0.0` — zmiany wymagające
+szczególnych kroków przy aktualizacji. Przy następnym wydaniu zmień `package.json`,
+aktualną wersję w README i `CHANGELOG.md`, a pełną paczkę nazwij zgodnie z numerem.
+
+Aby zaktualizować: zatrzymaj serwer, zachowaj własny katalog `data` (lub plik
+wskazany w `DB_PATH` wraz z kopiami), zastąp pliki programu z pełnej paczki,
+uruchom `npm start` i odśwież stronę przez Ctrl+F5. Nowy numer pojawi się w stopce.
+Migracje SQLite są wykonywane automatycznie przy starcie. Paczka nie zawiera
+bazy użytkownika, logów ani kopii zapasowych.
+
+## Adresy IPv4
+
+Pole IP jest opcjonalne i sprawdzane podczas wpisywania oraz na serwerze przy
+każdym dodawaniu i edycji. Wymagane są cztery liczby 0–255 rozdzielone kropkami,
+bez zer wiodących (np. `192.168.1.10`). Spacje na końcach są usuwane.
+Adresy IPv6, CIDR, adresy z portem i nazwy hostów w polu IP są odrzucane.
+Nazwy hostów wpisuje się w osobnym polu; resolver używa tylko IPv4.
+SSH używa `-4`. Ograniczenie pingowania do lokalnych adresów IPv4 pozostaje.
+Walidacja formatu przy zapisie nie wymaga, aby maszyna była dostępna.
+Istniejące rekordy nie są usuwane; stare niepoprawne IP lub IPv6 należy poprawić
+przy edycji. Historia wcześniejszych sprawdzeń pozostaje do wglądu.
