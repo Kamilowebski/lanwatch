@@ -885,6 +885,7 @@ function openDeviceDetails(device) {
   elements.manageDependenciesFromDetails.onclick = () => openDependencyManager(device);
   document.getElementById("graph-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.openDependencyGraph(device.id);};
   document.getElementById("changes-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.showDeviceChanges(device.id,device.hostName);};
+  document.getElementById("events-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.openMachineEvents(device);};
   elements.deviceDetailsDialog.showModal();
 }
 
@@ -1056,6 +1057,8 @@ function updateGroupHealth(container, members) {
   }
 }
 
+function groupSummaryKey(group) { return group.devices.map(device=>device.auditUid).sort().join("|"); }
+
 function inventoryGroupTargets(group) {
   const byId = new Map(devices.map(device => [device.id, device]));
   const targets = new Set(group.devices.map(device => device.id));
@@ -1073,10 +1076,10 @@ async function checkExpandedGroup(group) {
   pendingGroupChecks.add(group.key);
   renderDevices();
   try {
-    const result=await api("/api/ping", {method:"POST",body:JSON.stringify({deviceIds:[...targets]}),timeoutMs:pingRequestTimeout()});
+    const result=await api("/api/ping", {method:"POST",body:JSON.stringify({deviceIds:[...targets],groupMemberIds:group.devices.map(device=>device.id)}),timeoutMs:pingRequestTimeout()});
     const summary=result.summary;
     const message=`${summary.online} online · ${summary.offline} bez odpowiedzi · ${summary.unknown} nieustalonych`;
-    groupCheckSummaries.set(group.key,{message,finishedAt:result.finishedAt});
+    groupCheckSummaries.set(groupSummaryKey(group),{message,finishedAt:result.finishedAt});
     notify(`${group.relatedName || group.groupName}: ${message}.`,summary.offline || summary.unknown ? 'warning' : 'success');
     await refresh({preserveInventory:true});
   } catch(error) { notify(`Sprawdzanie grupy: ${error.message}`, "danger"); }
@@ -1104,11 +1107,11 @@ function renderGroupSummaryRow(group) {
   counts.className = "group-health-counts";
   updateGroupHealth(counts, group.devices);
   hostCell.append(name, count, counts);
-  const lastCheck=groupCheckSummaries.get(group.key);
+  const lastCheck=groupCheckSummaries.get(groupSummaryKey(group));
   if(lastCheck){
     const summary=document.createElement("small");summary.className="group-check-summary";
     summary.textContent=`${new Date(lastCheck.finishedAt).toLocaleTimeString("pl-PL")} · ${lastCheck.message}`;
-    summary.title="Ostatnia zakończona ręczna seria dla grupy i wszystkich jej zależności w tej karcie.";
+    summary.title="Ostatnia zakończona ręczna seria dla tego składu grupy i jej ówczesnych zależności. Podsumowanie jest zapisane w bazie.";
     hostCell.append(summary);
   }
   row.append(hostCell);
@@ -1917,7 +1920,7 @@ async function refreshBackupStatus() {
     label.textContent = status.error ? `Ostatnia próba nieudana: ${status.error}` : status.active ? "Trwa wykonywanie kopii…" : status.lastSuccessAt ? "Kopia zapasowa jest dostępna" : "Nie ma jeszcze ukończonej kopii";
     document.getElementById("backup-last").textContent = status.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleString("pl-PL") : "—";
     document.getElementById("backup-path").textContent = status.latestFile || status.directory;
-    document.getElementById("backup-count").textContent = `${status.count} / 7`;
+    document.getElementById("backup-count").textContent = `${status.count} łącznie (do 7 dziennych + 7 ręcznych)`;
   } catch (error) { label.dataset.state = "error"; label.textContent = error.message; }
 }
 

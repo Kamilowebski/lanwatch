@@ -722,3 +722,11 @@ button, input, select, textarea { font: inherit; }
 .device-ip-copy:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .device-ip-copy[data-copied] { color:#248853; border-color:#37a875; }
 :root[data-theme=dark] .device-ip-copy[data-copied] { color:#8bd1a8; }
+
+.saved-view-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 23px; border-top:1px solid var(--border); }
+.saved-view-toolbar .form-select,.saved-view-toolbar .form-control { width:190px; max-width:100%; font-size:11px; }
+.saved-view-status { font-size:11px; color:var(--muted); }
+.machine-events-body { padding:20px 24px; }.machine-events-body>p { color:var(--muted); font-size:12px; }
+#machine-events-list { padding:0; list-style:none; }#machine-events-list li { display:flex; gap:16px; padding:12px 0; border-bottom:1px solid var(--border); font-size:12px; }#machine-events-list time { color:var(--muted); flex-shrink:0; }
+#machine-events-more[hidden] { display:none; }
+#settings-backups .settings-save-state,#settings-backups .backup-details dd { overflow-wrap:anywhere; min-width:0; }

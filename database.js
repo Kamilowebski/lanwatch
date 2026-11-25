@@ -156,7 +156,7 @@ function getDevice(id) {
   const device = database.prepare(`
     SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
       d.category_id AS categoryId, c.name AS category,
-      d.description, d.line_number AS lineNumber, d.numerator, d.favorite,
+      d.description, d.line_number AS lineNumber, d.numerator, d.favorite, d.audit_uid AS auditUid,
       ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
       COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
       ${statusMessageExpression} AS statusMessage, s.latency_ms AS pingLatencyMs,
@@ -226,7 +226,7 @@ function getDevices() {
   const devices = database.prepare(`
     SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
       d.category_id AS categoryId, c.name AS category,
-      d.description, d.line_number AS lineNumber, d.numerator, d.favorite,
+      d.description, d.line_number AS lineNumber, d.numerator, d.favorite, d.audit_uid AS auditUid,
       ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
       COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
       ${statusMessageExpression} AS statusMessage, s.latency_ms AS pingLatencyMs,
@@ -274,6 +274,7 @@ function getSummary() {
   return { ...summary, onlineTtlMs: ONLINE_STATUS_TTL_MS };
 }
 
+const workspaceStore = require("./workspace-data").createWorkspaceStore(database);
 const monitorSettingsStore = require("./monitoring").createMonitorStore(database);
 function getMonitorSettings() { return monitorSettingsStore.get(); }
 function setMonitorSettings(value) { return monitorSettingsStore.set(value); }
@@ -300,6 +301,7 @@ function saveDeviceStatus(deviceId, result) {
   withTransaction(() => {
   database.prepare(`INSERT INTO monitor_failures(device_id,streak) VALUES(?,?)
     ON CONFLICT(device_id) DO UPDATE SET streak=CASE WHEN excluded.streak=1 THEN MIN(streak+1,1000000) ELSE 0 END`).run(deviceId,result.status==='offline'?1:0);
+  workspaceStore.recordStatus(deviceId,result.status,result.checkedAt,getMonitorSettings().failureThreshold,database.prepare("SELECT streak FROM monitor_failures WHERE device_id=?").get(deviceId).streak);
   database.prepare(`
     INSERT INTO device_status (device_id, status, checked_at, replies, target, message, latency_ms)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -375,7 +377,7 @@ function updateSingleDeviceMonitor(deviceId, settings, automatic = null) {
       notify_offline = excluded.notify_offline,
       note = CASE WHEN excluded.enabled = 0 THEN '' ELSE device_monitor.note END
   `).run(deviceId, Number(settings.enabled), Number(settings.notifyOnline), Number(settings.notifyOffline));
-  if (!settings.enabled) database.prepare("DELETE FROM monitor_failures WHERE device_id=?").run(deviceId);
+  if (!settings.enabled) { database.prepare("DELETE FROM monitor_failures WHERE device_id=?").run(deviceId);workspaceStore.resetState(deviceId); }
   if (automatic !== null || !settings.enabled) {
     database.prepare("UPDATE device_monitor SET automatic = ? WHERE device_id = ?").run(settings.enabled ? Number(automatic) : 0, deviceId);
   }
@@ -642,6 +644,7 @@ function updateDevice(id, device) {
     if (existing.hostName !== device.hostName || existing.ip !== device.ip) {
       database.prepare("DELETE FROM device_status WHERE device_id = ?").run(id);
       database.prepare("DELETE FROM monitor_failures WHERE device_id = ?").run(id);
+      workspaceStore.resetState(id);
     }
     recordDeviceChange(before,getDevice(id));
   });
@@ -743,13 +746,14 @@ function bulkUpdateDevices(ids, changes) {
   });
 }
 
-function backupDatabase() {
-  return require("./backup").backupInWorker(databasePath);
+function backupDatabase(manual=false) {
+  return require("./backup").backupInWorker(databasePath,manual);
 }
 
 const snippetStore = require("./snippets").createSnippetStore(database);
 
 module.exports = {
+  workspaceStore,
   getMonitorSettings,setMonitorSettings,
   getHistorySettings,setHistorySettings,pruneDeviceHistory,getDeviceReportData,getDeviceChanges,updateDeviceFavorite,
   importDeviceRows, bulkUpdateDevices,

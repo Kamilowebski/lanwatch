@@ -27,13 +27,21 @@ function createDailyBackup(database, databasePath, now = new Date()) {
   return destination;
 }
 
-module.exports = { createDailyBackup };
+function createManualBackup(database,databasePath,now=new Date()) {
+ const directory=path.join(path.dirname(databasePath),"backups");fs.mkdirSync(directory,{recursive:true});
+ const name=`lanwatch-manual-${now.toISOString().replace(/[:.]/g,'-')}-${require('node:crypto').randomUUID()}.sqlite`;
+ const destination=path.join(directory,name),temporary=destination+'.tmp';
+ try{database.prepare('VACUUM INTO ?').run(temporary);fs.renameSync(temporary,destination);}finally{fs.rmSync(temporary,{force:true});}
+ const names=fs.readdirSync(directory).filter(name=>/^lanwatch-manual-[A-Za-z0-9_-]+\.sqlite$/.test(name)).sort().reverse();
+ for(const name of names.slice(7))fs.unlinkSync(path.join(directory,name));return destination;
+}
+module.exports = { createDailyBackup,createManualBackup };
 
 // Use a separate SQLite connection in a worker so disk I/O cannot freeze HTTP requests.
-function backupInWorker(databasePath) {
+function backupInWorker(databasePath,manual=false) {
   const { Worker } = require("node:worker_threads");
   return new Promise((resolve, reject) => {
-    const worker = new Worker(__filename, { workerData: { databasePath } });
+    const worker = new Worker(__filename, { workerData: { databasePath,manual } });
     const timer = setTimeout(() => {
       worker.terminate();
       reject(new Error("Przekroczono czas wykonywania kopii bazy."));
@@ -58,7 +66,7 @@ if (!isMainThread && workerData?.databasePath) {
   try {
     database = new DatabaseSync(workerData.databasePath, { readOnly: true });
     database.exec("PRAGMA busy_timeout = 5000");
-    parentPort.postMessage({ path: createDailyBackup(database, workerData.databasePath) });
+    parentPort.postMessage({ path: (workerData.manual?createManualBackup:createDailyBackup)(database, workerData.databasePath) });
   } catch (error) {
     parentPort.postMessage({ error: error.message });
   } finally { database?.close(); }

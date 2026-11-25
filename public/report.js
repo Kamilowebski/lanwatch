@@ -77,6 +77,7 @@ if (typeof window !== 'undefined') (() => {
   pdf.addEventListener('click',()=>{if(!pdf.disabled)window.print();});
   window.addEventListener('beforeprint',()=>{if(dialog.open && !content.hidden)document.body.dataset.printReport='true';});
   window.addEventListener('afterprint',()=>{delete document.body.dataset.printReport;});
+  document.getElementById("report-events").addEventListener("click",()=>{if(currentDevice){dialog.close();window.openMachineEvents(currentDevice);}});
   window.openMonitorReport=device=>{
     currentDevice=device;document.getElementById('monitor-report-title').textContent=device.hostName;
     if(!dialog.open)dialog.showModal();load();

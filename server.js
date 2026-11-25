@@ -9,7 +9,7 @@ const { monitorEventLoopDelay } = require("node:perf_hooks");
 const databaseFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname,"data","lanwatch.sqlite");
 const diagnostics = require("./diagnostics").createLogger(path.join(path.dirname(databaseFile),"logs"));
 const {
-  backupDatabase, getMonitorSettings,setMonitorSettings,
+  workspaceStore,backupDatabase, getMonitorSettings,setMonitorSettings,
   getHistorySettings,setHistorySettings,pruneDeviceHistory,getDeviceReportData,getDeviceChanges,updateDeviceFavorite,
   importDeviceRows, bulkUpdateDevices,
   snippetStore,
@@ -47,6 +47,7 @@ const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/vendor/bootstrap-5.3.8.min.css": {file:"vendor/bootstrap-5.3.8.min.css",type:"text/css; charset=utf-8"},
   "/clipboard.js": {file:"clipboard.js",type:"text/javascript; charset=utf-8"},
+  "/workspace-tools.js": {file:"workspace-tools.js",type:"text/javascript; charset=utf-8"},
   "/layout.js": {file:"layout.js",type:"text/javascript; charset=utf-8"},
   "/monitoring-controls.js": {file:"monitoring-controls.js",type:"text/javascript; charset=utf-8"},
   "/insights.js": {file:"insights.js",type:"text/javascript; charset=utf-8"},
@@ -77,17 +78,18 @@ function cleanHistory() {
 
 let backupActive = false;
 let lastBackupError = null;
-async function runBackup() {
-  if (backupActive) return;
+async function runBackup(manual=false) {
+  if (backupActive) {if(manual)throw new HttpError(409,"Kopia jest już wykonywana.");return;}
   backupActive = true;
   const started = Date.now();
   diagnostics.log("info","backup.started");
   try {
-    await backupDatabase();
+    const file=await backupDatabase(manual);
     lastBackupError = null;
     diagnostics.log("info","backup.finished",{durationMs:Date.now()-started});
+    return {file};
   }
-  catch (error) { lastBackupError = error.message; diagnostics.log("error","backup.error",{message:error.message,stack:error.stack}); }
+  catch (error) { lastBackupError = error.message; diagnostics.log("error","backup.error",{message:error.message,stack:error.stack});if(manual)throw error; }
   finally { backupActive = false; }
 }
 
@@ -342,7 +344,7 @@ async function pingDeviceAndDependencies(deviceId) {
   return Promise.all(targets.map(target => checkDevice(target, true)));
 }
 
-async function pingSelectedDevices(deviceIds) {
+async function pingSelectedDevices(deviceIds,groupMemberIds=null) {
   const devices = getDevices();
   const devicesById = new Map(devices.map((device) => [device.id, device]));
   if (deviceIds.some((id) => !devicesById.has(id))) {
@@ -352,7 +354,9 @@ async function pingSelectedDevices(deviceIds) {
   const results=await Promise.all(deviceIds.map((id) => checkDevice(devicesById.get(id), true)));
   const summary={online:0,offline:0,unknown:0};
   for(const result of results)summary[result.status in summary?result.status:'unknown']++;
-  return {checked:deviceIds.length,summary,finishedAt:new Date().toISOString()};
+  const finishedAt=new Date().toISOString();
+  if(groupMemberIds)workspaceStore.saveSummary(groupMemberIds.map(id=>devicesById.get(id)),summary,finishedAt);
+  return {checked:deviceIds.length,summary,finishedAt};
 }
 
 async function pollMonitoredDevices() {
@@ -414,6 +418,21 @@ async function handleApi(request, response, pathname) {
       throw new HttpError(415, "Wymagany format application/json.");
     }
   }
+
+  if(pathname==="/api/saved-views" && request.method==="GET"){sendJson(response,200,{items:workspaceStore.listViews()});return;}
+  if(pathname==="/api/saved-views" && request.method==="POST"){sendJson(response,201,workspaceStore.saveView(await readJson(request)));return;}
+  const viewMatch=pathname.match(/^\/api\/saved-views\/([a-f0-9-]+)$/);
+  if(viewMatch&&request.method==="DELETE"){workspaceStore.deleteView(viewMatch[1]);sendJson(response,200,{ok:true});return;}
+  if(pathname==="/api/group-summaries"&&request.method==="GET"){sendJson(response,200,{items:workspaceStore.summaries()});return;}
+  const eventMatch=pathname.match(/^\/api\/devices\/(\d+)\/events$/);
+  if(eventMatch&&request.method==="GET"){
+    const id=Number(eventMatch[1]);if(!getDevice(id))throw new HttpError(404,"Nie znaleziono maszyny.");
+    const params=new URL(request.url,'http://localhost').searchParams;
+    const before=params.has('before')?Number(params.get('before')):Number.MAX_SAFE_INTEGER;
+    if(!Number.isSafeInteger(before)||before<1)throw new HttpError(400,"Nieprawidłowa strona zdarzeń.");
+    sendJson(response,200,workspaceStore.events(id,before));return;
+  }
+  if(pathname==="/api/backups/create"&&request.method==="POST"){sendJson(response,200,await runBackup(true));return;}
 
   if (pathname === "/api/monitor/runtime" && request.method === "GET") {
     sendJson(response,200,monitoringRuntime());return;
@@ -495,7 +514,9 @@ async function handleApi(request, response, pathname) {
     let names;
     try { names = await fs.promises.readdir(directory); }
     catch (error) { if (error.code !== "ENOENT") throw error; names = []; }
-    names = names.filter(name => /^lanwatch-\d{4}-\d{2}-\d{2}\.sqlite$/.test(name)).sort().reverse();
+    names = names.filter(name => /^lanwatch-(?:\d{4}-\d{2}-\d{2}|manual-[A-Za-z0-9_-]+)\.sqlite$/.test(name));
+    const details=await Promise.all(names.map(async name=>({name,stat:await fs.promises.stat(path.join(directory,name))})));
+    details.sort((a,b)=>b.stat.mtimeMs-a.stat.mtimeMs);names=details.map(item=>item.name);
     const latest = names[0] ? path.join(directory,names[0]) : null;
     const stat = latest ? await fs.promises.stat(latest) : null;
     sendJson(response,200,{active:backupActive,error:lastBackupError,count:names.length,directory,
@@ -567,7 +588,9 @@ async function handleApi(request, response, pathname) {
       throw new HttpError(400, "Wybierz prawidłowe maszyny do sprawdzenia.");
     }
     const deviceIds = [...new Set(body.deviceIds)];
-    sendJson(response, 200, await pingSelectedDevices(deviceIds));
+    const members=body.groupMemberIds;
+    if(members!==undefined&&(!Array.isArray(members)||!members.length||members.length>500||members.some(id=>!Number.isSafeInteger(id)||!deviceIds.includes(id))))throw new HttpError(400,"Nieprawidłowy skład grupy.");
+    sendJson(response, 200, await pingSelectedDevices(deviceIds,members?[...new Set(members)]:null));
     return;
   }
 

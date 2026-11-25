@@ -413,8 +413,9 @@ się nad tabelami monitora i ewidencji.
 Przycisk **Zwiń wszystkie grupy** zamyka rozwinięcia na wszystkich stronach;
 nie wysyła pingów i nie przerywa już uruchomionych sprawdzeń. Po sprawdzeniu grupy
 pod jej nazwą pojawia się czas zakończenia i podsumowanie wyników całej serii,
-łącznie z zależnościami. Podsumowanie jest przechowywane w bieżącej karcie,
-nie stanowi nowego wpisu historii; same pomiary zapisują się jak dotychczas.
+łącznie z zależnościami. Od wersji 1.6.0 podsumowanie jest zapisywane w bazie i przywracane po restarcie.
+Dotyczy konkretnego składu grupy i jej zależności w chwili sprawdzenia; zmiana składu
+nie przenosi starego podsumowania. Same pomiary zapisują się jak dotychczas.
 Filtr **Grupy z problemami** obejmuje grupy z maszyną lub zależnością pośrednią
 bez odpowiedzi. Nie traktuje niesprawdzonych i nieustalonych wyników jako awarii.
 Współpracuje z pozostałymi filtrami i zapamiętuje wybór w przeglądarce.
@@ -425,3 +426,27 @@ i otwierania raportu. Brak zapisanego IP nie tworzy pustego przycisku.
 Sekcje konfiguracji zapamiętują wybór bez dodawania identyfikatora do URL.
 Bezpośrednie odnośniki do sekcji nadal działają, ale po przejściu do innej
 zakładki ich fragment jest usuwany, aby nie wymuszał powrotu po odświeżeniu.
+
+### Zapisane widoki, zdarzenia i ręczne kopie (1.6.0)
+
+W ewidencji i monitorze pasek **Zapisane widoki** pozwala nazwać bieżący zestaw
+filtrów, zastosować zapisany widok albo go usunąć. Widoki są osobne dla obu zakładek;
+baza mieści łącznie do 40. Nie zawierają zaznaczeń maszyn ani pauzy monitorowania.
+Zastosowanie widoku nie uruchamia pingów. Widoki oraz podsumowania grup są częścią
+bazy i jej pełnych kopii. Podsumowania sprzed aktualizacji nie są odtwarzane.
+
+Przycisk **Zdarzenia** w szczegółach lub raporcie maszyny pokazuje pierwsze nieudane
+sprawdzenie w serii, potwierdzenie awarii i powrót online. Rejestr zaczyna się od 1.6.0,
+bez odtwarzania wcześniejszych wydarzeń. Wyniki nieustalone przerywają serię kolejnych
+niepowodzeń; powrót online zamyka otwarty incydent. Zdarzenia pokazują chwile pomiarów,
+a nie dokładny początek czy czas trwania awarii. Wyłączenie monitora lub zmiana hosta/IP
+resetuje stan incydentu. Lista jest stronicowana po 50 wpisów; usunięcie maszyny usuwa
+jej zdarzenia (dziennik zmian ewidencji pozostaje osobną funkcją).
+
+W **Konfiguracja → Kopie zapasowe** przycisk **Utwórz kopię teraz** wykonuje świeżą
+kopię, nawet jeżeli kopia dzienna już istnieje. Pliki `lanwatch-manual-*.sqlite` powstają
+w tym samym katalogu `backups`. Zachowywanych jest do 7 kopii ręcznych oraz osobno
+7 dziennych; nowsza kopia ręczna nie zastępuje dziennej. Kopiowanie działa w osobnym
+wątku, obejmuje zatwierdzone dane WAL, a komunikat sukcesu pojawia się po ukończeniu.
+Przy trwającej kopii kolejne żądanie jest odrzucane z komunikatem. Kopie nie są
+wysyłane do internetu. Przywracanie wykonuje się zgodnie z wcześniejszą instrukcją.

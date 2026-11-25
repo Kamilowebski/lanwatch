@@ -1,5 +1,12 @@
 # Historia zmian Lanwatch
 
+## 1.6.0 — 2026-11-25
+
+- Zapisane widoki ewidencji i monitora: nazwane zestawy filtrów, stosowanie i usuwanie; do 40 widoków w bazie, dostępnych po restarcie.
+- Historia zdarzeń maszyny: pierwszy brak odpowiedzi w serii, potwierdzona awaria z progiem i powrót online. Dostęp ze szczegółów i raportu, stronicowanie po 50 zdarzeń.
+- Ręczna kopia zapasowa z konfiguracji: za każdym razem nowy spójny plik SQLite w osobnym wątku, potwierdzenie ukończenia i zachowanie do 7 kopii ręcznych obok 7 dziennych.
+- Podsumowania ręcznego sprawdzenia grup są zapisywane w bazie i odtwarzane po otwarciu karty i restarcie. Powiązanie przez trwałe identyfikatory składu grupy chroni przed pomieszaniem usuniętych i nowych maszyn.
+
 ## 1.5.4 — 2026-11-25
 
 - Widoczne zapisane adresy IPv4 pod nazwami maszyn w ewidencji i monitorze; kliknięcie lub Enter kopiuje adres do schowka bez otwierania raportu i bez pingowania.

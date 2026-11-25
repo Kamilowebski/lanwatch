@@ -285,7 +285,7 @@
             </form></section>
             <section class="settings-card settings-preference-card" id="settings-history"><div class="settings-card-heading"><div><h2>Przechowywanie historii</h2><p>Czas przechowywania wyników pingowania</p></div></div><form class="settings-form" id="history-settings-form"><label for="history-retention-days">Okres</label><select class="form-select" id="history-retention-days"><option value="1">1 dzień</option><option value="7">7 dni</option><option value="30">30 dni</option></select><button class="monitor-action" type="submit" id="history-settings-save">Zapisz okres</button><p id="history-settings-status" class="settings-save-state" role="status">Wczytywanie…</p><small>Skrócenie okresu usuwa starsze wyniki w tle. Nie przywraca to wyników skasowanych wcześniej. Dłuższa historia zwiększa rozmiar bazy i kopii.</small></form></section>
             <section class="settings-card settings-backup-card" id="settings-backups">
-              <div class="settings-card-heading"><div><h2>Kopie zapasowe</h2><p>Cała baza, lokalnie · do 7 dziennych kopii</p></div><button type="button" class="monitor-action" id="backup-status-refresh">Odśwież status</button></div>
+              <div class="settings-card-heading"><div><h2>Kopie zapasowe</h2><p>Cała baza, lokalnie · do 7 dziennych i 7 ręcznych kopii</p></div><button type="button" class="monitor-action" id="backup-create">Utwórz kopię teraz</button><button type="button" class="monitor-action" id="backup-status-refresh">Odśwież status</button></div>
               <p id="backup-state" class="settings-save-state" role="status">Wczytywanie statusu…</p>
               <dl class="backup-details"><dt>Ostatnia udana kopia</dt><dd id="backup-last">—</dd><dt>Lokalizacja</dt><dd id="backup-path">—</dd><dt>Zachowane kopie</dt><dd id="backup-count">—</dd></dl>
               <p class="settings-help">Kopia powstaje przy pierwszym uruchomieniu danego dnia. Podczas pracy aplikacja co godzinę sprawdza, czy potrzebna jest kolejna. Przywracanie opisano w README.</p>
@@ -417,16 +417,17 @@
       </section>
       <div class="dialog-actions">
         <button class="btn btn-outline-secondary" type="button" data-close="device-details-dialog">Zamknij</button>
-        <button type="button" class="monitor-action" id="graph-from-details">Mapa zależności</button><button type="button" class="monitor-action" id="changes-from-details">Zmiany maszyny</button>
+        <button type="button" class="monitor-action" id="graph-from-details">Mapa zależności</button><button type="button" class="monitor-action" id="events-from-details">Zdarzenia</button><button type="button" class="monitor-action" id="changes-from-details">Zmiany maszyny</button>
         <button class="btn btn-outline-secondary" id="manage-dependencies-from-details" type="button">Zależności</button>
         <button class="btn btn-primary" id="edit-device-from-details" type="button">Edytuj maszynę</button>
       </div>
     </dialog>
 
+    <dialog class="app-dialog" id="machine-events-dialog"><div class="dialog-header"><h2 id="machine-events-title">Zdarzenia maszyny</h2><button type="button" class="icon-button" data-close="machine-events-dialog" aria-label="Zamknij zdarzenia">×</button></div><div class="machine-events-body"><p id="machine-events-message" role="status"></p><ol id="machine-events-list"></ol><button type="button" class="monitor-action" id="machine-events-more" hidden>Starsze zdarzenia</button></div></dialog>
     <dialog class="app-dialog monitor-report-dialog" id="monitor-report-dialog">
       <div class="dialog-header"><div><p class="eyebrow">RAPORT DOSTĘPNOŚCI</p><h2 id="monitor-report-title"></h2></div><button type="button" class="icon-button" data-close="monitor-report-dialog" aria-label="Zamknij raport">×</button></div>
       <div class="monitor-report-body">
-        <div class="report-toolbar"><label>Zakres <select class="form-select" id="report-range"><option value="1">Ostatnia godzina</option><option value="24" selected>Ostatnie 24 godziny</option><option value="168">Ostatnie 7 dni</option><option value="720">Ostatnie 30 dni</option><option value="all">Cała zachowana historia</option></select></label><div><button type="button" class="monitor-action" id="report-refresh">Odśwież raport</button> <button type="button" class="monitor-action monitor-action-primary" id="report-pdf" disabled>Zapisz PDF / drukuj</button></div></div>
+        <div class="report-toolbar"><label>Zakres <select class="form-select" id="report-range"><option value="1">Ostatnia godzina</option><option value="24" selected>Ostatnie 24 godziny</option><option value="168">Ostatnie 7 dni</option><option value="720">Ostatnie 30 dni</option><option value="all">Cała zachowana historia</option></select></label><div><button type="button" class="monitor-action" id="report-refresh">Odśwież raport</button> <button type="button" class="monitor-action" id="report-events">Zdarzenia</button><button type="button" class="monitor-action monitor-action-primary" id="report-pdf" disabled>Zapisz PDF / drukuj</button></div></div>
         <p id="report-print-meta" class="report-print-meta"></p><p id="report-message" role="status"></p>
         <div id="report-content" hidden><div id="report-stats" class="report-stats"></div>
         <section class="report-chart-panel"><h3>Dostępność w czasie</h3><p>Każdy punkt to jedno sprawdzenie. Przerwy między punktami nie potwierdzają stanu urządzenia.</p><div id="report-chart"></div></section>
@@ -462,6 +463,7 @@
     <script src="/insights.js" defer></script>
     <script src="/monitoring-controls.js" defer></script>
     <script src="/layout.js" defer></script>
+    <script src="/workspace-tools.js" defer></script>
     <script src="/snippets.js" defer></script>
   </body>
 </html>
