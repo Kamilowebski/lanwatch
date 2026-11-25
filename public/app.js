@@ -114,6 +114,7 @@ let selectedDependencyIds = new Set();
 let dependencyEditorDeviceId = null;
 let stagedDependencyIds = new Set();
 let statusExpiryTimer = null;
+const pendingGroupChecks = new Set();
 const expandedGroups = new Set(Array.isArray(savedInventoryView.expanded) ? savedInventoryView.expanded.filter(value => typeof value === "string").slice(0,500) : []);
 const knownMonitorStatuses = new Map();
 const pendingMonitorUpdates = new Set();
@@ -680,6 +681,13 @@ function statusSummary(groupDevicesList) {
   return { label, status, online, offline, total };
 }
 
+function rowStatusColor(relatedDevices) {
+  if (!relatedDevices.some(device => device.statusCheckedAt)) return "unchecked";
+  const statuses = new Set(relatedDevices.map(device => device.status));
+  if (relatedDevices.length > 1 && statuses.size > 1) return "mixed";
+  return statusSummary(relatedDevices).status;
+}
+
 function appendStatusCell(row, relatedDevices, representative, subjectLabel) {
   const cell = document.createElement("td");
   const summary = statusSummary(relatedDevices);
@@ -702,7 +710,7 @@ function appendStatusCell(row, relatedDevices, representative, subjectLabel) {
     .filter(Boolean)
     .sort()
     .pop();
-  row.dataset.status = statusSummary(relatedDevices).status;
+  row.dataset.status = rowStatusColor(relatedDevices);
   cell.classList.add("device-status-cell");
   const checkedAt = document.createElement("small");
   checkedAt.className = "status-time";
@@ -1046,6 +1054,24 @@ function updateGroupHealth(container, members) {
   }
 }
 
+async function checkExpandedGroup(group) {
+  if (pendingGroupChecks.has(group.key)) return;
+  const byId = new Map(devices.map(device => [device.id, device]));
+  const targets = new Set(group.devices.map(device => device.id));
+  const queue = [...targets];
+  for (let i=0;i<queue.length;i++) for (const id of byId.get(queue[i])?.dependencyIds || []) {
+    if (byId.has(id) && !targets.has(id)) { targets.add(id); queue.push(id); }
+  }
+  if(window.confirmPingSeries && !window.confirmPingSeries([...targets])) return;
+  pendingGroupChecks.add(group.key);
+  renderDevices();
+  try {
+    await api("/api/ping", {method:"POST",body:JSON.stringify({deviceIds:[...targets]}),timeoutMs:pingRequestTimeout()});
+    await refresh({preserveInventory:true});
+  } catch(error) { notify(`Sprawdzanie grupy: ${error.message}`, "danger"); }
+  finally { pendingGroupChecks.delete(group.key); renderDevices(); }
+}
+
 function renderGroupSummaryRow(group) {
   const row = document.createElement("tr");
   row.dataset.deviceIds = group.devices.map((device) => device.id).join(",");
@@ -1091,11 +1117,30 @@ function renderGroupSummaryRow(group) {
   toggle.type = "button";
   toggle.textContent = expandedGroups.has(group.key) ? "Zwiń" : "Rozwiń";
   toggle.setAttribute("aria-expanded", String(expandedGroups.has(group.key)));
-  toggle.addEventListener("click", () => {
-    if (expandedGroups.has(group.key)) expandedGroups.delete(group.key);
-    else expandedGroups.add(group.key);
+  const toggleGroup = () => {
+    const opening = !expandedGroups.has(group.key);
+    if (opening) expandedGroups.add(group.key);
+    else expandedGroups.delete(group.key);
     renderDevices();
+    if (opening) checkExpandedGroup(group);
+  };
+  toggle.addEventListener("click", toggleGroup);
+  row.classList.add("expandable-group-row");
+  row.dataset.groupKey = group.key;
+  row.addEventListener("click", event => {
+    if (event.target.closest("button,a,input,label,select,textarea,[role=button]")) return;
+    if (window.getSelection()?.toString()) return;
+    toggleGroup();
   });
+  if (pendingGroupChecks.has(group.key)) {
+    row.setAttribute("aria-busy", "true");
+    row.dataset.status = "checking";
+    const checking = document.createElement("small");
+    checking.className = "group-checking";
+    checking.setAttribute("role", "status");
+    checking.textContent = "Sprawdzanie dostępności…";
+    hostCell.append(checking);
+  }
   actionsCell.append(toggle);
   row.append(actionsCell);
   return row;
@@ -1237,7 +1282,8 @@ function updateVisibleDeviceStatuses() {
     const representative = relatedDevices[0];
     const subjectLabel = row.dataset.subjectLabel;
     const summary = statusSummary(relatedDevices);
-    row.dataset.status = summary.status;
+    row.dataset.status = rowStatusColor(relatedDevices);
+    if (row.dataset.groupKey && pendingGroupChecks.has(row.dataset.groupKey)) row.dataset.status = "checking";
     const status = row.querySelector(".status-trigger");
     status.classList.remove("status-online", "status-offline", "status-unknown");
     status.classList.add(`status-${summary.status}`);
@@ -1374,7 +1420,7 @@ function createMonitorNoteCell(device) {
 }
 
 function updateMonitorStatus(row, device) {
-  row.dataset.status = device.status;
+  row.dataset.status = device.statusCheckedAt ? device.status : "unchecked";
   const status = row.querySelector(".monitor-status");
   const label = {online: "Online", offline: "Brak odpowiedzi", unknown: "Nieustalony"}[device.status] || "Nieustalony";
   const className = `status-badge monitor-status status-${device.status}`;
@@ -1455,7 +1501,7 @@ function renderMonitor() {
     }
     const row = document.createElement("tr");
     row.dataset.deviceId = String(device.id);
-    row.dataset.status = device.status;
+    row.dataset.status = device.statusCheckedAt ? device.status : "unchecked";
     row.dataset.metadata = metadata;
     const host = document.createElement("td");
     host.className = "host-cell";

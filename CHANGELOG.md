@@ -1,5 +1,12 @@
 # Historia zmian Lanwatch
 
+## 1.5.2 — 2026-11-25
+
+- Osobne kolory dla niesprawdzonych maszyn, sprawdzanej grupy i grupy z różnymi wynikami; legenda kolorów w monitorze i ewidencji.
+- Kliknięcie pustego miejsca w wierszu grupy rozwija ją lub zwija; checkboxy, statusy i przyciski zachowują własne działanie.
+- Każde ręczne rozwinięcie uruchamia sprawdzenie grupy i wszystkich jej zależności, również pośrednich, ze wskaźnikiem postępu i ochroną przed powieleniem trwającego sprawdzenia.
+- Zwijanie i automatyczne odświeżanie nie uruchamiają pingowania. Duże serie nadal wymagają potwierdzenia liczby prób.
+
 ## 1.5.1 — 2026-11-25
 
 - Konfiguracja z bocznym menu i jedną widoczną sekcją, zapamiętaniem wyboru oraz obsługą odnośników do sekcji.

@@ -397,3 +397,15 @@ Konfiguracja ma boczne menu i jedną sekcję widoczną naraz; zapamiętuje ostat
 Listy kategorii i lokalizacji przewijają się razem ze stroną. W monitorze nazwę
 maszyny można kliknąć, aby otworzyć raport. Skrócone oznaczenia automatycznego
 dodania i wskazówki mają pełną treść w podpowiedzi po najechaniu.
+
+Kliknięcie pustego miejsca w wierszu grupy lub przycisku „Rozwiń” otwiera jej listę
+i wykonuje ręczne sprawdzenie maszyn oraz wszystkich zależności pośrednich.
+Zwijanie i odświeżanie widoku nie wysyłają dodatkowych pingów. Ponowne rozwinięcie
+w trakcie sprawdzania korzysta z trwającej serii. Checkboxy i statusy zachowują
+własne działanie; zaznaczanie tekstu nie rozwija grupy. Duże serie nadal pokazują
+potwierdzenie, a ręczne sprawdzanie działa także podczas pauzy monitora.
+
+Kolory wierszy rozróżniają również maszyny bez żadnego wyniku (szary), trwające
+sprawdzanie rozwiniętej grupy (niebieski) i grupy z różnymi wynikami (bursztynowy).
+Wynik nieustalony po wykonanym sprawdzeniu pozostaje fioletowy. Legenda znajduje
+się nad tabelami monitora i ewidencji.
