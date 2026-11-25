@@ -94,7 +94,10 @@ Kategorie i przykładowe komendy nie są odtwarzane przy każdym restarcie po ic
 Zaznacz maszyny lub całą grupę i wybierz **Włącz monitor** na pasku operacji
 zbiorczych. Monitor obejmie także wszystkie ich zależności, również pośrednie.
 Wspólne zależności pojawią się tylko raz. Po rozwinięciu grupy widać również
-zależności spoza grupy, z opisem „Zależność dla” wskazującym powiązane maszyny. Wyłączanie obejmuje jedynie zaznaczone
+osobne sekcje „Maszyny grupy” i „Zależności spoza grupy”. Zewnętrzne urządzenia
+mają opis „Wymagana przez”, a klikalne nazwy w kolumnie Zależności otwierają szczegóły.
+Każde urządzenie pojawia się raz wewnątrz rozwinięcia grupy. Włączenie monitora
+pojedynczej maszyny również automatycznie obejmuje jej zależności. Wyłączanie obejmuje jedynie zaznaczone
 maszyny, aby nie zatrzymywać monitorowania zależności używanych przez inne urządzenia.
 
 ### Monitoring i raporty

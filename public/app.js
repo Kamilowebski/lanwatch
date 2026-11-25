@@ -720,7 +720,29 @@ function dependencyNames(relatedDevices) {
 }
 
 function appendDependencyCell(row, relatedDevices) {
-  row.append(makeCell(dependencyNames(relatedDevices), "dependency-cell"));
+  if (relatedDevices.length !== 1) {
+    row.append(makeCell(dependencyNames(relatedDevices), "dependency-cell"));
+    return;
+  }
+  const cell = document.createElement("td");
+  cell.className = "dependency-cell";
+  const byId = new Map(devices.map(device => [device.id, device]));
+  for (const id of relatedDevices[0].dependencyIds) {
+    const target = byId.get(id);
+    if (target) cell.append(makeDependencyLink(target));
+  }
+  if (!cell.childElementCount) cell.textContent = "—";
+  row.append(cell);
+}
+
+function makeDependencyLink(device) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "dependency-link";
+  button.textContent = device.hostName;
+  button.setAttribute("aria-label", `Szczegóły zależności: ${device.hostName}`);
+  button.addEventListener("click", () => openDeviceDetails(device));
+  return button;
 }
 
 let historyRequestVersion = 0;
@@ -1053,16 +1075,46 @@ function renderExpandedGroup(group) {
       if (!members.has(id)) { members.set(id, target); queue.push(target); }
     }
   }
-  for (const device of members.values()) {
+  const ownIds = new Set(group.devices.map(device => device.id));
+  const external = [...members.values()].filter(device => !ownIds.has(device.id));
+  function heading(label, count, hint) {
+    const row = document.createElement("tr");
+    row.className = "group-section-row";
+    const cell = document.createElement("td");
+    cell.colSpan = 7;
+    const title = document.createElement("span");
+    title.className = "group-section-title";
+    title.textContent = `${label} · ${count}`;
+    const description = document.createElement("small");
+    description.textContent = hint;
+    cell.append(title, description);
+    row.append(cell);
+    elements.deviceList.append(row);
+  }
+  function append(device, isExternal) {
     const row = renderDeviceRow(device, true);
-    if (parents.has(device.id)) {
-      const relation = document.createElement("small");
+    if (isExternal) {
+      row.classList.add("group-external-dependency");
+      const relation = document.createElement("div");
       relation.className = "group-dependency-relation";
-      relation.textContent = `↳ Zależność dla: ${[...parents.get(device.id)].join(", ")}`;
+      const label = document.createElement("span");
+      label.textContent = "Wymagana przez: ";
+      relation.append(label);
+      for (const name of parents.get(device.id) || []) {
+        const source = [...members.values()].find(item => item.hostName === name);
+        if (source) relation.append(makeDependencyLink(source));
+      }
       row.querySelector(".host-cell").append(relation);
     }
     elements.deviceList.append(row);
   }
+  heading("Maszyny grupy", group.devices.length, "Powiązania wskazano w kolumnie Zależności.");
+  group.devices.forEach(device => append(device, false));
+  if (external.length) {
+    heading("Zależności spoza grupy", external.length, "Dołączane automatycznie podczas włączania monitora.");
+    external.forEach(device => append(device, true));
+  }
+
 }
 
 function renderDevices() {

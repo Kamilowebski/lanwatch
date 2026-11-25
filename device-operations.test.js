@@ -28,10 +28,13 @@ test('CSV preview rolls back, import resolves forward dependencies, and duplicat
  d.updateDeviceDependencies(dependency.id,[leaf.id]);d.updateDeviceDependencies(leaf.id,[t.id]);
  d.updateDeviceMonitor(dependency.id,{enabled:true,notifyOnline:true,notifyOffline:true});
  d.updateMonitorNote(dependency.id,'Keep this');
+ assert.ok(d.getDevice(leaf.id).monitorEnabled);
+ assert.equal(d.getDevice(dependency.id).notifyOnline,true);assert.equal(d.getDevice(dependency.id).monitorNote,'Keep this');
+ d.bulkUpdateDevices([t.id,dependency.id,leaf.id],{monitorEnabled:false});
  const enabled=d.bulkUpdateDevices([t.id,dependency.id],{monitorEnabled:true});
  assert.equal(enabled.monitored,3);assert.equal(enabled.dependenciesAdded,1);
  assert.ok(d.getDevice(leaf.id).monitorEnabled);assert.equal(d.getDevice(other.id).monitorEnabled,false);
- assert.equal(d.getDevice(dependency.id).notifyOnline,true);assert.equal(d.getDevice(dependency.id).monitorNote,'Keep this');
+ assert.equal(d.getDevice(dependency.id).notifyOnline,true);assert.equal(d.getDevice(dependency.id).monitorNote,'');
  d.bulkUpdateDevices([t.id],{monitorEnabled:false});assert.ok(d.getDevice(dependency.id).monitorEnabled);assert.ok(d.getDevice(leaf.id).monitorEnabled);
  d.bulkUpdateDevices([t.id],{location:'Nowa hala',monitorEnabled:true});assert.equal(d.getDevice(leaf.id).location,'Nowa hala');
  const category=d.getCategories().find(v=>v.name==='Terminal');

@@ -1,5 +1,12 @@
 # Historia zmian Lanwatch
 
+## 1.4.2 — 2026-11-25
+
+- Rozwinięta grupa rozdziela własne maszyny i zależności spoza grupy, bez powielania urządzeń wewnątrz rozwinięcia.
+- Klikalne nazwy w kolumnie Zależności i lista „Wymagana przez” przy zewnętrznych zależnościach.
+- Włączanie monitora pojedynczej maszyny również automatycznie obejmuje wszystkie zależności, z zachowaniem ich ustawień powiadomień i notatek.
+- Wyłączanie monitora nadal dotyczy wyłącznie wskazanych maszyn.
+
 ## 1.4.1 — 2026-11-25
 
 - Zbiorcze włączanie monitora dla zaznaczonych maszyn i grup dołącza wszystkie zależności, również pośrednie.

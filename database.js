@@ -321,6 +321,27 @@ function getDeviceHistory(deviceId, before = Number.MAX_SAFE_INTEGER) {
 }
 
 function updateDeviceMonitor(deviceId, settings) {
+  return withTransaction(() => {
+    const result = updateSingleDeviceMonitor(deviceId, settings);
+    if (settings.enabled) {
+      const visited = new Set([deviceId]);
+      const queue = [getDevice(deviceId)];
+      for (let index = 0; index < queue.length; index++) {
+        for (const id of queue[index].dependencyIds) {
+          if (visited.has(id)) continue;
+          visited.add(id);
+          const device = getDevice(id);
+          if (!device) continue;
+          updateSingleDeviceMonitor(id, {enabled:true, notifyOnline:device.notifyOnline, notifyOffline:device.notifyOffline});
+          queue.push(device);
+        }
+      }
+    }
+    return result;
+  });
+}
+
+function updateSingleDeviceMonitor(deviceId, settings) {
   if (!getDevice(deviceId)) {
     throw Object.assign(new Error("Nie znaleziono maszyny."), { status: 404 });
   }
@@ -689,7 +710,7 @@ function bulkUpdateDevices(ids, changes) {
     }
     if (changes.monitorEnabled !== undefined) {
       for (const device of monitored.values()) {
-        updateDeviceMonitor(device.id, {enabled:changes.monitorEnabled, notifyOnline:device.notifyOnline, notifyOffline:device.notifyOffline});
+        updateSingleDeviceMonitor(device.id, {enabled:changes.monitorEnabled, notifyOnline:device.notifyOnline, notifyOffline:device.notifyOffline});
       }
     }
     return {updated:existing.length, ...(changes.monitorEnabled === true ? {monitored:monitored.size, dependenciesAdded:monitored.size-existing.length} : {})};
