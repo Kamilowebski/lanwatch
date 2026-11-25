@@ -451,8 +451,9 @@ wątku, obejmuje zatwierdzone dane WAL, a komunikat sukcesu pojawia się po uko�
 Przy trwającej kopii kolejne żądanie jest odrzucane z komunikatem. Kopie nie są
 wysyłane do internetu. Przywracanie wykonuje się zgodnie z wcześniejszą instrukcją.
 
-Kliknięcie pustego miejsca w wierszu pojedynczej maszyny w ewidencji lub monitorze
-uruchamia ping wyłącznie tej maszyny, także gdy należy do grupy. Kliknięcie wiersza
+Kliknięcie pustego miejsca w wierszu pojedynczej maszyny w ewidencji
+uruchamia ping wyłącznie tej maszyny, także gdy należy do grupy. W monitorze
+kliknięcie pustego miejsca wiersza otwiera raport bez wykonywania pingu. Kliknięcie wiersza
 grupy nadal rozwija grupę i sprawdza ją wraz z zależnościami. Przyciski, kopiowanie IP,
 checkboxy i zaznaczanie tekstu nie uruchamiają dodatkowego pingu wiersza. Niebieskie
 tło wskazuje trwające sprawdzenie; kolejne kliknięcia wiersza nie dublują go.

@@ -1619,7 +1619,12 @@ function renderMonitor() {
     );
     row.append(notifications);
     row.append(createMonitorNoteCell(device), monitorCell);
-    attachSingleRowPing(row,device);
+    row.classList.add("reportable-device-row");
+    row.addEventListener("click",event=>{
+      if(event.button!==0 || event.target.closest("button,a,input,label,select,textarea,[role=button],.monitor-note-text,[contenteditable=true]"))return;
+      if(window.getSelection()?.toString())return;
+      window.openMonitorReport(devices.find(item=>item.id===device.id)||device);
+    });
     row.classList.toggle("monitor-row-offline", device.status === "offline");
     desiredRows.push(row);
   }

@@ -732,3 +732,5 @@ button, input, select, textarea { font: inherit; }
 #settings-backups .settings-save-state,#settings-backups .backup-details dd { overflow-wrap:anywhere; min-width:0; }
 
 .pingable-device-row { cursor:pointer; }.pingable-device-row:hover>td { background-color:var(--accent-soft) !important; }
+
+.reportable-device-row { cursor:pointer; }.reportable-device-row:hover>td { background-color:var(--accent-soft) !important; }

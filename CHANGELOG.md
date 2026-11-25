@@ -1,5 +1,10 @@
 # Historia zmian Lanwatch
 
+## 1.6.2 — 2026-11-25
+
+- Kliknięcie pustego miejsca wiersza w monitorze otwiera raport maszyny bez wykonywania pingu.
+- W ewidencji kliknięcie wiersza nadal sprawdza dostępność pojedynczej maszyny; przyciski, IP i edycja notatki zachowują własne działanie.
+
 ## 1.6.1 — 2026-11-25
 
 - Wybór zapisanego widoku natychmiast stosuje filtry; usunięty przycisk „Zastosuj”.
