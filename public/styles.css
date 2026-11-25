@@ -611,3 +611,5 @@ button, input, select, textarea { font: inherit; }
   body[data-print-report=true] #report-chart { overflow: visible; }body[data-print-report=true] #report-chart svg { min-width: 0; width: 100%; }
   body[data-print-report=true] .report-chart-panel { break-inside: avoid; }
 }
+
+.group-dependency-relation { display:block; margin-top:.3rem; color:var(--text-muted, #64748b); font-size:.75rem; overflow-wrap:anywhere; }

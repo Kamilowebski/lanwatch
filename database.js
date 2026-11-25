@@ -669,14 +669,30 @@ function bulkUpdateDevices(ids, changes) {
     const location = changes.location === undefined ? null : getLocationByName(changes.location);
     if (changes.location !== undefined && !location) throw Object.assign(new Error("Wybrana lokalizacja już nie istnieje."),{status:400});
     if (changes.categoryId !== undefined && !getCategory(changes.categoryId)) throw Object.assign(new Error("Wybrana kategoria już nie istnieje."),{status:400});
+    // Expand only enabling: disabling must not stop shared dependencies.
+    const monitored = new Map(existing.map(device => [device.id, device]));
+    if (changes.monitorEnabled === true) {
+      const queue = [...existing];
+      for (let index = 0; index < queue.length; index++) {
+        for (const id of queue[index].dependencyIds) {
+          if (monitored.has(id)) continue;
+          const dependency = getDevice(id);
+          if (dependency) { monitored.set(id, dependency); queue.push(dependency); }
+        }
+      }
+    }
     for (const device of existing) {
       const before=inventorySnapshot(device);
       if (location) database.prepare("UPDATE devices SET location = ? WHERE id = ?").run(location.name,device.id);
       if (changes.categoryId !== undefined) database.prepare("UPDATE devices SET category_id = ? WHERE id = ?").run(changes.categoryId,device.id);
-      if (changes.monitorEnabled !== undefined) updateDeviceMonitor(device.id,{enabled:changes.monitorEnabled,notifyOnline:device.notifyOnline,notifyOffline:device.notifyOffline});
       recordDeviceChange(before,getDevice(device.id),'bulk');
     }
-    return {updated:existing.length};
+    if (changes.monitorEnabled !== undefined) {
+      for (const device of monitored.values()) {
+        updateDeviceMonitor(device.id, {enabled:changes.monitorEnabled, notifyOnline:device.notifyOnline, notifyOffline:device.notifyOffline});
+      }
+    }
+    return {updated:existing.length, ...(changes.monitorEnabled === true ? {monitored:monitored.size, dependenciesAdded:monitored.size-existing.length} : {})};
   });
 }
 

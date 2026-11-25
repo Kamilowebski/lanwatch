@@ -1,5 +1,12 @@
 # Historia zmian Lanwatch
 
+## 1.4.1 — 2026-11-25
+
+- Zbiorcze włączanie monitora dla zaznaczonych maszyn i grup dołącza wszystkie zależności, również pośrednie.
+- Wspólne zależności i cykle nie powodują powtórzeń. Wyłączanie dotyczy wyłącznie zaznaczonych maszyn.
+- Rozwinięta grupa pokazuje także zależności pośrednie z opisem, dla których maszyn są wymagane.
+- Potwierdzenie i komunikat wyniku wyjaśniają dołączanie zależności.
+
 ## 1.4.0 — 2026-11-25
 
 - Retencja historii pingowania: 1, 7 (domyślnie) lub 30 dni zamiast limitu 1000 wyników; usuwanie starszych danych partiami.

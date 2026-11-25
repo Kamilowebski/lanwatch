@@ -1038,6 +1038,33 @@ function renderGroupSummaryRow(group) {
   return row;
 }
 
+function renderExpandedGroup(group) {
+  const byId = new Map(devices.map(device => [device.id, device]));
+  const members = new Map(group.devices.map(device => [device.id, device]));
+  const parents = new Map();
+  const queue = [...group.devices];
+  for (let index = 0; index < queue.length; index++) {
+    const source = queue[index];
+    for (const id of source.dependencyIds) {
+      const target = byId.get(id);
+      if (!target) continue;
+      if (!parents.has(id)) parents.set(id, new Set());
+      parents.get(id).add(source.hostName);
+      if (!members.has(id)) { members.set(id, target); queue.push(target); }
+    }
+  }
+  for (const device of members.values()) {
+    const row = renderDeviceRow(device, true);
+    if (parents.has(device.id)) {
+      const relation = document.createElement("small");
+      relation.className = "group-dependency-relation";
+      relation.textContent = `↳ Zależność dla: ${[...parents.get(device.id)].join(", ")}`;
+      row.querySelector(".host-cell").append(relation);
+    }
+    elements.deviceList.append(row);
+  }
+}
+
 function renderDevices() {
   for (const button of document.querySelectorAll("[data-quick-filter]")) {
     const key = button.dataset.quickFilter;
@@ -1063,9 +1090,7 @@ function renderDevices() {
     if (group.devices.length > 1 && !query && (group.groupName || group.related)) {
       elements.deviceList.append(renderGroupSummaryRow(group));
       if (expandedGroups.has(group.key)) {
-        for (const device of group.devices) {
-          elements.deviceList.append(renderDeviceRow(device, true));
-        }
+        renderExpandedGroup(group);
       }
     } else if (group.devices.length > 1 && query) {
       for (const device of group.devices) {

@@ -41,7 +41,7 @@
   async function apply(ids,changes) {
     const result=await api('/api/devices/bulk',{method:'PUT',body:JSON.stringify({deviceIds:ids,changes})});
     ids.forEach(id=>selected.delete(id));
-    notify(`Zmieniono maszyny: ${result.updated}.`);
+    notify(changes.monitorEnabled === true ? `Monitorowanie włączone dla ${result.monitored} maszyn, w tym dodatkowe zależności: ${result.dependenciesAdded}.` : `Zmieniono maszyny: ${result.updated}.`);
     return result;
   }
   async function reloadAfterChange() {
@@ -62,7 +62,7 @@
   async function monitor(enabled) {
     if(busy || !selected.size)return;
     const ids=[...selected];
-    if(!window.confirm(`${enabled?'Włączyć':'Wyłączyć'} monitorowanie ${ids.length} maszyn?${enabled?'':' Notatki monitora zostaną usunięte.'}`))return;
+    if(!window.confirm(`${enabled?'Włączyć':'Wyłączyć'} monitorowanie ${ids.length} maszyn?${enabled?' Zostaną również włączone wszystkie ich zależności, także pośrednie.':' Notatki monitora zostaną usunięte.'}`))return;
     busy=true;window.syncInventorySelection();
     try {await apply(ids,{monitorEnabled:enabled});await reloadAfterChange();}
     catch(error){notify(error.message,'danger');}

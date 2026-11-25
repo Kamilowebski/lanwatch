@@ -20,8 +20,22 @@ test('CSV preview rolls back, import resolves forward dependencies, and duplicat
  d.updateMonitorNote(t.id,'Temporary');d.bulkUpdateDevices([t.id],{monitorEnabled:false});assert.equal(d.getDevice(t.id).monitorNote,'');
  assert.throws(()=>d.bulkUpdateDevices([t.id,999999],{location:'Rollback location'}),{status:404});
  assert.equal(d.getDevice(t.id).location,'Nowa hala');
+ d.bulkUpdateDevices(devices.map(v=>v.id),{monitorEnabled:false});
+ const dependency=devices.find(v=>v.hostName==='D01');
+ d.importDeviceRows([{...base,hostName:'N-LEAF',ip:'',dependencyHosts:[]},{...base,hostName:'N-OTHER',ip:'',dependencyHosts:[]}]);
+ const leaf=d.getDevices().find(v=>v.hostName==='N-LEAF');
+ const other=d.getDevices().find(v=>v.hostName==='N-OTHER');
+ d.updateDeviceDependencies(dependency.id,[leaf.id]);d.updateDeviceDependencies(leaf.id,[t.id]);
+ d.updateDeviceMonitor(dependency.id,{enabled:true,notifyOnline:true,notifyOffline:true});
+ d.updateMonitorNote(dependency.id,'Keep this');
+ const enabled=d.bulkUpdateDevices([t.id,dependency.id],{monitorEnabled:true});
+ assert.equal(enabled.monitored,3);assert.equal(enabled.dependenciesAdded,1);
+ assert.ok(d.getDevice(leaf.id).monitorEnabled);assert.equal(d.getDevice(other.id).monitorEnabled,false);
+ assert.equal(d.getDevice(dependency.id).notifyOnline,true);assert.equal(d.getDevice(dependency.id).monitorNote,'Keep this');
+ d.bulkUpdateDevices([t.id],{monitorEnabled:false});assert.ok(d.getDevice(dependency.id).monitorEnabled);assert.ok(d.getDevice(leaf.id).monitorEnabled);
+ d.bulkUpdateDevices([t.id],{location:'Nowa hala',monitorEnabled:true});assert.equal(d.getDevice(leaf.id).location,'Nowa hala');
  const category=d.getCategories().find(v=>v.name==='Terminal');
- d.bulkUpdateDevices(devices.map(v=>v.id),{categoryId:category.id});assert.ok(d.getDevices().every(v=>v.categoryId===category.id));
+ d.bulkUpdateDevices(devices.map(v=>v.id),{categoryId:category.id});assert.ok(devices.every(v=>d.getDevice(v.id).categoryId===category.id));
  `;
  execFileSync(process.execPath,['-e',script],{cwd:__dirname,env:{...process.env,DB_PATH:path.join(directory,'test.sqlite')},stdio:'pipe'});
  }finally{fs.rmSync(directory,{recursive:true,force:true});}

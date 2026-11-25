@@ -91,6 +91,12 @@ Kategorie i przykładowe komendy nie są odtwarzane przy każdym restarcie po ic
   przy edycji istniejącej maszyny kategoria nie zmienia się automatycznie.
 - Używanych kategorii i lokalizacji nie można usunąć bez zmiany przypisań maszyn.
 
+Zaznacz maszyny lub całą grupę i wybierz **Włącz monitor** na pasku operacji
+zbiorczych. Monitor obejmie także wszystkie ich zależności, również pośrednie.
+Wspólne zależności pojawią się tylko raz. Po rozwinięciu grupy widać również
+zależności spoza grupy, z opisem „Zależność dla” wskazującym powiązane maszyny. Wyłączanie obejmuje jedynie zaznaczone
+maszyny, aby nie zatrzymywać monitorowania zależności używanych przez inne urządzenia.
+
 ### Monitoring i raporty
 
 Monitoring uruchamia cykle co **15 sekund**, a widok odświeża się co **5 sekund**.
