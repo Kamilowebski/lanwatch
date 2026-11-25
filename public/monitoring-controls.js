@@ -23,12 +23,12 @@
       const device=byId.get(Number(row.dataset.deviceId));if(!device)continue;
       let badge=row.querySelector('.monitor-pause-badge');
       if(!badge){badge=document.createElement('small');badge.className='monitor-pause-badge';row.querySelector('.host-cell').append(badge);}
-      badge.textContent=paused(device)?'Wstrzymano automatyczne sprawdzanie':'';badge.hidden=!paused(device);
+      badge.textContent=paused(device)?'Pauza':'';badge.title='Wstrzymano automatyczne sprawdzanie; ręczny ping nadal działa.';badge.hidden=!paused(device);
       let hint=row.querySelector('.monitor-dependency-hint');
       if(!hint){hint=document.createElement('small');hint.className='monitor-dependency-hint';row.querySelector('.host-cell').append(hint);}
       const failed=[],visited=new Set([device.id]),queue=[device];
       if(device.status==='offline')for(let i=0;i<queue.length;i++)for(const id of queue[i].dependencyIds){if(visited.has(id))continue;visited.add(id);const target=byId.get(id);if(!target)continue;if(target.status==='offline')failed.push(target.hostName);queue.push(target);}
-      hint.textContent=failed.length?`Sprawdź najpierw: ${failed.slice(0,3).join(', ')}${failed.length>3?` +${failed.length-3}`:''}. Zależność również nie odpowiada — to wskazówka, nie pewna przyczyna.`:'';hint.hidden=!failed.length;
+      hint.textContent=failed.length?`Sprawdź najpierw: ${failed.slice(0,3).join(', ')}${failed.length>3?` +${failed.length-3}`:''}. Zależność również nie odpowiada — to wskazówka, nie pewna przyczyna.`:'';hint.title=hint.textContent;hint.hidden=!failed.length;
       let streak=row.querySelector('.monitor-failure-streak');
       if(!streak){streak=document.createElement('small');streak.className='monitor-failure-streak';row.querySelector('.monitor-status').parentElement.append(streak);}
       streak.textContent=device.status==='offline'?((device.failureStreak||0)<threshold?`Potwierdzanie: ${device.failureStreak||0}/${threshold}`:`Potwierdzono: ${device.failureStreak} kolejnych`):'';

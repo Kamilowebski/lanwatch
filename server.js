@@ -47,6 +47,7 @@ const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/vendor/bootstrap-5.3.8.min.css": {file:"vendor/bootstrap-5.3.8.min.css",type:"text/css; charset=utf-8"},
   "/clipboard.js": {file:"clipboard.js",type:"text/javascript; charset=utf-8"},
+  "/layout.js": {file:"layout.js",type:"text/javascript; charset=utf-8"},
   "/monitoring-controls.js": {file:"monitoring-controls.js",type:"text/javascript; charset=utf-8"},
   "/insights.js": {file:"insights.js",type:"text/javascript; charset=utf-8"},
   "/inventory-tools.js": {file:"inventory-tools.js",type:"text/javascript; charset=utf-8"},

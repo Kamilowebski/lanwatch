@@ -663,3 +663,38 @@ button, input, select, textarea { font: inherit; }
 #monitor-search::placeholder { color:var(--muted); opacity:1; }
 :root[data-theme=dark] .monitor-dependency-hint { color:#ff9ca5; }
 :root[data-theme=dark] .monitor-pause-badge { color:#ecc47c; }
+/* One configuration section at a time; lists scroll with the page. */
+.settings-workspace { display:grid; grid-template-columns:180px minmax(0,1fr); gap:24px; align-items:start; }
+.settings-workspace .settings-section-nav { display:flex; flex-direction:column; gap:6px; position:sticky; top:20px; margin:0; }
+.settings-workspace .settings-section-nav a { padding:12px 14px; border-color:transparent; background:transparent; font-size:12px; }
+.settings-workspace .settings-section-nav a[aria-current] { color:var(--accent); background:var(--accent-soft); border-color:var(--border); }
+.settings-workspace .settings-grid { display:block; min-width:0; }
+.settings-workspace .settings-card[hidden] { display:none; }
+.settings-workspace .settings-list { max-height:none; overflow:visible; }
+.settings-workspace .settings-card { max-width:960px; }
+.settings-workspace .settings-form { max-width:none; }
+/* Fixed proportions prevent long names and notes from pushing actions offscreen. */
+.monitor-table { table-layout:fixed; min-width:0; }
+.monitor-table th:nth-child(1) { width:28%; }.monitor-table th:nth-child(2) { width:15%; }.monitor-table th:nth-child(3) { width:8%; }.monitor-table th:nth-child(4) { width:17%; }.monitor-table th:nth-child(5) { width:23%; }.monitor-table th:nth-child(6) { width:9%; }
+.monitor-table tbody td { height:64px; padding:9px 12px; white-space:normal; vertical-align:middle; }
+.monitor-table .host-cell,.monitor-table .monitor-note-cell,.monitor-table .monitor-notifications,.monitor-table .monitor-actions { min-width:0; width:auto; }
+.monitor-table .monitor-host-name { max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px; }
+.monitor-table .monitor-device-meta { margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.monitor-table .monitor-status { font-size:10px; padding:5px 8px; }
+.monitor-table .monitor-toggle { font-size:10px; gap:5px; margin:4px 0; white-space:normal; }
+.monitor-table .monitor-note-preview { gap:6px; flex-wrap:wrap; }
+.monitor-table .monitor-note-text { max-height:3.2em; overflow:auto; line-height:1.5; }
+.monitor-table .monitor-remove { padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:10px; }
+.monitor-table .monitor-automatic-origin,.monitor-table .monitor-pause-badge { display:inline-block; margin:4px 5px 0 0; padding:1px 5px; border:1px solid var(--border); border-radius:4px; font-size:9px; }
+.monitor-table .monitor-dependency-hint { max-width:100%; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; margin-top:4px; font-size:10px; }
+.monitor-table .monitor-failure-streak { font-size:9px; }
+.monitor-table [hidden] { display:none !important; }
+.inventory-table tbody tr[data-status=online]>td { background-color:rgba(36,166,111,.07); }
+.inventory-table tbody tr[data-status=offline]>td { background-color:rgba(215,65,75,.085); }
+.inventory-table tbody tr[data-status=unknown]>td { background-color:rgba(135,103,205,.065); }
+.inventory-table tbody tr[data-status=online]>td:first-child { box-shadow:inset 3px 0 #37a875; }
+.inventory-table tbody tr[data-status=offline]>td:first-child { box-shadow:inset 3px 0 #d65b57; }
+.inventory-table tbody tr[data-status=unknown]>td:first-child { box-shadow:inset 3px 0 #9985cd; }
+@media(max-width:1100px) { .settings-workspace { grid-template-columns:150px minmax(0,1fr); gap:16px; }.monitor-table tbody td { padding:8px; }.monitor-table .monitor-toggle { font-size:9px; } }
+
+.settings-workspace .form-control::placeholder { color:var(--muted); opacity:1; }

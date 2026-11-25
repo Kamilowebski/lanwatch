@@ -1,5 +1,13 @@
 # Historia zmian Lanwatch
 
+## 1.5.1 — 2026-11-25
+
+- Konfiguracja z bocznym menu i jedną widoczną sekcją, zapamiętaniem wyboru oraz obsługą odnośników do sekcji.
+- Kategorie i lokalizacje przewijają się razem ze stroną, bez osobnych pasków i pustych przestrzeni między kartami.
+- Zwarty monitor ze stałymi proporcjami kolumn, krótszymi oznaczeniami pauzy i automatycznego dodania oraz widocznym przyciskiem wyłączenia.
+- Raport otwierany nazwą maszyny; usunięty powielony link z każdego wiersza.
+- Czytelniejsze kolory wierszy i paski statusu po lewej; długie nazwy oraz wskazówki zachowują pełną treść w podpowiedziach.
+
 ## 1.5.0 — 2026-11-25
 
 - Konfigurowalny interwał 15–3600 s (domyślnie 60 s), 1–5 prób ICMP (domyślnie 3), limit 1–16 maszyn równolegle (domyślnie 8).

@@ -1470,18 +1470,17 @@ function renderMonitor() {
     details.textContent = [device.groupName || device.category, device.location]
       .filter(Boolean)
       .join(" · ");
-    const reportLink = document.createElement("button");
-    reportLink.type = "button"; reportLink.className = "monitor-text-action monitor-report-link";
-    reportLink.textContent = "Raport dostępności";
-    reportLink.setAttribute("aria-label", `Raport: ${device.hostName}`);
-    reportLink.addEventListener("click", () => window.openMonitorReport(device));
-    host.append(hostName, details, reportLink);
+    hostName.title = `${device.hostName} — otwórz raport dostępności`;
+    hostName.setAttribute("aria-label", `Raport dostępności: ${device.hostName}`);
+    details.title = details.textContent;
+    host.append(hostName, details);
     if (device.monitorAutomatic) {
       const origin = document.createElement("small");
       origin.className = "monitor-automatic-origin";
       const sources = dependencyReasons.get(device.id) || [];
       origin.textContent = sources.length ? `Automatycznie · zależność dla: ${sources.join(", ")}` : "Automatycznie · brak aktywnej maszyny nadrzędnej";
-      origin.title = "Dodano razem z zależnościami. Wyłączenie maszyny nadrzędnej nie wyłącza tej maszyny.";
+      origin.title = origin.textContent + ". Wyłączenie maszyny nadrzędnej nie wyłącza tej maszyny.";
+      origin.textContent = "Dodano automatycznie";
       host.append(origin);
     }
     row.append(host);
@@ -1522,7 +1521,7 @@ function renderMonitor() {
       notifyOffline: Boolean(device.notifyOffline),
     }));
     monitorCell.className = "monitor-actions";
-    disableMonitor.textContent = "Wyłącz monitor";
+    disableMonitor.textContent = "Wyłącz";
     disableMonitor.className = "monitor-text-action monitor-remove";
     monitorCell.append(disableMonitor);
 

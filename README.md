@@ -392,3 +392,8 @@ W licznikach grup zapis „Grupa 2/6” oznacza 2 maszyny bez odpowiedzi z 6;
 wyłącznie maszyn spoza grupy. Pełny opis jest dostępny po najechaniu na licznik.
 Mapa rozdziela połączone zestawy i wyróżnia bezpośrednie relacje wskazanej maszyny
 przy najechaniu lub fokusie klawiatury. Kliknięcie nadal otwiera szczegóły.
+
+Konfiguracja ma boczne menu i jedną sekcję widoczną naraz; zapamiętuje ostatni wybór.
+Listy kategorii i lokalizacji przewijają się razem ze stroną. W monitorze nazwę
+maszyny można kliknąć, aby otworzyć raport. Skrócone oznaczenia automatycznego
+dodania i wskazówki mają pełną treść w podpowiedzi po najechaniu.
