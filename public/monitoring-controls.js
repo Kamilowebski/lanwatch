@@ -8,7 +8,7 @@
   };
   window.matchesMonitorFilter=device=>{
     const query=$('monitor-search').value.trim().toLocaleLowerCase('pl');
-    return (!$('monitor-problems').checked || device.status!=='online') && (!query || [device.hostName,device.ip,device.groupName,device.monitorNote].some(value=>(value||'').toLocaleLowerCase('pl').includes(query)));
+    return (!$('monitor-problems').checked || device.status!=='online') && (!query || [device.hostName,device.ip,device.groupName,device.monitorNote,...(device.tags||[])].some(value=>(value||'').toLocaleLowerCase('pl').includes(query)));
   };
   window.confirmPingSeries=subject=>{
     const ids=Array.isArray(subject)?subject:[...new Set([subject.id,...devices.filter(device=>(subject.groupName||'').trim() && device.groupName.trim().toLocaleLowerCase('pl')===(subject.groupName||'').trim().toLocaleLowerCase('pl')).map(device=>device.id)])];

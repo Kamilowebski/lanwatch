@@ -734,3 +734,13 @@ button, input, select, textarea { font: inherit; }
 .pingable-device-row { cursor:pointer; }.pingable-device-row:hover>td { background-color:var(--accent-soft) !important; }
 
 .reportable-device-row { cursor:pointer; }.reportable-device-row:hover>td { background-color:var(--accent-soft) !important; }
+.device-tag-chips { display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; }.device-tag-chips:empty { display:none; }.device-tag-chips span { font-size:9px; font-weight:400; padding:1px 5px; border:1px solid var(--border); border-radius:5px; color:var(--accent); background:var(--accent-soft); }
+#inventory-tag-filter { min-width:125px; font-size:11px; }
+.machine-tool-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); font-size:12px; }.machine-tool-row>span { flex:1; min-width:0; overflow-wrap:anywhere; }
+#device-journal-dialog { width:min(700px,calc(100vw - 40px)); }#journal-list { list-style:none; padding:0; }#journal-list li { border-bottom:1px solid var(--border); padding:12px 0; }#journal-list p { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; margin:6px 0; }#journal-list small { color:var(--muted); }
+#journal-form { margin-top:18px; }#journal-more[hidden],#device-template-picker[hidden],#report-comparison[hidden] { display:none; }
+#report-comparison { border:1px solid var(--border); border-radius:9px; padding:16px; margin:14px 0; }#report-comparison h3 { font-size:15px; }#report-comparison p { font-size:11px; color:var(--muted); }
+#comparison-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:14px; }#comparison-form label { font-size:11px; }
+.comparison-table { width:100%; font-size:11px; }.comparison-table td,.comparison-table th { padding:8px; border-bottom:1px solid var(--border); white-space:nowrap; }.comparison-bar { display:flex; height:12px; border-radius:6px; overflow:hidden; background:var(--surface-muted); margin:6px 0 14px; }
+
+@media print { #comparison-form,#compare-toggle { display:none !important; } .comparison-table { break-inside:avoid; } }

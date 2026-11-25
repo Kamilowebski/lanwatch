@@ -274,11 +274,13 @@ function getSummary() {
   return { ...summary, onlineTtlMs: ONLINE_STATUS_TTL_MS };
 }
 
+const machineTools = require("./machine-tools").createMachineTools(database);
 const workspaceStore = require("./workspace-data").createWorkspaceStore(database);
 const monitorSettingsStore = require("./monitoring").createMonitorStore(database);
 function getMonitorSettings() { return monitorSettingsStore.get(); }
 function setMonitorSettings(value) { return monitorSettingsStore.set(value); }
 function failureState(device) {
+  device.tags = machineTools.tags(device.id);
   device.failureStreak = database.prepare("SELECT streak FROM monitor_failures WHERE device_id=?").get(device.id)?.streak || 0;
   device.notificationStatus = device.status === "offline" && device.failureStreak < getMonitorSettings().failureThreshold ? "unknown" : device.status;
   return device;
@@ -603,6 +605,7 @@ function createDevice(device) {
     );
     const newId = Number(result.lastInsertRowid);
     saveDependencies(newId, device.dependencyIds || []);
+    if(device.tags!==undefined)machineTools.setTags(newId,device.tags);
     recordDeviceChange(null,getDevice(newId),'create');
     return newId;
   });
@@ -646,6 +649,7 @@ function updateDevice(id, device) {
       database.prepare("DELETE FROM monitor_failures WHERE device_id = ?").run(id);
       workspaceStore.resetState(id);
     }
+    if(device.tags!==undefined)machineTools.setTags(id,device.tags);
     recordDeviceChange(before,getDevice(id));
   });
   return getDevice(id);
@@ -673,6 +677,43 @@ function deleteDevice(id) {
     auditStore.record(before,null,'delete');
     for(const snapshot of affected)recordDeviceChange(snapshot,getDevice(snapshot.id),'dependencies');
   });
+}
+
+function updateDeviceTags(id,tags) {return withTransaction(()=>{const device=getDevice(id);if(!device)throw Object.assign(new Error('Nie znaleziono maszyny.'),{status:404});const before=inventorySnapshot(device);machineTools.setTags(id,tags);recordDeviceChange(before,getDevice(id));return getDevice(id);});}
+function eraseTrashDevice(id){return withTransaction(()=>machineTools.eraseTrash(id));}
+function trashDevice(id) {
+ return withTransaction(()=>{const device=getDevice(id);if(!device)throw Object.assign(new Error("Nie znaleziono maszyny."),{status:404});const trashId=machineTools.capture(id,device);deleteDevice(id);return {id:trashId};});
+}
+function restoreDevice(trashId) {
+ return withTransaction(()=>{
+  const archived=machineTools.getTrash(trashId),{device,rows}=archived.payload;
+  assertDeviceIdentifiersUnique(device);
+  let category=getCategories().find(v=>v.name.toLocaleLowerCase('pl')===device.category.toLocaleLowerCase('pl'));
+  if(!category)category=createCategory(device.category);
+  let location=getLocations().find(v=>v.name.toLocaleLowerCase('pl')===device.location.toLocaleLowerCase('pl'));
+  if(!location)location=createLocation(device.location);
+  const restored=createDevice({...device,categoryId:category.id,location:location.name,dependencyIds:[],tags:[]});
+  database.prepare('DELETE FROM device_changes WHERE device_uid=?').run(restored.auditUid);
+  database.prepare('UPDATE devices SET audit_uid=?,favorite=? WHERE id=?').run(archived.uid,Number(device.favorite),restored.id);
+  for(const [table,items] of Object.entries(rows)){if(!items.length)continue;const keys=Object.keys(items[0]).filter(key=>key!=='id');const insert=database.prepare(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`);for(const row of items)insert.run(...keys.map(key=>key==='device_id'?restored.id:row[key]));}
+  const pending=database.prepare('SELECT a.id AS a,b.id AS b,l.from_uid,l.to_uid FROM trash_links l JOIN devices a ON a.audit_uid=l.from_uid JOIN devices b ON b.audit_uid=l.to_uid').all();
+  const affected=new Map(pending.filter(link=>link.a!==restored.id).map(link=>[link.a,inventorySnapshot(getDevice(link.a))]));
+  for(const link of pending){database.prepare('INSERT OR IGNORE INTO device_dependencies VALUES(?,?)').run(link.a,link.b);database.prepare('DELETE FROM trash_links WHERE from_uid=? AND to_uid=?').run(link.from_uid,link.to_uid);}
+  for(const [id,before] of affected)recordDeviceChange(before,getDevice(id),'dependencies');
+  database.prepare('DELETE FROM device_trash WHERE id=?').run(trashId);
+  recordDeviceChange(null,getDevice(restored.id),'restore');return getDevice(restored.id);
+ });
+}
+function compareDeviceReports(id,ranges) {
+ if(!getDevice(id))throw Object.assign(new Error('Nie znaleziono maszyny.'),{status:404});
+ const cutoff=historyCutoff();
+ return ranges.map(({from,to})=>{
+  const start=Date.parse(from),end=Date.parse(to);
+  if(!Number.isFinite(start)||!Number.isFinite(end)||start>=end||end-start>30*86400000)throw Object.assign(new Error('Wybierz dwa poprawne okresy, każdy do 30 dni.'),{status:400});
+  const effectiveFrom=new Date(Math.max(start,Date.parse(cutoff))).toISOString();
+  const row=database.prepare(`SELECT COUNT(*) AS total,COALESCE(SUM(status='online'),0) AS online,COALESCE(SUM(status='offline'),0) AS offline,COALESCE(SUM(status='unknown'),0) AS unknown,AVG(CASE WHEN status='online' THEN latency_ms END) AS averageMs FROM device_history WHERE device_id=? AND checked_at>=? AND checked_at<?`).get(id,effectiveFrom,new Date(end).toISOString());
+  return {...row,from:new Date(start).toISOString(),to:new Date(end).toISOString(),effectiveFrom,truncated:start<Date.parse(cutoff),onlinePercent:row.total?row.online/row.total*100:null};
+ });
 }
 
 function importDeviceRows(rows, preview = false) {
@@ -753,6 +794,7 @@ function backupDatabase(manual=false) {
 const snippetStore = require("./snippets").createSnippetStore(database);
 
 module.exports = {
+  updateDeviceTags,eraseTrashDevice,machineTools,trashDevice,restoreDevice,compareDeviceReports,
   workspaceStore,
   getMonitorSettings,setMonitorSettings,
   getHistorySettings,setHistorySettings,pruneDeviceHistory,getDeviceReportData,getDeviceChanges,updateDeviceFavorite,

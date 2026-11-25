@@ -109,6 +109,8 @@ let statusFilter = ["online","offline","unknown"].includes(savedInventoryView.st
 let quickFilter = ["offline","monitored","favorites"].includes(savedInventoryView.quick) ? savedInventoryView.quick : "all";
 elements.search.value = typeof savedInventoryView.query === "string" ? savedInventoryView.query : "";
 elements.filterStatus.value = statusFilter;
+if(typeof savedInventoryView.tag==='string' && savedInventoryView.tag.length<=40 && savedInventoryView.tag){const select=document.getElementById('inventory-tag-filter');select.add(new Option(savedInventoryView.tag,savedInventoryView.tag));select.value=savedInventoryView.tag;}
+
 let dependencyCurrentDeviceId = null;
 let selectedDependencyIds = new Set();
 let dependencyEditorDeviceId = null;
@@ -586,7 +588,7 @@ function matchesDeviceQuery(group, query) {
       device.groupName,
       device.ip,
       device.location,
-      device.category,
+      device.category, ...(device.tags||[]),
     ]),
   ];
   return containsQuery(searchableValues, query);
@@ -651,7 +653,8 @@ function quickFilterMatches(device,key) {
 }
 
 function matchesDeviceFilters(group) {
-  return (!document.getElementById("inventory-problem-groups").checked || ((group.groupName || group.related) && inventoryGroupTargets(group).some(device=>device.status==="offline")))
+  return (!document.getElementById("inventory-tag-filter").value || group.devices.some(device=>(device.tags||[]).includes(document.getElementById("inventory-tag-filter").value)))
+    && (!document.getElementById("inventory-problem-groups").checked || ((group.groupName || group.related) && inventoryGroupTargets(group).some(device=>device.status==="offline")))
     && (quickFilter !== "favorites" || group.devices.some(device=>device.favorite))
     && (quickFilter !== "offline" || group.devices.some(device => device.status === "offline"))
     && (quickFilter !== "monitored" || group.devices.some(device => device.monitorEnabled))
@@ -886,6 +889,8 @@ function openDeviceDetails(device) {
   elements.manageDependenciesFromDetails.onclick = () => openDependencyManager(device);
   document.getElementById("graph-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.openDependencyGraph(device.id);};
   document.getElementById("changes-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.showDeviceChanges(device.id,device.hostName);};
+  document.getElementById("journal-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.openDeviceJournal(device);};
+  document.getElementById("template-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.templateFromDevice(device);};
   document.getElementById("events-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.openMachineEvents(device);};
   elements.deviceDetailsDialog.showModal();
 }
@@ -912,6 +917,18 @@ function categoryIcon(category) {
   path.setAttribute("d", icons[String(category || "").toLocaleLowerCase("pl").trim()] || "M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z");
   svg.append(path);
   return svg;
+}
+
+function deviceTagChips(device) {
+ const line=document.createElement('div');line.className='device-tag-chips';
+ for(const tag of device.tags||[]){const span=document.createElement('span');span.textContent=tag;line.append(span);}return line;
+}
+function syncTagFilter() {
+ const select=document.getElementById('inventory-tag-filter'),current=select.value;
+ const tags=[...new Set(devices.flatMap(device=>device.tags||[]))].sort((a,b)=>a.localeCompare(b,'pl'));
+ if(current&&!tags.includes(current))tags.push(current);
+ const values=['',...tags];if(JSON.stringify([...select.options].map(v=>v.value))!==JSON.stringify(values)){
+ select.replaceChildren(new Option('Wszystkie tagi',''));for(const tag of tags)select.add(new Option(tag,tag));select.value=current;}
 }
 
 function attachSingleRowPing(row, device) {
@@ -949,7 +966,7 @@ function renderDeviceRow(device, isGroupMember = false) {
   favorite.textContent=device.favorite?"★":"☆";favorite.setAttribute("aria-label",`Ulubiona maszyna: ${device.hostName}`);favorite.setAttribute("aria-pressed",String(device.favorite));
   favorite.disabled=window.isDeviceFavoritePending?.(device.id) || false;
   favorite.addEventListener("click",()=>window.toggleDeviceFavorite(device.id,!device.favorite,favorite));
-  titleLine.append(favorite,hostName);hostCell.append(titleLine,makeDeviceAddress(device));
+  titleLine.append(favorite,hostName);hostCell.append(titleLine,makeDeviceAddress(device),deviceTagChips(device));
   if (device.lineNumber) {
     const lineNumber = document.createElement("small");
     lineNumber.className = "line-number-cell";
@@ -1243,6 +1260,7 @@ function renderExpandedGroup(group) {
 }
 
 function renderDevices() {
+  syncTagFilter();
   for (const button of document.querySelectorAll("[data-quick-filter]")) {
     const key = button.dataset.quickFilter;
     button.setAttribute("aria-pressed", String(key === quickFilter));
@@ -1279,7 +1297,7 @@ function renderDevices() {
   }
 
   window.syncInventorySelection();
-  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all" || document.getElementById("inventory-problem-groups").checked);
+  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all" || document.getElementById("inventory-problem-groups").checked || document.getElementById("inventory-tag-filter").value);
   renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
   document.getElementById("result-count").textContent =
     hasFilters ? `${filteredGroups.length} wyników` : "";
@@ -1298,7 +1316,7 @@ function renderDevices() {
     : "Dodaj pierwszą maszynę, aby rozpocząć tworzenie ewidencji.";
   document.getElementById("empty-add-device").classList.toggle("d-none", devices.length > 0);
   savePreference("lanwatch-inventory-view", JSON.stringify({query:elements.search.value,category:categoryFilter,
-    location:locationFilter,status:statusFilter,quick:quickFilter,page:currentPage,expanded:[...expandedGroups]}));
+    location:locationFilter,status:statusFilter,quick:quickFilter,tag:document.getElementById('inventory-tag-filter').value,page:currentPage,expanded:[...expandedGroups]}));
 }
 
 function updateVisibleDeviceStatuses() {
@@ -1356,7 +1374,7 @@ function updateVisibleDeviceStatuses() {
   const query = elements.search.value.trim().toLocaleLowerCase("pl");
   const filteredGroups = searchRelatedGroups(query).filter(matchesDeviceFilters);
   window.syncInventorySelection();
-  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all" || document.getElementById("inventory-problem-groups").checked);
+  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all" || document.getElementById("inventory-problem-groups").checked || document.getElementById("inventory-tag-filter").value);
   renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
 }
 
@@ -1530,7 +1548,7 @@ function renderMonitor() {
   };
   for (const device of monitoredDevices) {
     const metadata = JSON.stringify([device.id, device.hostName, device.ip, device.category,
-      device.groupName, device.location, device.notifyOnline, device.notifyOffline, device.monitorAutomatic, dependencyReasons.get(device.id),
+      device.groupName, device.location,device.tags, device.notifyOnline, device.notifyOffline, device.monitorAutomatic, dependencyReasons.get(device.id),
       pendingMonitorUpdates.has(device.id)]);
     const existing = previousRows.get(String(device.id));
     if (existing && existing.dataset.metadata === metadata) {
@@ -1559,7 +1577,7 @@ function renderMonitor() {
     hostName.title = `${device.hostName} — otwórz raport dostępności`;
     hostName.setAttribute("aria-label", `Raport dostępności: ${device.hostName}`);
     details.title = details.textContent;
-    host.append(hostName, makeDeviceAddress(device), details);
+    host.append(hostName, makeDeviceAddress(device), details,deviceTagChips(device));
     if (device.monitorAutomatic) {
       const origin = document.createElement("small");
       origin.className = "monitor-automatic-origin";
@@ -1692,7 +1710,7 @@ function inventoryMetadataChanged(nextDevices) {
     item.category,
     item.lineNumber,
     item.numerator,
-    item.description,
+    item.description,item.tags,
     item.dependencyIds,
     item.monitorEnabled,
     item.notifyOnline,
@@ -1730,6 +1748,7 @@ async function refresh({ preserveInventory = false } = {}) {
       onlineTtlMs = summary.onlineTtlMs;
       metadataRefreshedAt = Date.now();
       renderSettings();
+      window.refreshMachineFeatureOptions?.();
       if (!document.getElementById("settings-view").classList.contains("d-none")) refreshBackupStatus();
     } else if (!canPreserveInventory) {
       renderNamedItems("category",categories); renderNamedItems("location",locations);
@@ -1857,6 +1876,8 @@ function openDeviceForm(device = null) {
   document.getElementById("line-number").value = device?.lineNumber || "";
   document.getElementById("numerator").value = device?.numerator || "";
   document.getElementById("device-description").value = device?.description || "";
+  document.getElementById("device-tags").value=(device?.tags||[]).join(", ");
+  window.prepareDeviceTemplate?.(device);
   elements.categories.value = device?.categoryId || categories[0]?.id || "";
   categorySelectionManual = Boolean(device);
   initialCategoryValue = elements.categories.value;
@@ -1926,11 +1947,11 @@ async function removeNamedItem(type, item) {
 }
 
 async function removeDevice(device) {
-  if (!window.confirm(`Czy na pewno usunąć maszynę „${device.hostName}”?`)) return;
+  if (!window.confirm(`Przenieść maszynę „${device.hostName}” do kosza? Jej dane będzie można przywrócić.`)) return;
   try {
     await api(`/api/devices/${device.id}`, { method: "DELETE" });
     await refresh();
-    notify("Maszyna została usunięta.");
+    notify("Maszyna została przeniesiona do kosza.");
   } catch (error) {
     notify(error.message, "danger");
   }
@@ -2020,6 +2041,7 @@ async function pingVisibleDevices(button) {
   }
 }
 
+document.getElementById('inventory-tag-filter').addEventListener('change',()=>{currentPage=1;renderDevices();});
 const problemGroupsInput=document.getElementById("inventory-problem-groups");
 problemGroupsInput.checked=readPreference("lanwatch-problem-groups")==="true";
 problemGroupsInput.addEventListener("change",()=>{
@@ -2150,6 +2172,7 @@ async function saveDevice(event) {
     !id;
   const formData = new FormData(elements.deviceForm);
   const device = Object.fromEntries(formData.entries());
+  device.tags=document.getElementById("device-tags").value.split(",").map(v=>v.trim()).filter(Boolean);
   if (!id) device.dependencyIds = Array.from(selectedDependencyIds);
   const nextDefaults = {
     groupName: device.groupName,

@@ -1,5 +1,13 @@
 # Historia zmian Lanwatch
 
+## 1.7.0 — 2026-11-25
+
+- Trwały dziennik prac maszyny: wpisy do 5000 znaków, stronicowanie i usuwanie wpisów; niezależny od notatki monitora. Dostępny ze szczegółów i raportu.
+- Tagi maszyn: do 12 tagów po 40 znaków, edycja w formularzu oraz dzienniku, widoczne oznaczenia, filtr ewidencji, wyszukiwanie w monitorze i obsługa zapisanych widoków.
+- Szablony dodawania: kategoria, lokalizacja, grupa, opis, linia, numerator i tagi; tworzenie w konfiguracji lub z maszyny. Host i IP nie są kopiowane.
+- Kosz zamiast bezpowrotnego usuwania: przywracanie historii, monitora, notatek, zdarzeń, dziennika, tagów, ulubionego i zależności. Konflikt hosta/IP blokuje przywrócenie bez nadpisywania. Osobna opcja trwałego usunięcia.
+- Porównanie dwóch okresów w raporcie: liczby i procenty wyników, średnie opóźnienia i paski udziałów; dokładne statystyki, informacja o ograniczeniu retencją i obsługa wydruku PDF.
+
 ## 1.6.2 — 2026-11-25
 
 - Kliknięcie pustego miejsca wiersza w monitorze otwiera raport maszyny bez wykonywania pingu.

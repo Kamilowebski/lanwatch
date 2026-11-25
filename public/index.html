@@ -106,7 +106,7 @@
             </div>
             <label class="monitor-sort-option" title="Grupy z maszyną lub zależnością bez odpowiedzi; wyniki nieustalone nie są traktowane jako awaria."><input type="checkbox" id="inventory-problem-groups"> Grupy z problemami</label>
             <button class="monitor-action" id="collapse-all-groups" type="button">Zwiń wszystkie grupy</button>
-            <span class="result-count" id="result-count"></span>
+            <label class="monitor-sort-option">Tag<select class="form-select" id="inventory-tag-filter"><option value="">Wszystkie tagi</option></select></label><span class="result-count" id="result-count"></span>
             <button class="btn btn-sm btn-outline-secondary" id="ping-visible-devices" type="button" disabled>
               Pinguj widoczne
             </button>
@@ -205,7 +205,7 @@
               <p class="page-subtitle">Wybierz sekcję, aby zmienić ustawienia aplikacji.</p>
             </div>
           </section>
-          <nav class="settings-section-nav" aria-label="Sekcje konfiguracji"><a href="#settings-categories">Kategorie</a><a href="#settings-locations">Lokalizacje</a><a href="#settings-ssh">SSH</a><a href="#settings-appearance">Wygląd</a><a href="#settings-backups">Kopie zapasowe</a><a href="#settings-history">Historia</a><a href="#settings-monitor">Monitorowanie</a></nav>
+          <nav class="settings-section-nav" aria-label="Sekcje konfiguracji"><a href="#settings-categories">Kategorie</a><a href="#settings-locations">Lokalizacje</a><a href="#settings-ssh">SSH</a><a href="#settings-appearance">Wygląd</a><a href="#settings-backups">Kopie zapasowe</a><a href="#settings-history">Historia</a><a href="#settings-monitor">Monitorowanie</a><a href="#settings-templates">Szablony</a><a href="#settings-trash">Kosz</a></nav>
           <div class="settings-grid">
             <section class="settings-card" id="settings-categories">
               <div class="settings-card-heading">
@@ -283,6 +283,8 @@
               <label for="monitor-threshold">Kolejne nieudane sprawdzenia przed alertem (1–10)</label><input id="monitor-threshold" class="form-control" type="number" min="1" max="10" required>
               <button class="monitor-action" type="submit">Zapisz ustawienia</button><p id="monitor-settings-status" role="status"></p><small>Pierwszy brak odpowiedzi jest widoczny od razu. Próg opóźnia tylko alert. Wynik online lub nieustalony przerywa serię niepowodzeń. Długi cykl nie nakłada się na kolejny.</small>
             </form></section>
+            <section class="settings-card" id="settings-templates"><div class="settings-card-heading"><h2>Szablony maszyn</h2><p>Klasyfikacja, opis i tagi — bez kopiowania hosta i IP</p></div><form class="settings-form" id="template-form"><label>Nazwa szablonu<input class="form-control" id="template-name" maxlength="60" required></label><label>Kategoria<select class="form-select" id="template-category" required></select></label><label>Lokalizacja<select class="form-select" id="template-location" required></select></label><label>Grupa<input class="form-control" id="template-group" maxlength="255"></label><label>Linia<input class="form-control" id="template-line" maxlength="255"></label><label>Numerator<input class="form-control" id="template-numerator" maxlength="255"></label><label>Opis<textarea class="form-control" id="template-description" maxlength="5000"></textarea></label><label>Tagi (oddzielone przecinkami)<input class="form-control" id="template-tags"></label><button type="submit" class="monitor-action">Zapisz szablon</button><p id="template-status" role="status"></p></form><div class="settings-form" id="template-list"></div></section>
+            <section class="settings-card" id="settings-trash"><div class="settings-card-heading"><h2>Kosz maszyn</h2><p>Przywracanie danych i powiązań bez nadpisywania istniejących maszyn</p><button type="button" class="monitor-action" id="trash-refresh">Odśwież kosz</button></div><div class="settings-form"><p id="trash-status" role="status"></p><div id="trash-list"></div></div></section>
             <section class="settings-card settings-preference-card" id="settings-history"><div class="settings-card-heading"><div><h2>Przechowywanie historii</h2><p>Czas przechowywania wyników pingowania</p></div></div><form class="settings-form" id="history-settings-form"><label for="history-retention-days">Okres</label><select class="form-select" id="history-retention-days"><option value="1">1 dzień</option><option value="7">7 dni</option><option value="30">30 dni</option></select><button class="monitor-action" type="submit" id="history-settings-save">Zapisz okres</button><p id="history-settings-status" class="settings-save-state" role="status">Wczytywanie…</p><small>Skrócenie okresu usuwa starsze wyniki w tle. Nie przywraca to wyników skasowanych wcześniej. Dłuższa historia zwiększa rozmiar bazy i kopii.</small></form></section>
             <section class="settings-card settings-backup-card" id="settings-backups">
               <div class="settings-card-heading"><div><h2>Kopie zapasowe</h2><p>Cała baza, lokalnie · do 7 dziennych i 7 ręcznych kopii</p></div><button type="button" class="monitor-action" id="backup-create">Utwórz kopię teraz</button><button type="button" class="monitor-action" id="backup-status-refresh">Odśwież status</button></div>
@@ -305,7 +307,7 @@
           <button class="icon-button" type="button" data-close="device-dialog" aria-label="Zamknij">×</button>
         </div>
         <input id="device-id" type="hidden">
-        <div class="device-form-sections"><fieldset class="form-grid form-section"><legend><span>01</span> Dane podstawowe</legend>
+        <div id="device-template-picker" class="settings-form"><label for="device-template">Użyj szablonu</label><select id="device-template" class="form-select"><option value="">Bez szablonu</option></select></div><div class="device-form-sections"><fieldset class="form-grid form-section"><legend><span>01</span> Dane podstawowe</legend>
           <div class="form-field">
             <label for="host-name">Nazwa hosta <span>*</span></label>
             <input class="form-control" id="host-name" name="hostName" maxlength="255" required>
@@ -342,7 +344,7 @@
             <input class="form-control" id="numerator" name="numerator" maxlength="255">
           </div>
           <div class="form-field form-field-wide">
-            <label for="device-description">Opis</label>
+            <label for="device-tags">Tagi (oddzielone przecinkami)</label><input class="form-control" id="device-tags" maxlength="500" placeholder="krytyczna, do wymiany"><label for="device-description">Opis</label>
             <textarea class="form-control" id="device-description" name="description" rows="3" maxlength="5000"></textarea>
           </div>
           <div class="form-field form-field-wide" id="dependency-create-field">
@@ -417,17 +419,19 @@
       </section>
       <div class="dialog-actions">
         <button class="btn btn-outline-secondary" type="button" data-close="device-details-dialog">Zamknij</button>
-        <button type="button" class="monitor-action" id="graph-from-details">Mapa zależności</button><button type="button" class="monitor-action" id="events-from-details">Zdarzenia</button><button type="button" class="monitor-action" id="changes-from-details">Zmiany maszyny</button>
+        <button type="button" class="monitor-action" id="graph-from-details">Mapa zależności</button><button type="button" class="monitor-action" id="events-from-details">Zdarzenia</button><button type="button" class="monitor-action" id="journal-from-details">Dziennik prac i tagi</button><button type="button" class="monitor-action" id="template-from-details">Zapisz jako szablon</button><button type="button" class="monitor-action" id="changes-from-details">Zmiany maszyny</button>
         <button class="btn btn-outline-secondary" id="manage-dependencies-from-details" type="button">Zależności</button>
         <button class="btn btn-primary" id="edit-device-from-details" type="button">Edytuj maszynę</button>
       </div>
     </dialog>
 
+    <dialog class="app-dialog" id="device-journal-dialog"><div class="dialog-header"><h2 id="journal-title">Dziennik prac</h2><button type="button" class="icon-button" data-close="device-journal-dialog" aria-label="Zamknij dziennik">×</button></div><div class="settings-form"><form id="journal-tags-form"><label>Tagi maszyny<input class="form-control" id="journal-tags"></label><button type="submit" class="monitor-action">Zapisz tagi</button></form><form id="journal-form"><label>Nowy wpis<textarea class="form-control" id="journal-body" maxlength="5000" required rows="3"></textarea></label><button type="submit" class="monitor-action">Dodaj wpis</button></form><p id="journal-status" role="status"></p><ol id="journal-list"></ol><button type="button" class="monitor-action" id="journal-more" hidden>Starsze wpisy</button></div></dialog>
     <dialog class="app-dialog" id="machine-events-dialog"><div class="dialog-header"><h2 id="machine-events-title">Zdarzenia maszyny</h2><button type="button" class="icon-button" data-close="machine-events-dialog" aria-label="Zamknij zdarzenia">×</button></div><div class="machine-events-body"><p id="machine-events-message" role="status"></p><ol id="machine-events-list"></ol><button type="button" class="monitor-action" id="machine-events-more" hidden>Starsze zdarzenia</button></div></dialog>
     <dialog class="app-dialog monitor-report-dialog" id="monitor-report-dialog">
       <div class="dialog-header"><div><p class="eyebrow">RAPORT DOSTĘPNOŚCI</p><h2 id="monitor-report-title"></h2></div><button type="button" class="icon-button" data-close="monitor-report-dialog" aria-label="Zamknij raport">×</button></div>
       <div class="monitor-report-body">
-        <div class="report-toolbar"><label>Zakres <select class="form-select" id="report-range"><option value="1">Ostatnia godzina</option><option value="24" selected>Ostatnie 24 godziny</option><option value="168">Ostatnie 7 dni</option><option value="720">Ostatnie 30 dni</option><option value="all">Cała zachowana historia</option></select></label><div><button type="button" class="monitor-action" id="report-refresh">Odśwież raport</button> <button type="button" class="monitor-action" id="report-events">Zdarzenia</button><button type="button" class="monitor-action monitor-action-primary" id="report-pdf" disabled>Zapisz PDF / drukuj</button></div></div>
+        <div class="report-toolbar"><label>Zakres <select class="form-select" id="report-range"><option value="1">Ostatnia godzina</option><option value="24" selected>Ostatnie 24 godziny</option><option value="168">Ostatnie 7 dni</option><option value="720">Ostatnie 30 dni</option><option value="all">Cała zachowana historia</option></select></label><div><button type="button" class="monitor-action" id="report-refresh">Odśwież raport</button> <button type="button" class="monitor-action" id="report-events">Zdarzenia</button><button type="button" class="monitor-action" id="report-journal">Dziennik prac</button><button type="button" class="monitor-action" id="compare-toggle" aria-expanded="false">Porównaj okresy</button><button type="button" class="monitor-action monitor-action-primary" id="report-pdf" disabled>Zapisz PDF / drukuj</button></div></div>
+        <section id="report-comparison" hidden><h3>Porównanie okresów</h3><p>Procenty dotyczą zapisanych sprawdzeń, a nie czasu działania. Każdy okres może mieć do 30 dni.</p><form id="comparison-form"><label>Okres A od<input type="datetime-local" id="compare-from-a" class="form-control" required></label><label>Okres A do<input type="datetime-local" id="compare-to-a" class="form-control" required></label><label>Okres B od<input type="datetime-local" id="compare-from-b" class="form-control" required></label><label>Okres B do<input type="datetime-local" id="compare-to-b" class="form-control" required></label><button type="submit" class="monitor-action">Porównaj</button></form><p id="comparison-message" role="status"></p><div id="comparison-results"></div></section>
         <p id="report-print-meta" class="report-print-meta"></p><p id="report-message" role="status"></p>
         <div id="report-content" hidden><div id="report-stats" class="report-stats"></div>
         <section class="report-chart-panel"><h3>Dostępność w czasie</h3><p>Każdy punkt to jedno sprawdzenie. Przerwy między punktami nie potwierdzają stanu urządzenia.</p><div id="report-chart"></div></section>
@@ -464,6 +468,7 @@
     <script src="/monitoring-controls.js" defer></script>
     <script src="/layout.js" defer></script>
     <script src="/workspace-tools.js" defer></script>
+    <script src="/machine-features.js" defer></script>
     <script src="/snippets.js" defer></script>
   </body>
 </html>

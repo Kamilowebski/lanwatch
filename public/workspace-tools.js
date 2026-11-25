@@ -1,10 +1,12 @@
 (() => {
  const $=id=>document.getElementById(id);
  let views=[];
- function filters(scope){return scope==='inventory'?{query:elements.search.value,category:categoryFilter,location:locationFilter,status:statusFilter,quick:quickFilter,problems:$('inventory-problem-groups').checked}:{query:$('monitor-search').value,problems:$('monitor-problems').checked,offlineFirst};}
+ function filters(scope){return scope==='inventory'?{query:elements.search.value,tag:$('inventory-tag-filter').value,category:categoryFilter,location:locationFilter,status:statusFilter,quick:quickFilter,problems:$('inventory-problem-groups').checked}:{query:$('monitor-search').value,problems:$('monitor-problems').checked,offlineFirst};}
  function apply(view){const f=view.filters;
   if(view.scope==='inventory'){
    elements.search.value=f.query||'';categoryFilter=categories.some(item=>String(item.id)===f.category)?f.category:'';locationFilter=locations.some(item=>item.name===f.location)?f.location:'';statusFilter=f.status||'';quickFilter=f.quick||'all';
+   if(f.tag && ![...$('inventory-tag-filter').options].some(option=>option.value===f.tag))$('inventory-tag-filter').add(new Option(f.tag,f.tag));
+   $('inventory-tag-filter').value=f.tag||'';
    elements.filterCategory.value=categoryFilter;elements.filterLocation.value=locationFilter;elements.filterStatus.value=statusFilter;
    $('inventory-problem-groups').checked=!!f.problems;savePreference('lanwatch-problem-groups',String(!!f.problems));currentPage=1;renderDevices();
   }else{

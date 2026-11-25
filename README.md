@@ -246,7 +246,7 @@ waliduje i importuje wszystko w jednej transakcji. Niepoprawny IPv4, konflikt ho
 lub IP, błędna zależność albo inny błąd odrzuca cały plik bez częściowego zapisu.
 Import tylko dodaje — nie nadpisuje istniejących maszyn. Limit: 500 maszyn, 900 KB.
 
-CSV nie zawiera historii pingowania, notatek monitora ani jego ustawień. Do pełnego
+CSV nie zawiera historii pingowania, notatek monitora, jego ustawień, tagów maszyn, dzienników prac, szablonów ani kosza. Do pełnego
 odtworzenia aplikacji służy kopia SQLite. Kategorie i lokalizacje brakujące w bazie
 zostaną utworzone po potwierdzeniu importu.
 
@@ -440,8 +440,8 @@ sprawdzenie w serii, potwierdzenie awarii i powrót online. Rejestr zaczyna się
 bez odtwarzania wcześniejszych wydarzeń. Wyniki nieustalone przerywają serię kolejnych
 niepowodzeń; powrót online zamyka otwarty incydent. Zdarzenia pokazują chwile pomiarów,
 a nie dokładny początek czy czas trwania awarii. Wyłączenie monitora lub zmiana hosta/IP
-resetuje stan incydentu. Lista jest stronicowana po 50 wpisów; usunięcie maszyny usuwa
-jej zdarzenia (dziennik zmian ewidencji pozostaje osobną funkcją).
+resetuje stan incydentu. Lista jest stronicowana po 50 wpisów. Od 1.7.0 usunięcie maszyny przenosi jej
+zdarzenia do kosza razem z pozostałymi danymi (dziennik zmian ewidencji pozostaje osobną funkcją).
 
 W **Konfiguracja → Kopie zapasowe** przycisk **Utwórz kopię teraz** wykonuje świeżą
 kopię, nawet jeżeli kopia dzienna już istnieje. Pliki `lanwatch-manual-*.sqlite` powstają
@@ -460,3 +460,41 @@ tło wskazuje trwające sprawdzenie; kolejne kliknięcia wiersza nie dublują go
 
 Wybranie zapisanego widoku z listy natychmiast stosuje jego filtry, bez dodatkowego
 przycisku. Zapisanie nowego widoku nie uruchamia sprawdzania dostępności.
+
+### Dziennik prac, tagi, szablony i kosz (1.7.0)
+
+**Dziennik prac i tagi** otworzysz ze szczegółów maszyny; dziennik jest dostępny także
+z jej raportu. Trwałe wpisy (do 5000 znaków) nie znikają po wyłączeniu monitorowania.
+Wpisy mają datę utworzenia, stronicowanie po 50 i możliwość usunięcia po potwierdzeniu.
+Tagi wpisuj po przecinku: do 12 tagów po 40 znaków. Są normalizowane do małych liter
+i deduplikowane. Widać je przy maszynie; ewidencja ma filtr tagu, a monitor wyszukuje
+również po tagach. Zapisane widoki ewidencji zapamiętują filtr tagu.
+
+**Konfiguracja → Szablony** pozwala zapisać do 50 zestawów domyślnych pól. Szablon
+można też przygotować ze szczegółów istniejącej maszyny, a następnie nazwać i zapisać.
+Przy dodawaniu nowej maszyny wybierz szablon z listy; host i IP pozostają do podania.
+Szablon kopiuje kategorię, lokalizację, grupę, opis, linię, numerator i tagi. Jeśli jego
+kategoria lub lokalizacja już nie istnieje, należy wybrać je ręcznie przed zapisem.
+Zastosowanie szablonu samo nie dodaje maszyny ani nie uruchamia pingów.
+
+Usunięcie maszyny przenosi ją do **Konfiguracja → Kosz**. Z aktywnego monitora
+znika, lecz kosz przechowuje dane maszyny, historię pomiarów, ustawienia i notatkę
+monitora, zdarzenia, dziennik prac, tagi oraz ulubione. Przywracanie nie nadpisuje
+aktywnej maszyny o tym samym hoście lub IP — konflikt pozostawia dane w koszu.
+Brakująca kategoria lub lokalizacja jest odtwarzana. Przywracany jest zapisany stan
+monitorowania; globalne i grupowe pauzy nadal obowiązują. Zależności wracają, gdy oba
+urządzenia są aktywne, także przy przywracaniu w różnej kolejności. Historię po
+przywróceniu nadal ogranicza ustawiona retencja. Kosz nie jest opróżniany automatycznie;
+**Usuń na zawsze** wymaga potwierdzenia i kasuje zapisane tam dane danej maszyny.
+Maszyn usuniętych przed aktualizacją do 1.7.0 nie można odzyskać przez nowy kosz.
+
+W raporcie **Porównaj okresy** pozwala wybrać dwa przedziały dat, każdy do 30 dni.
+Domyślnie porównuje ostatnie 24 godziny z poprzednimi 24 godzinami. Przedziały obejmują
+początek i wykluczają koniec, aby granicznego pomiaru nie liczyć dwa razy. Statystyki
+obejmują wszystkie zachowane pomiary, nie próbkę punktów z wykresu. Pokazują liczbę
+wyników online, bez odpowiedzi i nieustalonych, udział online oraz średnie opóźnienie
+z poprawnych odpowiedzi. **To udział sprawdzeń, nie procent czasu działania.**
+Brak pomiarów jest oznaczony kreską, a okres ucięty retencją ma wyraźny komunikat.
+Wynik porównania można dołączyć do wydruku PDF, pozostawiając tę sekcję otwartą.
+
+Wszystkie nowe dane są w bazie SQLite i pełnych kopiach. CSV ewidencji ich nie przenosi.

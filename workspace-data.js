@@ -3,7 +3,7 @@ const fail=message=>{throw Object.assign(new Error(message),{status:400});};
 function validateView(value){
  if(!value||!['inventory','monitor'].includes(value.scope)||typeof value.name!=='string'||!value.name.trim()||value.name.length>60)fail('Podaj nazwę widoku (do 60 znaków) i prawidłową zakładkę.');
  const f=value.filters;if(!f||typeof f!=='object'||Array.isArray(f))fail('Nieprawidłowe filtry.');
- const allowed=value.scope==='inventory'?['query','category','location','status','quick','problems']:['query','problems','offlineFirst'];
+ const allowed=value.scope==='inventory'?['query','category','location','status','quick','problems','tag']:['query','problems','offlineFirst'];
  if(Object.keys(f).some(key=>!allowed.includes(key)))fail('Nieznane filtry widoku.');
  for(const [key,item] of Object.entries(f))if(['problems','offlineFirst'].includes(key)?typeof item!=='boolean':typeof item!=='string'||item.length>200)fail('Nieprawidłowa wartość filtra.');
  if(f.status!==undefined&&!['','online','offline','unknown'].includes(f.status))fail('Nieprawidłowy status.');

@@ -13,6 +13,7 @@ if (typeof window !== 'undefined') (() => {
   const message=document.getElementById('report-message');
   const content=document.getElementById('report-content');
   const pdf=document.getElementById('report-pdf');
+  const hasComparison=()=>!document.getElementById('report-comparison').hidden&&document.getElementById('comparison-results').children.length>0;
   const labels={online:'Online',offline:'Brak odpowiedzi',unknown:'Nieustalony'};
   const colors={online:'#37a875',offline:'#d65b57',unknown:'#9a91d7'};
   const number=value=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(value);
@@ -47,12 +48,12 @@ if (typeof window !== 'undefined') (() => {
   async function load() {
     if(!currentDevice)return;
     const token=++version;
-    message.textContent='Wczytywanie raportu…';message.hidden=false;content.hidden=true;pdf.disabled=true;
+    message.textContent='Wczytywanie raportu…';message.hidden=false;content.hidden=true;pdf.disabled=!hasComparison();document.getElementById('report-print-meta').textContent='';
     try {
       const result=await api(`/api/devices/${currentDevice.id}/report?hours=${range.value}`);
       const {items}=result;
       if(token!==version)return;
-      if(!items.length){message.textContent='Brak sprawdzeń w wybranym zakresie. Wybierz dłuższy okres lub uruchom monitoring.';return;}
+      if(!items.length){pdf.disabled=!hasComparison();message.textContent='Brak sprawdzeń w wybranym zakresie. Wybierz dłuższy okres lub uruchom monitoring.';return;}
       const summary=result.summary || summarizeReport(items),stats=document.getElementById('report-stats');stats.replaceChildren();
       for(const key of Object.keys(labels)) {
         const card=document.createElement('article');card.className=`report-stat report-stat-${key}`;
@@ -75,11 +76,12 @@ if (typeof window !== 'undefined') (() => {
   document.getElementById('report-refresh').addEventListener('click',load);
   dialog.addEventListener('close',()=>{if(!dialog.open)version++;});
   pdf.addEventListener('click',()=>{if(!pdf.disabled)window.print();});
-  window.addEventListener('beforeprint',()=>{if(dialog.open && !content.hidden)document.body.dataset.printReport='true';});
+  window.addEventListener('beforeprint',()=>{if(dialog.open && (!content.hidden || hasComparison()))document.body.dataset.printReport='true';});
   window.addEventListener('afterprint',()=>{delete document.body.dataset.printReport;});
+  document.getElementById("report-journal").addEventListener("click",()=>{if(currentDevice){dialog.close();window.openDeviceJournal(currentDevice);}});
   document.getElementById("report-events").addEventListener("click",()=>{if(currentDevice){dialog.close();window.openMachineEvents(currentDevice);}});
   window.openMonitorReport=device=>{
-    currentDevice=device;document.getElementById('monitor-report-title').textContent=device.hostName;
+    currentDevice=device;window.prepareReportComparison?.(device);document.getElementById('monitor-report-title').textContent=device.hostName;
     if(!dialog.open)dialog.showModal();load();
   };
 })();

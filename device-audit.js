@@ -1,4 +1,4 @@
-const FIELDS=['hostName','ip','groupName','location','category','description','lineNumber','numerator','dependencies'];
+const FIELDS=['hostName','ip','groupName','location','category','description','lineNumber','numerator','dependencies','tags'];
 function createAuditStore(database) {
   database.exec(`CREATE TABLE IF NOT EXISTS device_changes (
     id INTEGER PRIMARY KEY, device_id INTEGER NOT NULL, device_uid TEXT NOT NULL,

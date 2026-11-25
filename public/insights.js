@@ -27,8 +27,8 @@
   });
   document.querySelector('[data-view="settings-view"]').addEventListener('click',loadRetention);
 
-  const fieldNames={hostName:'Nazwa hosta',ip:'IPv4',groupName:'Grupa',location:'Lokalizacja',category:'Kategoria',description:'Opis',lineNumber:'Numer linii',numerator:'Numerator',dependencies:'Zależności'};
-  const actions={create:'Dodanie',update:'Edycja',delete:'Usunięcie',dependencies:'Zależności',bulk:'Zmiana zbiorcza',classification:'Zmiana nazwy kategorii / lokalizacji'};
+  const fieldNames={hostName:'Nazwa hosta',ip:'IPv4',groupName:'Grupa',location:'Lokalizacja',category:'Kategoria',description:'Opis',lineNumber:'Numer linii',numerator:'Numerator',dependencies:'Zależności',tags:'Tagi'};
+  const actions={create:'Dodanie',update:'Edycja',delete:'Usunięcie',dependencies:'Zależności',tags:'Tagi',bulk:'Zmiana zbiorcza',classification:'Zmiana nazwy kategorii / lokalizacji',restore:'Przywrócenie'};
   let changesVersion=0,changesDevice=null,nextChanges=null,changesHost='';
   const display=value=>value===null?'—':Array.isArray(value)?value.join(', ') || '—':String(value) || '—';
   async function loadChanges(append=false) {

@@ -9,7 +9,7 @@ const { monitorEventLoopDelay } = require("node:perf_hooks");
 const databaseFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname,"data","lanwatch.sqlite");
 const diagnostics = require("./diagnostics").createLogger(path.join(path.dirname(databaseFile),"logs"));
 const {
-  workspaceStore,backupDatabase, getMonitorSettings,setMonitorSettings,
+  updateDeviceTags,eraseTrashDevice,machineTools,trashDevice,restoreDevice,compareDeviceReports,workspaceStore,backupDatabase, getMonitorSettings,setMonitorSettings,
   getHistorySettings,setHistorySettings,pruneDeviceHistory,getDeviceReportData,getDeviceChanges,updateDeviceFavorite,
   importDeviceRows, bulkUpdateDevices,
   snippetStore,
@@ -47,6 +47,7 @@ const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/vendor/bootstrap-5.3.8.min.css": {file:"vendor/bootstrap-5.3.8.min.css",type:"text/css; charset=utf-8"},
   "/clipboard.js": {file:"clipboard.js",type:"text/javascript; charset=utf-8"},
+  "/machine-features.js": {file:"machine-features.js",type:"text/javascript; charset=utf-8"},
   "/workspace-tools.js": {file:"workspace-tools.js",type:"text/javascript; charset=utf-8"},
   "/layout.js": {file:"layout.js",type:"text/javascript; charset=utf-8"},
   "/monitoring-controls.js": {file:"monitoring-controls.js",type:"text/javascript; charset=utf-8"},
@@ -222,6 +223,7 @@ function validateDevice(input) {
   if (input.dependencyIds !== undefined) {
     device.dependencyIds = validateDependencyIds(input.dependencyIds);
   }
+  if(input.tags!==undefined)device.tags=machineTools.validateTags(input.tags);
   return device;
 }
 
@@ -418,6 +420,25 @@ async function handleApi(request, response, pathname) {
       throw new HttpError(415, "Wymagany format application/json.");
     }
   }
+
+  if(pathname==='/api/templates'&&request.method==='GET'){sendJson(response,200,{items:machineTools.templates()});return;}
+  if(pathname==='/api/templates'&&request.method==='POST'){sendJson(response,201,machineTools.saveTemplate(await readJson(request)));return;}
+  const templateMatch=pathname.match(/^\/api\/templates\/([a-f0-9-]+)$/);
+  if(templateMatch&&request.method==='DELETE'){machineTools.deleteTemplate(templateMatch[1]);sendJson(response,200,{ok:true});return;}
+  if(pathname==='/api/trash'&&request.method==='GET'){sendJson(response,200,{items:machineTools.trash()});return;}
+  const trashMatch=pathname.match(/^\/api\/trash\/([a-f0-9-]+)(\/restore)?$/);
+  if(trashMatch&&trashMatch[2]&&request.method==='POST'){sendJson(response,200,restoreDevice(trashMatch[1]));return;}
+  if(trashMatch&&!trashMatch[2]&&request.method==='DELETE'){eraseTrashDevice(trashMatch[1]);sendJson(response,200,{ok:true});return;}
+  const tagsMatch=pathname.match(/^\/api\/devices\/(\d+)\/tags$/);
+  if(tagsMatch&&request.method==='PUT'){sendJson(response,200,updateDeviceTags(Number(tagsMatch[1]),(await readJson(request))?.tags));return;}
+  const journalMatch=pathname.match(/^\/api\/devices\/(\d+)\/journal(?:\/(\d+))?$/);
+  if(journalMatch){const id=Number(journalMatch[1]);if(!getDevice(id))throw new HttpError(404,'Nie znaleziono maszyny.');
+   if(request.method==='GET'){const before=Number(new URL(request.url,'http://localhost').searchParams.get('before')||Number.MAX_SAFE_INTEGER);if(!Number.isSafeInteger(before)||before<1)throw new HttpError(400,'Nieprawidłowa strona.');sendJson(response,200,machineTools.journal(id,before));return;}
+   if(request.method==='POST'&&!journalMatch[2]){sendJson(response,201,machineTools.addNote(id,(await readJson(request))?.body));return;}
+   if(request.method==='DELETE'&&journalMatch[2]){machineTools.deleteNote(id,Number(journalMatch[2]));sendJson(response,200,{ok:true});return;}
+  }
+  const compareMatch=pathname.match(/^\/api\/devices\/(\d+)\/compare$/);
+  if(compareMatch&&request.method==='GET'){const p=new URL(request.url,'http://localhost').searchParams;sendJson(response,200,{items:compareDeviceReports(Number(compareMatch[1]),[{from:p.get('fromA'),to:p.get('toA')},{from:p.get('fromB'),to:p.get('toB')}])});return;}
 
   if(pathname==="/api/saved-views" && request.method==="GET"){sendJson(response,200,{items:workspaceStore.listViews()});return;}
   if(pathname==="/api/saved-views" && request.method==="POST"){sendJson(response,201,workspaceStore.saveView(await readJson(request)));return;}
@@ -685,7 +706,7 @@ async function handleApi(request, response, pathname) {
   }
   if (deviceMatch && request.method === "DELETE") {
     const deviceId = Number(deviceMatch[1]);
-    deleteDevice(deviceId);
+    trashDevice(deviceId);
     sendJson(response, 200, { ok: true });
     return;
   }
