@@ -285,9 +285,30 @@ Ewidencja, ustawienia SSH, monitoring, notatki, historia i snippety są w SQLite
 Motyw, filtry, rozmiar strony i rozwinięte grupy są przechowywane w przeglądarce.
 Katalogi `data/` i `node_modules/` są pomijane przez Git.
 
-Aplikacja nie ma logowania. Udostępnia panel tylko lokalnie i sprawdza źródło
-żądań zmieniających dane. Funkcje SSH dodatkowo wymagają żądania z lokalnego
-źródła przeglądarki i adresu loopback. Nie wystawiaj panelu przez reverse proxy ani tunel sieciowy.
+Aplikacja nie ma logowania. Nasłuchuje tylko na 127.0.0.1. Każde żądanie musi mieć
+Host `localhost` lub `127.0.0.1` z portem aplikacji; obce, brakujące i powielone Host
+są odrzucane. Kontrola źródła obejmuje wszystkie metody zmieniające dane, także DELETE:
+Origin musi być zgodny z adresem aplikacji, a obce Fetch Metadata lub Referer powodują
+odmowę. Lokalne klienty bez tych nagłówków (np. PowerShell) pozostają obsługiwane.
+Nie jest to uwierzytelnianie lokalnych procesów ani innych użytkowników komputera.
+Funkcje SSH dodatkowo wymagają lokalnego Origin i adresu loopback. Nie wystawiaj panelu
+przez reverse proxy ani tunel sieciowy.
+
+Od 1.7.1 odpowiedzi, również błędy, zawierają CSP, `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` i CORP `same-origin`.
+CSP pozwala na skrypty i połączenia aplikacji tylko z własnego źródła, blokuje skrypty
+inline/eval, obiekty i ramki. Style inline pozostają dozwolone dla dynamicznych wykresów
+i elementów interfejsu; nie oznacza to dopuszczenia skryptów inline.
+JSON ma limit zagnieżdżenia 64 oraz rozmiaru w bajtach UTF-8: import snippetów 900000 B,
+import CSV w opakowaniu JSON 2 MiB, pozostałe żądania JSON 1 MiB.
+Limit odczytu nagłówków to 10 s, całego żądania 30 s; nie ogranicza to czasu oczekiwania
+na zakończenie już przyjętej serii pingów.
+
+Tunel SSH używa prywatnego IPv4 zweryfikowanego przed uruchomieniem, przekazanego jako
+`HostName`, oraz oryginalnej nazwy przez `HostKeyAlias`. Ogranicza to ponowne rozwiązywanie
+DNS między sprawdzeniem a połączeniem, zachowując kontrolę klucza hosta. Nazwa użytkownika
+nie może zaczynać się od myślnika. Skrypty PowerShell nadal korzystają z walidowanych
+argumentów, a hasło SSH nie jest przechowywane w aplikacji.
 
 ## Kopie zapasowe i przywracanie
 

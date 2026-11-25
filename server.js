@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
+const {validateLocalRequest,setSecurityHeaders,parseBoundedJson}=require("./security");
 const { isValidIPv4 } = require("./public/ipv4");
 const path = require("node:path");
 const { version: appVersion } = require("./package.json");
@@ -160,24 +161,15 @@ function sendJson(response, status, data) {
 }
 
 function readJson(request) {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    request.setEncoding("utf8");
-    request.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > (request.url?.startsWith("/api/devices/import") ? 2 : 1) * 1024 * 1024) {
-        reject(new HttpError(413, "Przesłane dane są zbyt duże."));
-        request.destroy();
-      }
-    });
-    request.on("end", () => {
-      try {
-        resolve(JSON.parse(body));
-      } catch {
-        reject(new HttpError(400, "Nieprawidłowy format danych."));
-      }
-    });
-    request.on("error", reject);
+  return new Promise((resolve,reject)=>{
+    const pathname=String(request.url).split('?')[0];
+    const limit=pathname==='/api/snippets/import'?900000:pathname.startsWith('/api/devices/import')?2*1024*1024:1024*1024;
+    let bytes=0,done=false,chunks=[];
+    const tooLarge=()=>{done=true;chunks=[];request.resume();reject(new HttpError(413,'Przesłane dane są zbyt duże.'));};
+    request.on('error',error=>{if(!done){done=true;chunks=[];reject(error);}});
+    if(Number(request.headers['content-length'])>limit){tooLarge();return;}
+    request.on('data',chunk=>{if(done)return;bytes+=chunk.length;if(bytes>limit){tooLarge();return;}chunks.push(chunk);});
+    request.on('end',()=>{if(done)return;done=true;try{resolve(parseBoundedJson(Buffer.concat(chunks).toString('utf8')));}catch(error){reject(error);}finally{chunks=[];}});
   });
 }
 
@@ -266,9 +258,9 @@ function validateSshUsername(input) {
   if (
     typeof username !== "string" ||
     username.length > 64 ||
-    (username.trim() && !/^[A-Za-z0-9_.-]+$/.test(username.trim()))
+    (username.trim() && !/^[A-Za-z0-9_.][A-Za-z0-9_.-]{0,63}$/.test(username.trim()))
   ) {
-    throw new HttpError(400, "Nazwa użytkownika SSH może zawierać tylko litery, cyfry, kropki, myślniki i podkreślenia.");
+    throw new HttpError(400, "Nazwa użytkownika SSH może zawierać litery, cyfry, kropki, myślniki i podkreślenia, ale nie może zaczynać się od myślnika.");
   }
   return username.trim();
 }
@@ -407,13 +399,6 @@ async function handleApi(request, response, pathname) {
   }
 
   if (!["GET", "HEAD"].includes(request.method)) {
-    const origin = request.headers.origin;
-    if (origin && origin !== `http://${request.headers.host}`) {
-      throw new HttpError(403, "Żądanie pochodzi z innej witryny.");
-    }
-    if (request.headers["sec-fetch-site"] === "cross-site") {
-      throw new HttpError(403, "Żądanie pochodzi z innej witryny.");
-    }
     if (["PUT", "POST"].includes(request.method) &&
         (Number(request.headers["content-length"]) > 0 || request.headers["transfer-encoding"]) &&
         request.headers["content-type"]?.split(";")[0].trim().toLowerCase() !== "application/json") {
@@ -717,6 +702,7 @@ async function handleApi(request, response, pathname) {
 const server = http.createServer(async (request, response) => {
   const requestId = /^[A-Za-z0-9-]{1,80}$/.test(request.headers["x-request-id"] || "")
     ? request.headers["x-request-id"] : randomUUID();
+  setSecurityHeaders(response);
   response.setHeader("X-Request-ID",requestId);
   response.setHeader("X-Lanwatch-Version",appVersion);
   const start = performance.now();
@@ -738,7 +724,8 @@ const server = http.createServer(async (request, response) => {
     if(!response.writableFinished && isApi) diagnostics.log("warn","request.disconnected",info);
   });
   try {
-    const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+    validateLocalRequest(request,server.address().port);
+    const url = new URL(request.url, `http://${request.headers.host}`);
     if (url.pathname.startsWith("/api/")) {
       await handleApi(request, response, url.pathname);
       return;
@@ -760,6 +747,7 @@ const server = http.createServer(async (request, response) => {
       "request.error",{...info,message:error.message,stack:error.stack});
     if (response.headersSent || response.destroyed) return;
     if (error instanceof HttpError || Number.isInteger(error.status)) {
+      if(error.status===413)response.setHeader("Connection","close");
       sendJson(response, error.status, { error: error.message });
       return;
     }
@@ -768,6 +756,8 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
+server.headersTimeout=10000;
+server.requestTimeout=30000;
 server.listen(port, host, () => {
   console.log(`Lanwatch v${appVersion} działa pod adresem http://localhost:${port}`);
   console.log(`Nasłuchuje na interfejsie ${host}.`);

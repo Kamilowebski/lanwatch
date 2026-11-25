@@ -1,12 +1,12 @@
 const { spawn } = require("node:child_process");
 const path = require("node:path");
-const { resolvePrivateAddress } = require("./ping");
+const { resolvePrivateAddress,isPrivateAddress } = require("./ping");
 
 function validateTerminal(device, sshUser) {
   if (!device || device.category.toLocaleLowerCase("pl") !== "terminal") {
     throw Object.assign(new Error("Funkcje SSH są dostępne tylko dla kategorii Terminal."), { status: 400 });
   }
-  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(sshUser || "")) {
+  if (!/^[A-Za-z0-9_.][A-Za-z0-9_.-]{0,63}$/.test(sshUser || "")) {
     throw Object.assign(new Error("Ustaw globalną nazwę użytkownika SSH w Ustawieniach."), { status: 400 });
   }
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/.test(device.hostName || "")) {
@@ -20,7 +20,7 @@ function quotePowerShell(value) {
 
 async function validateLocalSshHost(hostName) {
   try {
-    await resolvePrivateAddress(hostName);
+    return await resolvePrivateAddress(hostName);
   } catch (error) {
     throw Object.assign(
       new Error(`Nazwa hosta SSH musi wskazywać na adres lokalny: ${error.message}`),
@@ -33,17 +33,20 @@ function vncTunnelArguments(device, sshUser) {
   return ["-L", "5900:localhost:5900", `${sshUser}@${device.hostName}`];
 }
 
-function powerShellScript(args) {
+function powerShellScript(args,pinnedAddress=null) {
   if (
     !Array.isArray(args) ||
     args.length !== 3 ||
     args[0] !== "-L" ||
     args[1] !== "5900:localhost:5900" ||
-    !/^[A-Za-z0-9_.-]{1,64}@[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/.test(args[2])
+    !/^[A-Za-z0-9_.][A-Za-z0-9_.-]{0,63}@[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/.test(args[2])
   ) {
     throw Object.assign(new Error("Nieprawidłowe argumenty tunelu SSH."), { status: 400 });
   }
-  const command = `ssh -4 ${args.join(" ")}`;
+  if(pinnedAddress!==null&&!isPrivateAddress(pinnedAddress))throw Object.assign(new Error("Nieprawidłowy lokalny adres SSH."),{status:400});
+  const host=args[2].split('@')[1];
+  const pin=pinnedAddress?`-o HostName=${pinnedAddress} -o HostKeyAlias=${host} `:'';
+  const command = `ssh -4 ${pin}${args.join(" ")}`;
   return [
     `Write-Host ${quotePowerShell(command)}`,
     command,
@@ -119,13 +122,13 @@ function launchPowerShellWindow(script) {
 
 async function startVncTunnel(device, sshUser) {
   validateTerminal(device, sshUser);
-  await validateLocalSshHost(device.hostName);
+  const address=await validateLocalSshHost(device.hostName);
   if (process.platform !== "win32") {
     throw Object.assign(new Error("Otwieranie tunelu w PowerShell jest dostępne tylko w systemie Windows."), { status: 501 });
   }
 
   const args = vncTunnelArguments(device, sshUser);
-  await launchPowerShellWindow(powerShellScript(args));
+  await launchPowerShellWindow(powerShellScript(args,address));
   return { launched: true };
 }
 

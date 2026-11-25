@@ -77,3 +77,10 @@ test("launches the tunnel script in a separate visible PowerShell window", () =>
   assert.equal(Buffer.from(encodedScript, "base64").toString("utf16le"), script);
 });
 
+test('SSH rejects option-like users and can pin a validated private IP while preserving the host-key name',async()=>{
+ await assert.rejects(startVncTunnel(terminal,'-admin'),{status:400});
+ assert.throws(()=>powerShellScript(['-L','5900:localhost:5900','-v@terminal-test']),{status:400});
+ const args=vncTunnelArguments({...terminal,hostName:'T104-0173'},'testuser');
+ const script=powerShellScript(args,'192.168.1.20');assert.ok(script.includes('ssh -4 -o HostName=192.168.1.20 -o HostKeyAlias=T104-0173 -L 5900:localhost:5900 testuser@T104-0173'));
+ for(const value of ['8.8.8.8','192.168.1.1;whoami','host.local','::1'])assert.throws(()=>powerShellScript(args,value),{status:400});
+});

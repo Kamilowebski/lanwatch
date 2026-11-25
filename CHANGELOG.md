@@ -1,5 +1,14 @@
 # Historia zmian Lanwatch
 
+## 1.7.1 — 2026-11-25
+
+- Kontrola Host dla wszystkich zasobów i API: tylko literalne localhost i 127.0.0.1 z portem aplikacji; odrzucanie obcych, brakujących i powielonych Host oraz nieprawidłowych celów żądania.
+- Kontrola Origin, Fetch Metadata i pomocniczo Referer obejmuje POST, PUT i DELETE. Odrzucone próby nie zmieniają danych; lokalne klienty bez nagłówków przeglądarki pozostają obsługiwane.
+- Nagłówki CSP, nosniff, X-Frame-Options DENY, Referrer-Policy i Cross-Origin-Resource-Policy, również na odpowiedziach błędów.
+- Limity JSON liczone w bajtach UTF-8; 900 KB dla importu snippetów, limit zagnieżdżenia 64 i czytelne odrzucenie zbyt dużych danych.
+- SSH odrzuca użytkowników zaczynających się od myślnika i otrzymuje zweryfikowany prywatny IPv4 przez HostName, z zachowaniem nazwy HostKeyAlias do kontroli klucza.
+- Testy HTTP prób rebinding/CSRF, w tym DELETE, oraz parametrów SSH i braku nagłówków uwierzytelniania w logach.
+
 ## 1.7.0 — 2026-11-25
 
 - Trwały dziennik prac maszyny: wpisy do 5000 znaków, stronicowanie i usuwanie wpisów; niezależny od notatki monitora. Dostępny ze szczegółów i raportu.
