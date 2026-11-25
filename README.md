@@ -1,320 +1,259 @@
 # Lanwatch
 
-Aktualna wersja: **1.2.0**. Zmiany opisuje [CHANGELOG.md](CHANGELOG.md).
+[![Tests](https://github.com/Kamilowebski/lanwatch/actions/workflows/test.yml/badge.svg)](https://github.com/Kamilowebski/lanwatch/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Lanwatch to desktopowa aplikacja do prowadzenia ewidencji maszyn w lokalnej
-sieci. Serwer działa w Node.js, interfejs korzysta z HTML, JavaScript i
-Bootstrap, a dane są przechowywane w SQLite.
+**Wersja 1.2.1** · [Historia zmian](CHANGELOG.md) · [Licencja MIT](LICENSE)
 
-## Wymagania
+Lokalna aplikacja do ewidencji urządzeń, monitorowania dostępności i przechowywania
+komend administracyjnych. Działa w przeglądarce, z serwerem Node.js i bazą SQLite
+na tym samym komputerze. Interfejs jest w języku polskim.
 
-- Node.js w wersji 22.5 lub nowszej (wymagana wbudowana obsługa `node:sqlite`)
-- npm
-- Dostęp do internetu w przeglądarce, aby pobrać arkusz stylów Bootstrap z CDN
-- Windows PowerShell i klient OpenSSH na komputerze z serwerem (dla tunelu VNC)
-
-## Uruchomienie
-
-W katalogu projektu wykonaj:
-
-```bash
-npm start
-```
-
-Testy można uruchomić poleceniem `npm test`.
-
-Otwórz `http://localhost:3000`. Serwer domyślnie nasłuchuje tylko na `127.0.0.1`. Dostęp przez LAN jest wyłączony; zmienna `HOST` jest ignorowana.
-
-Port można zmienić przez `PORT`. Interfejs jest na stałe ustawiony na `127.0.0.1`.
-Przykład w PowerShell:
-
-```powershell
-$env:PORT=4000
-$env:HOST="127.0.0.1"
-npm start
-```
-
-Domyślna baza SQLite tworzy się automatycznie w `data/lanwatch.sqlite`.
-Lokalizację bazy można zmienić zmienną `DB_PATH`. Przy aktualizacji istniejące
-lokalizacje maszyn są automatycznie dodawane do listy lokalizacji.
-Baza w katalogu `data/` oraz zależności w `node_modules/` są pomijane przez Git.
+**Dostęp wyłącznie przez localhost.** Serwer nasłuchuje na `127.0.0.1`; nie udostępnia
+panelu przez LAN. Na Windows korzysta z systemowego **`ping.exe`**, **OpenSSH (`ssh`)**
+i **Windows PowerShell**. Biblioteka komend służy wyłącznie do kopiowania tekstu.
 
 ## Funkcje
 
-- Dodawanie, edycja i usuwanie maszyn.
-- Dane maszyny: nazwa hosta, opcjonalny adres IP (np. dla urządzeń z DHCP),
-  opcjonalna nazwa urządzenia/grupy, lokalizacja, kategoria, opis, numer linii
-  i numerator. Wspólna nazwa grupy łączy elementy jednego urządzenia, np.
-  głowice Bizerby; wyszukiwarka znajduje wszystkie elementy tej grupy.
-- Zależności można dodać podczas tworzenia maszyny. Dla istniejącej maszyny
-  przycisk „Zależności” otwiera osobny edytor, w którym można wyszukać i dodać
-  inne maszyny, usuwać obecne relacje oraz zapisać same zależności bez zmiany
-  pozostałych danych maszyny.
-- Nazwa hosta i niepusty adres IP muszą być unikalne (bez rozróżniania wielkości
-  liter). Formularz sprawdza duplikaty podczas wpisywania, a serwer ponownie
-  weryfikuje je przy zapisie.
-- Zarządzanie kategoriami i lokalizacjami w zakładce „Ustawienia”. Nazwę użytej
-  lokalizacji można zmienić, a jej usunięcie jest zablokowane, gdy przypisane są
-  do niej maszyny.
-- Przy pierwszym uruchomieniu tworzone są kategorie: Terminal, Komputer, Server,
-  drukarka, Raspberry pi, kamera, detektor, waga, bizerba i inne.
-- Tabela z nazwą hosta, adresem IP, lokalizacją, typem i statusem.
-- Lista grupuje elementy o tej samej nazwie w jeden zwijany wiersz; wyszukiwanie
-  i filtry typu, lokalizacji oraz statusu dotyczą całej grupy.
-- Wyszukiwanie maszyny pokazuje także wszystkie maszyny połączone z nią
-  zależnościami, również wtedy, gdy wskazują na nią inne maszyny.
-- Stronicowanie pokazuje domyślnie 20 pozycji (grup lub pojedynczych maszyn).
-  Ustawienie 10, 20, 50 albo 100 pozycji znajduje się w „Ustawieniach” i jest
-  zapamiętywane w przeglądarce.
-- Wybór zależności ma wyszukiwarkę po nazwie hosta, grupie, IP, lokalizacji
-  i typie; zaznaczenia pozostają wybrane podczas filtrowania wyników.
-- Przyciski zapisu pozostają widoczne na dole przewijanego formularza maszyny.
-- Przy dodawaniu kolejnych elementów można użyć „Zapisz i dodaj następną”;
-  formularz zachowuje wtedy grupę, lokalizację i kategorię.
-- Enter w formularzu maszyny zapisuje bieżącą maszynę; „Zapisz i dodaj następną”
-  pozostaje osobną akcją.
-- Ręczne sprawdzanie dostępności po kliknięciu statusu maszyny. Aplikacja używa
-  wyłącznie systemowego polecenia `ping` (ICMP), wysyła trzy próby i sprawdza
-  także pozostałe elementy tej samej grupy oraz ich bezpośrednie zależności.
-  Przycisk „Pinguj widoczne” sprawdza osobno maszyny z bieżącej strony wyników,
-  bez sprawdzania ich zależności i bez otwierania raportu.
-- Wyniki pingowania i czas ostatniego sprawdzenia są zapisywane w bazie oraz
-  pokazywane w tabeli i dashboardzie. Status „Brak odpowiedzi” oznacza brak
-  odpowiedzi na wszystkie trzy próby ICMP, nie pewność, że urządzenie jest
-  wyłączone (np. firewall może blokować ICMP).
-- Status Online wygasa po 5 minutach od ostatniego sprawdzenia i zmienia się na
-  „Nieustalony”. Widok odświeża się po upływie tego czasu; nie uruchamia to
-  kolejnych pingów.
-- Monitoring pojedynczej maszyny włącza się przyciskiem „Monitor” w jej wierszu
-  zakładki „Maszyny”; nie włącza on monitorowania grupy ani zależności. Zakładka
-  „Monitor” pokazuje tylko wybrane maszyny, ich status i opóźnienie. Aktywne
-  maszyny są sprawdzane w cyklach uruchamianych co 15 sekund,
-  z limitem 8 równoczesnych prób. Długi cykl nie nakłada się na następny;
-  przy dużej liczbie maszyn odstęp między próbami może przekroczyć 15 sekund.
-  Ręczne próby korzystają z tej samej kolejki, a trwająca próba dla tej samej
-  maszyny jest współdzielona. Widok odświeża się co 5 sekund. Dla każdej maszyny można osobno włączyć
-  powiadomienia o przejściu online i braku odpowiedzi. Powiadomienia wymagają
-  otwartej karty Lanwatch, a systemowe dodatkowo zgody przeglądarki.
-- Dla kategorii „Terminal” wspólnego użytkownika SSH konfiguruje się w
-  „Ustawieniach”; nie trzeba podawać go osobno dla każdej maszyny. Połączenie
-  używa nazwy hosta, np. `ssh użytkownik@nazwa-hosta`. Uwierzytelnienie
-  korzysta ze standardowej konfiguracji OpenSSH, kluczy/ssh-agent lub monitu
-  SSH w PowerShell. Lanwatch nie zapisuje haseł SSH.
-- Przycisk „Tunel VNC” otwiera okno PowerShell i uruchamia w nim OpenSSH;
-  przeglądarka nie wykonuje poleceń SSH ani nie pokazuje zdalnego terminala.
-  Uruchamiana komenda SSH zawiera tylko przekierowanie i cel, np.
-  `ssh -4 -L 5900:localhost:5900 użytkownik@nazwa-hosta`; połączenie
-  pozostaje interaktywne w PowerShell. Mały komunikat w aplikacji potwierdza
-  uruchomienie okna. Zamknij okno PowerShell, aby zakończyć tunel. TigerVNC
-  uruchom na tym samym komputerze i połącz z `127.0.0.1:5900`.
-- Przed uruchomieniem Lanwatch sprawdza, czy nazwa hosta wskazuje na adres
-  lokalny. Samo SSH działa bez dodatkowych parametrów i korzysta z domyślnych
-  ustawień OpenSSH oraz `known_hosts`; ewentualne potwierdzenie klucza hosta
-  lub hasła wpisz w oknie PowerShell. Widoczne okno wymaga uruchomienia
-  Lanwatch w aktywnej sesji użytkownika Windows, nie jako usługi systemowej.
-- Jasny i ciemny motyw zapamiętywany w przeglądarce.
+| Zakładka | Możliwości |
+| --- | --- |
+| **Maszyny** | Dodawanie i edycja, grupy urządzeń, zależności, wyszukiwanie, filtry z licznikami, stronicowanie, ikony kategorii i zapamiętywanie widoku. |
+| **Monitor** | Statusy i opóźnienia, względny czas sprawdzenia, powiadomienia, sortowanie maszyn bez odpowiedzi i notatki na czas monitorowania. |
+| **Raport maszyny** | Wykres chwil sprawdzeń, procenty wyników, średnie opóźnienie oraz zakres godziny, doby, tygodnia lub zachowanej historii. |
+| **Komendy** | Własne snippety, system i powłoka, kategorie, tagi, wyszukiwanie, ulubione, kopiowanie oraz import i eksport JSON. |
+| **Konfiguracja** | Kategorie i lokalizacje z liczbami przypisań, użytkownik SSH, motyw, rozmiar strony i status kopii zapasowych. |
 
-Ping jest uruchamiany po kliknięciu lub cyklicznie dla maszyn z włączonym
-monitoringiem, wyłącznie do adresów lokalnych: prywatnych i link-local adresów IPv4 lub nazw hostów rozpoznanych na taki adres IPv4. Bez adresu
-IP systemowy resolver rozpoznaje nazwę hosta (może użyć DNS); same próby
-diagnostyczne są wyłącznie ICMP. Aplikacja nie wykonuje sond TCP/UDP ani
-skanowania portów.
+Dodatkowo: automatyczne kopie całej bazy, logi diagnostyczne z rotacją i automatyczne
+migracje istniejącej bazy przy uruchomieniu.
 
-## Bezpieczeństwo
+## Wymagania
 
-Aplikacja nie ma logowania ani kontroli dostępu. Domyślnie jest dostępna
-wyłącznie na komputerze serwera. Żądania zmieniające dane z innego źródła
-przeglądarki są odrzucane; dane w treści żądania wymagają `application/json`. Serwer jest na stałe ograniczony do `127.0.0.1`; nie udostępnia API przez LAN. Uruchamianie tunelu SSH i zmiana globalnego użytkownika SSH
-odrzucają żądania spoza loopbacku i żądania bez lokalnego źródła przeglądarki.
-Używaj adresu `http://localhost:3000`, aby otwierać okna PowerShell z tunelami.
+- **Node.js 24 LTS — zalecany**, wraz z npm. Minimalna wersja: **22.13.0**,
+  udostępniająca `node:sqlite` bez dodatkowej flagi uruchomieniowej.
+- Windows do pełnej obsługi tuneli VNC w PowerShell. Ewidencja, biblioteka i monitoring
+  mogą działać także na Linuxie, jeśli dostępne jest systemowe polecenie `ping`.
+- **Microsoft Edge — zalecana przeglądarka.** W dotychczasowym użytkowaniu Firefox
+  wykazywał problemy z odświeżaniem; ich przyczyna nie została potwierdzona.
+- Dostęp do CDN w przeglądarce do pobrania arkusza Bootstrap. Dane aplikacji są lokalne,
+  ale arkusz stylów jest pobierany z `cdn.jsdelivr.net`.
+- Do tunelu VNC: klient OpenSSH, Windows PowerShell i osobny klient VNC, np. TigerVNC.
+  Serwer należy uruchomić w aktywnej sesji użytkownika Windows.
 
-## Zasada aktualizacji dokumentacji
+Projekt korzysta z modułów wbudowanych w Node.js. **Nie wymaga `npm install`**
+ani osobnej instalacji serwera bazy danych.
 
-Przy każdej zmianie funkcjonalności lub dodaniu elementu projektu zaktualizuj
-ten plik README, aby opisywał aktualny sposób działania i uruchamiania aplikacji.
+## Szybki start — Windows PowerShell
 
+Zainstaluj [Node.js](https://nodejs.org/) i [Git for Windows](https://git-scm.com/downloads/win),
+a następnie wykonaj:
 
-## Poprawki niezawodności i testy
+```powershell
+git clone https://github.com/Kamilowebski/lanwatch.git
+cd lanwatch
+node --version
+npm start
+```
 
-Kategorie domyślne są dodawane tylko podczas tworzenia tabeli kategorii.
-Usunięcie lub zmiana nazwy pozostaje zachowana po restarcie, także w istniejącej bazie.
-Parser ping nie uznaje samego kodu zakończenia 0 za odpowiedź hosta;
-obsługuje opóźnienie `czas=` polskiego Windows oraz odpowiedzi IPv6.
-Automatyczne odświeżanie przelicza listę i stronicowanie przy aktywnym filtrze statusu.
-Wynik próby dla poprzedniego hosta lub IP nie nadpisuje statusu zmienionej maszyny.
+Jeśli pobierasz projekt jako ZIP z GitHuba, rozpakuj go i otwórz PowerShell w katalogu
+z plikiem `package.json`. Git nie jest wtedy potrzebny do uruchomienia.
 
-GitHub Actions uruchamia testy na Windows i Linux z Node.js 22 i 24.
-Testy interfejsu sprawdzają logikę odświeżania bez przeglądarki;
-nie zastępują sprawdzenia wyglądu i rzeczywistego tunelu PowerShell na Windows.
+Otwórz **http://127.0.0.1:3000** lub **http://localhost:3000** w Edge.
+Zatrzymanie serwera: **Ctrl+C** w PowerShell. Nie otwieraj `public/index.html`
+bezpośrednio z dysku — interfejs wymaga działającego serwera.
 
-## Historia dostępności
+Przy pierwszym uruchomieniu powstają baza, domyślne kategorie i przykładowe snippety.
+Kategorie i przykładowe komendy nie są odtwarzane przy każdym restarcie po ich usunięciu.
 
-W szczegółach maszyny znajduje się historia rzeczywistych sprawdzeń ping:
-czas, status, docelowy adres, liczba odpowiedzi, opóźnienie i komunikat.
-Zapisywane są próby ręczne i monitoring. Historia jest trwała w SQLite,
-wyświetlana od najnowszych po 50 wpisów z przyciskiem „Pokaż starsze”.
-Dla każdej maszyny zachowywane jest ostatnie 1000 wyników. Usunięcie maszyny
-usuwa jej historię. Zmiana IP zachowuje stare wpisy z poprzednim adresem.
-Wcześniejsze sprawdzenia nie są odtwarzane; historia zaczyna się po aktualizacji.
-Wygaśnięcie statusu Online nie tworzy wpisu, ponieważ nie wykonuje nowego pingu.
+## Pierwsze użycie
 
-Historia w szczegółach maszyny ma przewijaną tabelę ze stałym nagłówkiem,
-kolorowe etykiety statusów, osobne daty i godziny oraz wyrównane opóźnienia.
-Widok obsługuje jasny i ciemny motyw, stany ładowania, pustej historii i błędu z ponowieniem.
+1. W **Konfiguracji** dodaj lokalizacje i dostosuj kategorie.
+2. W **Maszynach** wybierz „Dodaj maszynę”. Podaj host, lokalizację i kategorię;
+   adres IPv4 jest opcjonalny, np. dla urządzeń z DHCP.
+3. Kliknij status, aby sprawdzić maszynę, elementy jej grupy i bezpośrednie zależności.
+   „Pinguj widoczne” sprawdza maszyny na bieżącej stronie bez rozszerzania zależności.
+4. W menu „⋯” włącz monitorowanie wybranej maszyny. Nazwa i link pod nią w Monitorze
+   otwierają raport pojedynczego urządzenia.
+5. W **Komendach** dodaj własne wpisy lub skorzystaj z przykładów. „Kopiuj” przenosi
+   dosłowny tekst do schowka; aplikacja go nie wykonuje ani nie podmienia parametrów.
 
-## Automatyczne kopie bazy
+### Adresy, grupy i podpowiedzi kategorii
 
-Aplikacja tworzy lokalną kopię SQLite przy pierwszym uruchomieniu danego dnia.
-Podczas pracy sprawdza co godzinę, czy rozpoczął się kolejny dzień; wtedy tworzy
-nową kopię. Gdy aplikacja jest wyłączona, kopie nie powstają.
-Kopia obejmuje całą bazę: ewidencję, ustawienia i historię sprawdzeń.
+- Obsługiwane są wyłącznie **IPv4**: cztery liczby 0–255, bez zer wiodących.
+  Poprawny przykład: `192.168.1.10`. Puste IP jest dozwolone.
+- Walidacja działa podczas wpisywania i na serwerze przy dodawaniu oraz edycji.
+  IPv6, CIDR, porty i nazwy hostów w polu IP są odrzucane. Host ma osobne pole.
+- Nazwa hosta i niepusty IP muszą być unikalne. Poprawny format IP nie oznacza,
+  że urządzenie musi odpowiadać w chwili zapisu.
+- Wspólna nazwa grupy łączy elementy urządzenia w zwijany wiersz. Wyszukiwanie
+  uwzględnia także urządzenia połączone zależnościami.
+- Prefiksy hosta podpowiadają kategorię: **T → Terminal, D/N → Komputer,
+  P/Z → drukarka**, bez rozróżniania wielkości liter. Ręczny wybór ma pierwszeństwo;
+  przy edycji istniejącej maszyny kategoria nie zmienia się automatycznie.
+- Używanych kategorii i lokalizacji nie można usunąć bez zmiany przypisań maszyn.
 
-Kopie znajdują się w `data/backups/lanwatch-RRRR-MM-DD.sqlite`.
-Przy własnym `DB_PATH` katalog `backups` powstaje obok pliku bazy.
-Zachowywanych jest siedem ostatnich dziennych kopii. Ponowny start tego samego
-dnia nie nadpisuje istniejącej kopii. Błąd kopii jest wypisywany w konsoli;
-aplikacja działa dalej i ponowi próbę przy następnym sprawdzeniu.
-Snapshot SQLite jest tworzony przez `VACUUM INTO`, a gotowy plik jest przenoszony
-na docelową nazwę przed usunięciem najstarszych kopii.
+### Monitoring i raporty
 
-Aby przywrócić dane: zatrzymaj aplikację, zachowaj kopię aktualnego katalogu
-`data`, zastąp `lanwatch.sqlite` wybraną kopią i usuń ewentualne pozostałe pliki
-`lanwatch.sqlite-wal` oraz `lanwatch.sqlite-shm` z katalogu roboczej bazy.
-Następnie uruchom aplikację ponownie. Dla `DB_PATH` wykonaj te kroki przy wskazanym pliku.
+Monitoring uruchamia cykle co **15 sekund**, a widok odświeża się co **5 sekund**.
+Jednocześnie wykonuje się najwyżej **8 prób pingowania**. Ręczne żądania mają
+pierwszeństwo przed oczekującymi automatycznymi, bez przerywania trwających prób.
+Dłuższy cykl nie nakłada się na kolejny, więc przy dużej liczbie maszyn odstęp rośnie.
 
-Zapis maszyny ma limit oczekiwania na odpowiedź serwera (15 sekund).
-Błędy są pokazywane wewnątrz formularza, a przyciski są odblokowywane.
-Błąd odświeżenia listy po udanym zapisie jest zgłaszany osobno; nie wymaga ponownego dodania maszyny.
+Każde sprawdzenie wysyła trzy próby ICMP. Pingowanie jest ograniczone do prywatnych
+oraz link-local adresów IPv4 i hostów rozpoznanych na taki adres. Aplikacja nie skanuje
+portów ani nie wykonuje sond TCP/UDP w ramach monitorowania.
 
-## Odporność na zawieszenia
+**„Brak odpowiedzi” nie dowodzi wyłączenia urządzenia** — ICMP może blokować firewall.
+Status Online po pięciu minutach bez świeżego wyniku zmienia się na „Nieustalony”.
+Samo wygaśnięcie statusu nie wykonuje pingu i nie dopisuje wyniku do historii.
 
-Kopia bazy jest wykonywana w osobnym wątku z osobnym połączeniem SQLite.
-Baza pracuje w trybie WAL, aby kopia nie kolidowała z zapisem ewidencji i historii.
-Rozpoznawanie nazwy hosta ma limit 5 sekund, a uruchomienie okna PowerShell — 10 sekund.
-Dłuższe pingowanie wielu maszyn ma limit dopasowany do liczby maszyn i kolejki,
-nie krótki limit używany przy zwykłym zapisie danych.
+Dla maszyny zachowywanych jest do **1000 ostatnich sprawdzeń**. Historia w szczegółach
+jest stronicowana po 50 wpisów. Raport obejmuje zarówno próby ręczne, jak i monitoring.
+**Procenty to udział zapisanych sprawdzeń, nie procent czasu działania.** Luki między
+pomiarami i usunięte starsze wyniki nie są odtwarzane.
 
-Starsze odpowiedzi odświeżania nie nadpisują nowszych danych. Przesunięcie zegara
-nie powoduje natychmiastowej pętli odświeżania. Odmowa dostępu do pamięci ustawień
-przeglądarki nie blokuje startu aplikacji. Błędy działań w otwartym oknie są
-pokazywane w tym oknie. Niezapisana nazwa użytkownika SSH nie znika przy odświeżaniu.
-Zapis ustawień monitora nie czeka na decyzję w oknie zgody na powiadomienia.
+Notatka monitora ma do 1000 znaków. Przetrwa odświeżenie i restart aplikacji,
+ale **wyłączenie monitorowania usuwa notatkę**. Nie zmienia to opisu maszyny w ewidencji.
+Powiadomienia wymagają otwartej karty; systemowe wymagają dodatkowo zgody przeglądarki.
 
-## Diagnostyka zawieszeń
+### SSH i tunel VNC
 
-Logi serwera znajdują się w `data/logs/lanwatch.log` (przy własnym `DB_PATH`:
-`logs` obok bazy). To pliki tekstowe JSON, jeden wpis na linię. Zapisywane są:
-rozpoczęcie i zakończenie żądania API, jego status HTTP, czas wykonania,
-błędy oraz ostrzeżenia po 8 sekundach oczekiwania. Wpisy `request.waiting`
-zawierają też długość kolejki pingowania i informację o trwającej kopii.
-`requestId` łączy wpisy przeglądarki i serwera. Treści formularzy nie są logowane.
-Logowanie plików jest asynchroniczne. Plik ma limit około 5 MB, zachowywanych
-jest maksymalnie 7 plików (bieżący i 6 poprzednich).
+Dla maszyn kategorii Terminal ustaw wspólnego użytkownika SSH w Konfiguracji.
+„Tunel VNC” uruchamia widoczne okno PowerShell z systemowym OpenSSH, np.:
 
-Przeglądarka zgłasza błędy JavaScript, nieobsłużone odrzucenia Promise, błędy
-żądań API i przekroczenia czasu w konsoli F12. Próbuje również zapisać je
-na lokalnym serwerze; jeśli ten nie odpowiada, wpisy pozostają w konsoli
-i w pamięci sesji przeglądarki (`lanwatch-diagnostics`, maksymalnie 100 wpisów).
-Przesyłanie logów nie ponawia samo siebie przy błędzie.
+```powershell
+ssh -4 -L 5900:localhost:5900 UZYTKOWNIK@HOST
+```
 
-Opóźnienia pętli serwera powyżej 2 sekund oraz przeglądarki powyżej 10 sekund
-są zgłaszane po odzyskaniu możliwości wykonania kodu. Zamrożony proces nie może
-sam wypisać komunikatu w trakcie blokady. Po problemie zachowaj `data/logs`
-przed restartem; w F12 włącz zachowywanie dziennika przed odświeżeniem.
+Klient VNC na tym samym komputerze łączy się z **`127.0.0.1:5900`**. Uwierzytelnianie
+korzysta z konfiguracji OpenSSH, kluczy, agenta lub monitu w PowerShell. Lanwatch
+nie przechowuje haseł SSH. Zamknięcie okna z SSH kończy tunel.
+Stały port 5900 musi być wolny; aplikacja nie przydziela osobnych portów kolejnym tunelom.
 
-Kolumna statusu rezerwuje miejsce na datę jeszcze przed pierwszym pingiem, aby wynik nie zmieniał wysokości wiersza ani szerokości kolumny.
+### Biblioteka komend
 
-Nazwy maszyn mają lokalne ikony SVG odpowiadające kategorii (bez pobierania ikon z internetu). Nieznane kategorie i grupy mieszane mają ikonę ogólną. Kliknięcie nazwy w monitorze otwiera szczegóły i historię sprawdzeń; działa też z klawiatury.
+Wpis zawiera nazwę, opis, system, powłokę, kategorię, tagi, treść i oznaczenie ulubionego.
+Przykładowe `HOST` i `UZYTKOWNIK` zmień samodzielnie przed użyciem w swojej konsoli.
 
-Monitor zachowuje niezmienione wiersze i aktualizuje status, czas oraz opóźnienie bez przebudowy tabeli.
-Co 5 sekund pobierana jest lista maszyn. Kategorie, lokalizacje i ustawienia są
-pobierane przy pełnym odświeżeniu po operacji oraz co minutę podczas pracy w tle.
-Nagłówek pokazuje stan połączenia i czas ostatniego udanego odświeżenia.
-Ręczny ping wyprzedza oczekujące sprawdzenia automatyczne; nie przerywa trwających prób.
-Ponowne żądanie dla maszyny już w kolejce podnosi jej priorytet bez dublowania próby.
+Eksport JSON obejmuje całą bibliotekę niezależnie od filtrów. Import wersji 1 dopisuje
+do **200 wpisów** z pliku do **900 KB**; nie nadpisuje istniejących. Ponowny import
+może utworzyć duplikaty. Niepoprawny import jest odrzucany przed zapisem całej partii.
 
-## Raport i notatki monitora
+## Ustawienia uruchomienia i dane
 
-Przycisk „Raport” i nazwa maszyny w Monitorze otwierają raport jednej maszyny.
-Zakresy: 1 godzina, 24 godziny, 7 dni oraz cała zachowana historia (do 1000 wyników).
-Wykres pokazuje faktyczne chwile sprawdzeń i ich statusy. Karty pokazują procent
-sprawdzeń Online, bez odpowiedzi i nieustalonych oraz średnie opóźnienie Online.
-Procenty nie oznaczają czasu działania — przerwy między pomiarami nie są mierzone.
-Raport obejmuje zarówno ręczne sprawdzenia, jak i monitoring. Odświeża się przy otwarciu,
-zmianie zakresu lub po użyciu przycisku „Odśwież raport”.
+| Zmienna | Domyślnie | Znaczenie |
+| --- | --- | --- |
+| `PORT` | `3000` | Port lokalnego serwera HTTP. |
+| `DB_PATH` | `data/lanwatch.sqlite` | Ścieżka bazy; względna jest rozwiązywana względem katalogu uruchomienia. |
+| `HOST` | ignorowana | Serwer jest na stałe przypisany do `127.0.0.1`. |
 
-Każda monitorowana maszyna ma osobną notatkę (do 1000 znaków), zapisywaną przyciskiem
-„Zapisz notatkę”. Notatka przetrwa odświeżenie i restart aplikacji, dopóki maszyna jest
-monitorowana. Wyłączenie monitora usuwa ją; nie zmienia opisu w ewidencji ani historii.
-Monitor nie ma osobnej kolumny IP; adres pozostaje dostępny w szczegółach maszyny.
+Przykład w PowerShell:
 
-Monitor pokazuje raport pod nazwą maszyny, a wyłączenie monitora na końcu wiersza.
-Notatka jest domyślnie tekstem; „Edytuj” lub „Dodaj notatkę” otwiera edytor z zapisem
-oraz anulowaniem. Odświeżanie zachowuje wpisywany tekst. Powiadomienia mają etykiety
-„Powrót online” i „Brak odpowiedzi”. Wiersze bez odpowiedzi są delikatnie wyróżniane;
-opcja „Bez odpowiedzi na początku” jest zapamiętywana w przeglądarce.
-Czas sprawdzenia ma postać względną (np. „12 s temu”) i aktualizuje się lokalnie
-co sekundę; dokładna data jest dostępna po najechaniu. Nie uruchamia to pingowania.
+```powershell
+$env:PORT = "4000"
+$env:DB_PATH = "C:\LanwatchData\lanwatch.sqlite"
+npm start
+```
 
-## Maszyny i konfiguracja
+Ewidencja, ustawienia SSH, monitoring, notatki, historia i snippety są w SQLite.
+Motyw, filtry, rozmiar strony i rozwinięte grupy są przechowywane w przeglądarce.
+Katalogi `data/` i `node_modules/` są pomijane przez Git.
 
-Tabela maszyn oferuje szybkie filtry Wszystkie / Bez odpowiedzi / Monitorowane z licznikami
-maszyn (grupy pozostają wyświetlane w całości). Przeglądarka zapamiętuje wyszukiwanie,
-filtry, stronę i rozwinięte grupy. „Szczegóły” jest główną akcją wiersza, a menu „⋯”
-zawiera monitoring, tunel VNC dla terminali, zależności, edycję i usuwanie.
-Formularz dzieli się na dane podstawowe, lokalizację i klasyfikację oraz dane dodatkowe.
+Aplikacja nie ma logowania. Udostępnia panel tylko lokalnie i sprawdza źródło
+żądań zmieniających dane. Funkcje SSH dodatkowo wymagają żądania z lokalnego
+źródła przeglądarki i adresu loopback. Nie wystawiaj panelu przez reverse proxy ani tunel sieciowy.
 
-Konfiguracja ma sekcje kategorii, lokalizacji, SSH, wyglądu i kopii zapasowych.
-Kategorie i lokalizacje pokazują liczbę przypisanych maszyn. Usuwanie używanych pozycji
-jest zablokowane z wyjaśnieniem; serwer nadal niezależnie sprawdza ograniczenie.
-SSH sygnalizuje niezapisane zmiany, zapis, sukces i błąd. Pole nie traci nowego wpisu,
-jeśli użytkownik zmieni go w trakcie zapisu. Motyw i rozmiar strony są ustawieniami
-przeglądarki. Sekcja kopii pokazuje czas i lokalizację ostatniego gotowego pliku oraz
-liczbę kopii, odświeżaną przy otwarciu Konfiguracji, pełnym odświeżeniu i na żądanie.
+## Kopie zapasowe i przywracanie
 
-Przy dodawaniu maszyny pierwsza litera nazwy hosta automatycznie podpowiada kategorię:
-T — Terminal, D/N — Komputer, P/Z — drukarka (bez rozróżniania wielkości liter).
-Ręczny wybór ma pierwszeństwo. „Zastosuj podpowiedź” pozwala ponownie użyć sugestii.
-Przy edycji istniejącej maszyny kategoria nie zmienia się automatycznie.
-Brak kategorii w konfiguracji wyświetla komunikat; aplikacja jej sama nie tworzy.
+Kopia całej bazy powstaje przy pierwszym uruchomieniu danego dnia. Podczas pracy
+aplikacja co godzinę sprawdza, czy rozpoczął się kolejny dzień. Wyłączona aplikacja
+nie wykonuje kopii. Zachowywanych jest **7 ostatnich kopii**:
 
-## Komendy i snippety — wyłącznie kopiowanie
+```text
+data/
+├── lanwatch.sqlite
+├── backups/lanwatch-RRRR-MM-DD.sqlite
+└── logs/lanwatch.log
+```
 
-Zakładka „Komendy” to lokalna biblioteka tekstów w SQLite: nazwa, opis, system,
-powłoka, kategoria, tagi, treść oraz ulubione. Dostępne są wyszukiwanie, filtry,
-dodawanie, edycja, usuwanie oraz „Kopiuj”. Komenda jest kopiowana dosłownie;
-aplikacja nigdy nie uruchamia wpisów z biblioteki ani nie podmienia ich parametrów.
-Przykładowe HOST i UZYTKOWNIK należy zmienić samodzielnie przed użyciem w konsoli.
-Sześć przykładowych wpisów jest tworzonych tylko przy pierwszej inicjalizacji biblioteki.
+Przy własnym `DB_PATH` katalogi `backups` i `logs` powstają obok bazy. Stan i lokalizację
+ostatniej kopii sprawdzisz w Konfiguracji. Kopia jest wykonywana w osobnym wątku,
+przez SQLite `VACUUM INTO`; baza pracuje w trybie WAL.
 
-Eksport JSON zapisuje całą bibliotekę, niezależnie od aktywnych filtrów.
-Import JSON wersji 1 dopisuje do 200 wpisów (plik do 900 KB); nie nadpisuje istniejących.
-Wszystkie wpisy są walidowane przed transakcyjnym importem. Ponowny import może
-utworzyć duplikaty. Biblioteka jest objęta automatyczną kopią całej bazy SQLite.
+Przywracanie:
 
-## Wersje i aktualizacja
+1. Zatrzymaj aplikację przez Ctrl+C.
+2. Zachowaj kopię całego dotychczasowego katalogu danych, łącznie z ewentualnymi
+   plikami `lanwatch.sqlite-wal` i `lanwatch.sqlite-shm`.
+3. Zastąp roboczy plik `lanwatch.sqlite` wybraną kopią.
+4. Usuń pozostałe pliki `lanwatch.sqlite-wal` i `lanwatch.sqlite-shm` z roboczego
+   katalogu — nie łącz starego WAL z przywróconą bazą.
+5. Uruchom ponownie aplikację. Dla `DB_PATH` zastosuj te kroki do wskazanej bazy.
 
-Obecne pełne wydanie to `lanwatch-1.2.0.zip`. Wersja w `package.json` jest
-źródłem numeru pokazywanego w stopce, komunikacie startowym PowerShell,
-logu `server.started` i nagłówku HTTP `X-Lanwatch-Version`.
-Schemat: `1.1.1` — poprawki, `1.2.0` — nowe funkcje, `2.0.0` — zmiany wymagające
-szczególnych kroków przy aktualizacji. Przy następnym wydaniu zmień `package.json`,
-aktualną wersję w README i `CHANGELOG.md`, a pełną paczkę nazwij zgodnie z numerem.
+## Aktualizacja
 
-Aby zaktualizować: zatrzymaj serwer, zachowaj własny katalog `data` (lub plik
-wskazany w `DB_PATH` wraz z kopiami), zastąp pliki programu z pełnej paczki,
-uruchom `npm start` i odśwież stronę przez Ctrl+F5. Nowy numer pojawi się w stopce.
-Migracje SQLite są wykonywane automatycznie przy starcie. Paczka nie zawiera
-bazy użytkownika, logów ani kopii zapasowych.
+Każda paczka `lanwatch-X.Y.Z.zip` zawiera pełny program. Wcześniejsze paczki nie są wymagane.
 
-## Adresy IPv4
+1. Zatrzymaj serwer i wykonaj kopię swoich danych.
+2. Podmień pliki programu, **zachowując katalog `data`** lub własną bazę z `DB_PATH`.
+3. Uruchom `npm start`; migracje SQLite wykonają się automatycznie.
+4. Odśwież Edge przez **Ctrl+F5** i sprawdź wersję w stopce.
 
-Pole IP jest opcjonalne i sprawdzane podczas wpisywania oraz na serwerze przy
-każdym dodawaniu i edycji. Wymagane są cztery liczby 0–255 rozdzielone kropkami,
-bez zer wiodących (np. `192.168.1.10`). Spacje na końcach są usuwane.
-Adresy IPv6, CIDR, adresy z portem i nazwy hostów w polu IP są odrzucane.
-Nazwy hostów wpisuje się w osobnym polu; resolver używa tylko IPv4.
-SSH używa `-4`. Ograniczenie pingowania do lokalnych adresów IPv4 pozostaje.
-Walidacja formatu przy zapisie nie wymaga, aby maszyna była dostępna.
-Istniejące rekordy nie są usuwane; stare niepoprawne IP lub IPv6 należy poprawić
-przy edycji. Historia wcześniejszych sprawdzeń pozostaje do wglądu.
+Dla czystej kopii repozytorium zamiast podmiany plików można użyć `git pull --ff-only`.
+Patch zawierający przygotowany commit można zastosować przez `git am SCIEZKA.patch`,
+a potem wysłać `git push`. Numer w `package.json` zasila stopkę, komunikat startowy,
+log `server.started` i nagłówek HTTP `X-Lanwatch-Version`.
+
+## Diagnostyka
+
+Logi są w `data/logs/lanwatch.log`. Zachowywanych jest do 7 plików po około 5 MB.
+Zawierają błędy, czasy żądań i ich `requestId`, przebieg monitorowania i kopii.
+Treści formularzy nie są logowane.
+
+Podgląd na żywo z drugiego PowerShell w katalogu projektu:
+
+```powershell
+Get-Content .\data\logs\lanwatch.log -Tail 40 -Wait
+```
+
+Jeśli interfejs nie odpowiada:
+
+- Sprawdź, czy PowerShell z serwerem nadal działa i czy dostępne jest
+  `http://127.0.0.1:3000/api/categories`.
+- W Edge otwórz **F12 → Console / Network**. Włącz zachowywanie dziennika przed odświeżeniem.
+- W klasycznej konsoli Windows naciśnij Esc, jeśli zaznaczenie tekstu wstrzymało zapis do konsoli.
+- Zachowaj logi przed restartem. Przeglądarka przechowuje też do 100 ostatnich wpisów
+  sesji w `sessionStorage` pod kluczem `lanwatch-diagnostics`.
+
+Ostrzeżenie o opóźnieniu pętli zdarzeń powstaje po odzyskaniu możliwości wykonania
+kodu; całkowicie zablokowany proces nie może zgłosić błędu w czasie blokady.
+
+## Testy i rozwój
+
+```powershell
+npm test
+```
+
+Testy używają wbudowanego `node:test` i izolowanych baz tymczasowych.
+GitHub Actions uruchamia je na Windows i Linux z Node.js 22 oraz 24.
+Testy jednostkowe nie zastępują sprawdzenia rzeczywistego tunelu PowerShell na Windows.
+
+Najważniejsze pliki:
+
+| Plik / katalog | Odpowiedzialność |
+| --- | --- |
+| `server.js` | Lokalny HTTP i API, kolejka pingowania, cykle monitora. |
+| `database.js` | SQLite, migracje, ewidencja i historia. |
+| `ping.js`, `terminal.js` | Systemowy ping oraz uruchamianie tunelu SSH w PowerShell. |
+| `backup.js`, `diagnostics.js` | Kopie w osobnym wątku i logi. |
+| `snippets.js` | Przechowywanie i walidacja biblioteki komend. |
+| `public/` | Interfejs HTML, CSS i JavaScript. |
+
+Przy zmianie funkcji zaktualizuj README i `CHANGELOG.md`. Nowe wydania otrzymują
+numer wersji w `package.json`, pełną paczkę ZIP i commit/patch. Poprawki podnoszą
+ostatnią część numeru (`1.2.1`), nowe funkcje środkową (`1.3.0`), a niezgodne zmiany
+wymagające dodatkowych kroków aktualizacji — pierwszą (`2.0.0`).
+
+## Licencja
+
+Kod Lanwatch jest udostępniony na licencji **MIT** — zobacz [LICENSE](LICENSE).
+Copyright © 2026 Kamilowebski. Zewnętrzne narzędzia i Bootstrap zachowują własne licencje.

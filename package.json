@@ -1,6 +1,6 @@
 {
   "name": "lanwatch",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Ewidencja maszyn w lokalnej sieci",
   "scripts": {
@@ -8,6 +8,7 @@
     "test": "node --test"
   },
   "engines": {
-    "node": ">=22.5"
-  }
+    "node": ">=22.13.0"
+  },
+  "license": "MIT"
 }

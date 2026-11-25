@@ -1,5 +1,15 @@
 # Historia zmian Lanwatch
 
+## 1.2.1 — 2026-11-25
+
+- Uporządkowane README: instalacja na Windows, wszystkie zakładki, IPv4, tunel VNC,
+  kopie, przywracanie danych, aktualizacja, diagnostyka i rozwój projektu.
+- Usunięte nieaktualne wzmianki o IPv6, dostępie przez LAN i dawnym układzie interfejsu.
+- Dodana licencja MIT z plikiem LICENSE i oznaczeniem w package.json.
+- Minimalna wersja Node.js skorygowana do 22.13.0, aby npm start działało
+  z node:sqlite bez flagi eksperymentalnej; zalecana wersja to Node.js 24 LTS.
+- Wydanie zawiera pełną funkcjonalność wersji 1.2.0; bez zmian schematu bazy.
+
 ## 1.2.0 — 2026-11-17
 
 - Walidacja IPv4 w formularzu i na serwerze przy dodawaniu i edycji maszyny.
