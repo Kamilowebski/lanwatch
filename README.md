@@ -450,3 +450,12 @@ w tym samym katalogu `backups`. Zachowywanych jest do 7 kopii ręcznych oraz oso
 wątku, obejmuje zatwierdzone dane WAL, a komunikat sukcesu pojawia się po ukończeniu.
 Przy trwającej kopii kolejne żądanie jest odrzucane z komunikatem. Kopie nie są
 wysyłane do internetu. Przywracanie wykonuje się zgodnie z wcześniejszą instrukcją.
+
+Kliknięcie pustego miejsca w wierszu pojedynczej maszyny w ewidencji lub monitorze
+uruchamia ping wyłącznie tej maszyny, także gdy należy do grupy. Kliknięcie wiersza
+grupy nadal rozwija grupę i sprawdza ją wraz z zależnościami. Przyciski, kopiowanie IP,
+checkboxy i zaznaczanie tekstu nie uruchamiają dodatkowego pingu wiersza. Niebieskie
+tło wskazuje trwające sprawdzenie; kolejne kliknięcia wiersza nie dublują go.
+
+Wybranie zapisanego widoku z listy natychmiast stosuje jego filtry, bez dodatkowego
+przycisku. Zapisanie nowego widoku nie uruchamia sprawdzania dostępności.

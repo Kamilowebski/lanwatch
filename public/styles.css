@@ -730,3 +730,5 @@ button, input, select, textarea { font: inherit; }
 #machine-events-list { padding:0; list-style:none; }#machine-events-list li { display:flex; gap:16px; padding:12px 0; border-bottom:1px solid var(--border); font-size:12px; }#machine-events-list time { color:var(--muted); flex-shrink:0; }
 #machine-events-more[hidden] { display:none; }
 #settings-backups .settings-save-state,#settings-backups .backup-details dd { overflow-wrap:anywhere; min-width:0; }
+
+.pingable-device-row { cursor:pointer; }.pingable-device-row:hover>td { background-color:var(--accent-soft) !important; }

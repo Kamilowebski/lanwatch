@@ -1,7 +1,7 @@
 (() => {
   for(const panel of document.querySelectorAll('#inventory-view .inventory-panel, #monitor-view .monitor-panel')){
     const legend=document.createElement('p');legend.className='status-color-legend';
-    for(const [state,label] of [['unchecked','Niesprawdzone'],['checking','Sprawdzanie grupy'],['online','Online'],['offline','Brak odpowiedzi'],['unknown','Nieustalony'],['mixed','Różne wyniki w grupie']]){
+    for(const [state,label] of [['unchecked','Niesprawdzone'],['checking','Sprawdzanie'],['online','Online'],['offline','Brak odpowiedzi'],['unknown','Nieustalony'],['mixed','Różne wyniki w grupie']]){
       const item=document.createElement('span');item.dataset.tone=state;item.textContent=label;legend.append(item);
     }
     panel.querySelector('.table-responsive')?.before(legend);

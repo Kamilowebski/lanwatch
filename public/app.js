@@ -114,6 +114,7 @@ let selectedDependencyIds = new Set();
 let dependencyEditorDeviceId = null;
 let stagedDependencyIds = new Set();
 let statusExpiryTimer = null;
+const pendingSingleRowPings = new Set();
 const pendingGroupChecks = new Set();
 const groupCheckSummaries = new Map();
 const expandedGroups = new Set(Array.isArray(savedInventoryView.expanded) ? savedInventoryView.expanded.filter(value => typeof value === "string").slice(0,500) : []);
@@ -913,6 +914,22 @@ function categoryIcon(category) {
   return svg;
 }
 
+function attachSingleRowPing(row, device) {
+  row.classList.add("pingable-device-row");
+  if (pendingSingleRowPings.has(device.id)) {row.dataset.status="checking";row.setAttribute("aria-busy","true");}
+  row.addEventListener("click",async event=>{
+    if(event.button!==0 || event.target.closest("button,a,input,label,select,textarea,[role=button],.monitor-note-text,[contenteditable=true]"))return;
+    if(window.getSelection()?.toString() || pendingSingleRowPings.has(device.id))return;
+    pendingSingleRowPings.add(device.id);
+    document.querySelectorAll('.pingable-device-row').forEach(item=>{
+      if(item.dataset.deviceIds===String(device.id)||item.dataset.deviceId===String(device.id)){item.dataset.status="checking";item.setAttribute("aria-busy","true");}
+    });
+    try {await api('/api/ping',{method:'POST',body:JSON.stringify({deviceIds:[device.id]}),timeoutMs:pingRequestTimeout()});await refresh({preserveInventory:true});}
+    catch(error){notify(error.message,'danger');}
+    finally{pendingSingleRowPings.delete(device.id);renderDevices();renderMonitor();}
+  });
+}
+
 function renderDeviceRow(device, isGroupMember = false) {
   const row = document.createElement("tr");
   row.dataset.deviceIds = String(device.id);
@@ -1028,6 +1045,7 @@ function renderDeviceRow(device, isGroupMember = false) {
   details.addEventListener("click", () => openDeviceDetails(device));
   actionsCell.append(details, more, menu);
   row.append(actionsCell);
+  attachSingleRowPing(row,device);
   return row;
 }
 
@@ -1303,7 +1321,7 @@ function updateVisibleDeviceStatuses() {
     const representative = relatedDevices[0];
     const subjectLabel = row.dataset.subjectLabel;
     const summary = statusSummary(relatedDevices);
-    row.dataset.status = rowStatusColor(relatedDevices);
+    row.dataset.status = relatedDevices.length===1&&pendingSingleRowPings.has(relatedDevices[0].id)?"checking":rowStatusColor(relatedDevices);
     if (row.dataset.groupKey && pendingGroupChecks.has(row.dataset.groupKey)) row.dataset.status = "checking";
     const status = row.querySelector(".status-trigger");
     status.classList.remove("status-online", "status-offline", "status-unknown");
@@ -1441,7 +1459,8 @@ function createMonitorNoteCell(device) {
 }
 
 function updateMonitorStatus(row, device) {
-  row.dataset.status = device.statusCheckedAt ? device.status : "unchecked";
+  if(pendingSingleRowPings.has(device.id))row.setAttribute("aria-busy","true");else row.removeAttribute("aria-busy");
+  row.dataset.status = pendingSingleRowPings.has(device.id)?"checking":device.statusCheckedAt ? device.status : "unchecked";
   const status = row.querySelector(".monitor-status");
   const label = {online: "Online", offline: "Brak odpowiedzi", unknown: "Nieustalony"}[device.status] || "Nieustalony";
   const className = `status-badge monitor-status status-${device.status}`;
@@ -1522,7 +1541,7 @@ function renderMonitor() {
     }
     const row = document.createElement("tr");
     row.dataset.deviceId = String(device.id);
-    row.dataset.status = device.statusCheckedAt ? device.status : "unchecked";
+    row.dataset.status = pendingSingleRowPings.has(device.id)?"checking":device.statusCheckedAt ? device.status : "unchecked";
     row.dataset.metadata = metadata;
     const host = document.createElement("td");
     host.className = "host-cell";
@@ -1600,6 +1619,7 @@ function renderMonitor() {
     );
     row.append(notifications);
     row.append(createMonitorNoteCell(device), monitorCell);
+    attachSingleRowPing(row,device);
     row.classList.toggle("monitor-row-offline", device.status === "offline");
     desiredRows.push(row);
   }

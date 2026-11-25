@@ -1,5 +1,12 @@
 # Historia zmian Lanwatch
 
+## 1.6.1 — 2026-11-25
+
+- Wybór zapisanego widoku natychmiast stosuje filtry; usunięty przycisk „Zastosuj”.
+- Kliknięcie nieinteraktywnego miejsca wiersza maszyny w ewidencji i monitorze sprawdza tylko tę maszynę, również wewnątrz rozwiniętej grupy.
+- Przyciski, adres IP, checkboxy i zaznaczanie tekstu zachowują dotychczasowe działanie.
+- Niebieski kolor podczas sprawdzania i blokada ponownego uruchomienia tej samej serii kliknięciem wiersza.
+
 ## 1.6.0 — 2026-11-25
 
 - Zapisane widoki ewidencji i monitora: nazwane zestawy filtrów, stosowanie i usuwanie; do 40 widoków w bazie, dostępnych po restarcie.

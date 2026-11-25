@@ -17,13 +17,12 @@
   const panel=document.querySelector(scope==='inventory'?'#inventory-view .inventory-panel':'#monitor-view .monitor-panel');
   const form=document.createElement('form');form.className='saved-view-toolbar';form.setAttribute('aria-label',`Zapisane widoki: ${scope==='inventory'?'Maszyny':'Monitor'}`);
   const select=document.createElement('select');select.className='form-select';select.setAttribute('aria-label','Zapisany widok');
-  const applyButton=document.createElement('button');applyButton.type='button';applyButton.className='monitor-action';applyButton.textContent='Zastosuj';
   const name=document.createElement('input');name.className='form-control';name.maxLength=60;name.placeholder='Nazwa nowego widoku';name.setAttribute('aria-label','Nazwa nowego widoku');
   const save=document.createElement('button');save.type='submit';save.className='monitor-action';save.textContent='Zapisz widok';
   const remove=document.createElement('button');remove.type='button';remove.className='monitor-text-action';remove.textContent='Usuń widok';
   const status=document.createElement('span');status.className='saved-view-status';status.setAttribute('role','status');
-  form.append(select,applyButton,name,save,remove,status);panel.querySelector('.inventory-heading').after(form);controls.push({scope,select});
-  applyButton.addEventListener('click',()=>{const view=views.find(view=>view.id===select.value);if(!view){status.textContent='Wybierz widok.';return;}apply(view);status.textContent='Widok zastosowano.';});
+  form.append(select,name,save,remove,status);panel.querySelector('.inventory-heading').after(form);controls.push({scope,select});
+  select.addEventListener('change',()=>{const view=views.find(view=>view.id===select.value);if(!view){status.textContent='Wybierz widok.';return;}apply(view);status.textContent='Widok zastosowano.';});
   form.addEventListener('submit',async event=>{event.preventDefault();if(save.disabled)return;if(!name.value.trim()){status.textContent='Podaj nazwę widoku.';name.focus();return;}save.disabled=true;try{const result=await api('/api/saved-views',{method:'POST',body:JSON.stringify({name:name.value,scope,filters:filters(scope)})});views.push(result);options();select.value=result.id;name.value='';status.textContent='Widok zapisano w bazie.';}catch(error){status.textContent=error.message;}finally{save.disabled=false;}});
   remove.addEventListener('click',async()=>{const id=select.value;if(!id){status.textContent='Wybierz widok.';return;}if(remove.disabled)return;remove.disabled=true;try{await api('/api/saved-views/'+id,{method:'DELETE'});views=views.filter(view=>view.id!==id);options();status.textContent='Widok usunięto.';}catch(error){status.textContent=error.message;}finally{remove.disabled=false;}});
  }
