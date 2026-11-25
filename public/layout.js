@@ -22,9 +22,15 @@
   }
   nav.addEventListener('click',event=>{
     const link=event.target.closest('a');if(!link)return;
+    if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
     event.preventDefault();select(link.hash.slice(1),true);
-    history.replaceState(null,'',link.hash);
+    history.replaceState(null,'',location.pathname+location.search);
   });
+  document.querySelectorAll('.main-nav-button').forEach(button=>button.addEventListener('click',()=>{
+    if(button.dataset.view!=='settings-view' && cards.some(card=>location.hash===`#${card.id}`)) {
+      history.replaceState(null,'',location.pathname+location.search);
+    }
+  }));
   function openLinkedSection(){
     const id=location.hash.slice(1);
     if(!cards.some(card=>card.id===id))return;

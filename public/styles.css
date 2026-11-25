@@ -714,3 +714,11 @@ button, input, select, textarea { font: inherit; }
 .status-color-legend [data-tone=unchecked] { --tone:#99a1b1; }.status-color-legend [data-tone=checking] { --tone:#3484ee; }.status-color-legend [data-tone=online] { --tone:#37a875; }.status-color-legend [data-tone=offline] { --tone:#d65b57; }.status-color-legend [data-tone=unknown] { --tone:#9985cd; }.status-color-legend [data-tone=mixed] { --tone:#ce941c; }
 
 .group-check-summary { display:block; margin-top:5px; color:var(--muted); font-size:10px; line-height:1.5; white-space:normal; max-width:340px; }
+
+.device-address-line:empty { display:none; }
+.device-address-line { margin-top:3px; line-height:1.3; }
+.device-ip-copy { padding:1px 5px; border:1px solid transparent; border-radius:4px; background:transparent; color:var(--muted); font:11px ui-monospace,SFMono-Regular,Consolas,monospace; cursor:copy; }
+.device-ip-copy:hover,.device-ip-copy:focus-visible { color:var(--accent); border-color:var(--border); background:var(--accent-soft); }
+.device-ip-copy:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.device-ip-copy[data-copied] { color:#248853; border-color:#37a875; }
+:root[data-theme=dark] .device-ip-copy[data-copied] { color:#8bd1a8; }

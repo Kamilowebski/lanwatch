@@ -418,3 +418,10 @@ nie stanowi nowego wpisu historii; same pomiary zapisują się jak dotychczas.
 Filtr **Grupy z problemami** obejmuje grupy z maszyną lub zależnością pośrednią
 bez odpowiedzi. Nie traktuje niesprawdzonych i nieustalonych wyników jako awarii.
 Współpracuje z pozostałymi filtrami i zapamiętuje wybór w przeglądarce.
+
+Zapisany adres IPv4 jest widoczny pod nazwą maszyny w ewidencji i monitorze.
+Kliknięcie lub Enter na adresie kopiuje sam adres do schowka, bez pingowania
+i otwierania raportu. Brak zapisanego IP nie tworzy pustego przycisku.
+Sekcje konfiguracji zapamiętują wybór bez dodawania identyfikatora do URL.
+Bezpośrednie odnośniki do sekcji nadal działają, ale po przejściu do innej
+zakładki ich fragment jest usuwany, aby nie wymuszał powrotu po odświeżeniu.

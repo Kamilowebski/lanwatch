@@ -931,7 +931,7 @@ function renderDeviceRow(device, isGroupMember = false) {
   favorite.textContent=device.favorite?"★":"☆";favorite.setAttribute("aria-label",`Ulubiona maszyna: ${device.hostName}`);favorite.setAttribute("aria-pressed",String(device.favorite));
   favorite.disabled=window.isDeviceFavoritePending?.(device.id) || false;
   favorite.addEventListener("click",()=>window.toggleDeviceFavorite(device.id,!device.favorite,favorite));
-  titleLine.append(favorite,hostName);hostCell.append(titleLine);
+  titleLine.append(favorite,hostName);hostCell.append(titleLine,makeDeviceAddress(device));
   if (device.lineNumber) {
     const lineNumber = document.createElement("small");
     lineNumber.className = "line-number-cell";
@@ -1537,7 +1537,7 @@ function renderMonitor() {
     hostName.title = `${device.hostName} — otwórz raport dostępności`;
     hostName.setAttribute("aria-label", `Raport dostępności: ${device.hostName}`);
     details.title = details.textContent;
-    host.append(hostName, details);
+    host.append(hostName, makeDeviceAddress(device), details);
     if (device.monitorAutomatic) {
       const origin = document.createElement("small");
       origin.className = "monitor-automatic-origin";

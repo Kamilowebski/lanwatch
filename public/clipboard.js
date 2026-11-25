@@ -24,3 +24,18 @@ function makeCopyButton(value, label) {
   });
   return button;
 }
+function makeDeviceAddress(device) {
+  const line=document.createElement('div');line.className='device-address-line';
+  if(!device.ip)return line;
+  const button=document.createElement('button');button.type='button';button.className='device-ip-copy';
+  button.textContent=device.ip;button.title='Kliknij, aby skopiować adres IP';
+  const label=`Kopiuj IP ${device.ip}: ${device.hostName}`;button.setAttribute('aria-label',label);
+  const feedback=document.createElement('span');feedback.className='visually-hidden';feedback.setAttribute('role','status');
+  button.addEventListener('click',async event=>{
+    event.stopPropagation();if(button.disabled)return;button.disabled=true;
+    try{await copyPlainText(device.ip,button);button.dataset.copied='true';feedback.textContent=`Skopiowano ${device.ip}`;button.title='Adres IP skopiowany';}
+    catch(error){notify(error.message,'danger');}
+    finally{button.disabled=false;setTimeout(()=>{if(button.isConnected){delete button.dataset.copied;button.title='Kliknij, aby skopiować adres IP';feedback.textContent='';}},1800);}
+  });
+  line.append(button,feedback);return line;
+}

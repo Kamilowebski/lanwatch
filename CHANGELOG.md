@@ -1,5 +1,11 @@
 # Historia zmian Lanwatch
 
+## 1.5.4 — 2026-11-25
+
+- Widoczne zapisane adresy IPv4 pod nazwami maszyn w ewidencji i monitorze; kliknięcie lub Enter kopiuje adres do schowka bez otwierania raportu i bez pingowania.
+- Potwierdzenie kopiowania nie zmienia adresu ani szerokości kolumny.
+- Przełączanie sekcji konfiguracji nie pozostawia identyfikatora w adresie. Wyjście z konfiguracji otwartej przez bezpośredni link usuwa jej fragment z URL, aby odświeżenie tabeli nie przenosiło do ustawień.
+
 ## 1.5.3 — 2026-11-25
 
 - Przycisk „Zwiń wszystkie grupy” zamyka rozwinięcia na wszystkich stronach bez wysyłania pingów i bez przerywania trwających sprawdzeń.
