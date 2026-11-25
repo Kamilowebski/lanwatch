@@ -2,6 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),http=requir
 test('HTTP rejects hostile authorities and cross-site writes, enforces byte/depth limits and sets security headers',async()=>{
  const listener=net.createServer();await new Promise(resolve=>listener.listen(0,'127.0.0.1',resolve));const port=listener.address().port;await new Promise(resolve=>listener.close(resolve));
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lanwatch-http-security-'));const child=spawn(process.execPath,[path.join(__dirname,'server.js')],{cwd:__dirname,env:{...process.env,PORT:String(port),DB_PATH:path.join(dir,'test.sqlite')},stdio:'ignore'});
+ const stop=async()=>{if(child.exitCode!==null||child.signalCode!==null)return;const exited=new Promise(resolve=>child.once('exit',resolve));child.kill('SIGTERM');await exited;};
  const send=(method,url,headers={},body)=>new Promise((resolve,reject)=>{const request=http.request({host:'127.0.0.1',port,path:url,method,headers},response=>{let text='';response.setEncoding('utf8');response.on('data',chunk=>text+=chunk);response.on('end',()=>resolve({status:response.statusCode,headers:response.headers,body:text}));});request.on('error',reject);request.end(body);});
  try{
   for(let i=0;i<100;i++){try{if((await send('GET','/api/devices')).status===200)break;}catch{}await new Promise(resolve=>setTimeout(resolve,50));}
@@ -28,6 +29,6 @@ test('HTTP rejects hostile authorities and cross-site writes, enforces byte/dept
   await new Promise(resolve=>setTimeout(resolve,30));assert.equal((await send('GET','/api/devices')).status,200);
   const locations=JSON.parse((await send('GET','/api/locations')).body);assert.equal(locations.some(v=>v.name==='Forbidden'),false);
   assert.equal((await send('PUT','/api/settings',{'Content-Type':'application/json',Origin:`http://127.0.0.1:${port}`},JSON.stringify({sshUser:'-bad'}))).status,400);
-  child.kill('SIGTERM');await new Promise(resolve=>child.once('exit',resolve));const log=fs.readFileSync(path.join(dir,'logs','lanwatch.log'),'utf8');assert.equal(log.includes(fakeCredential),false);
- }finally{if(child.exitCode===null){child.kill('SIGTERM');await new Promise(resolve=>child.once('exit',resolve));}fs.rmSync(dir,{recursive:true,force:true});}
+  await stop();const log=fs.readFileSync(path.join(dir,'logs','lanwatch.log'),'utf8');assert.equal(log.includes(fakeCredential),false);
+ }finally{await stop();fs.rmSync(dir,{recursive:true,force:true});}
 });

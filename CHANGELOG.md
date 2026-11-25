@@ -1,5 +1,10 @@
 # Historia zmian Lanwatch
 
+## 1.7.2 — 2026-11-25
+
+- Poprawione sprzątanie procesu serwera w teście bezpieczeństwa HTTP na Windows: zakończenie sygnałem jest rozpoznawane bez ponownego oczekiwania na zakończony proces.
+- Pełna paczka zawiera wszystkie poprawki bezpieczeństwa wersji 1.7.1; bez zmiany działania aplikacji względem 1.7.1.
+
 ## 1.7.1 — 2026-11-25
 
 - Kontrola Host dla wszystkich zasobów i API: tylko literalne localhost i 127.0.0.1 z portem aplikacji; odrzucanie obcych, brakujących i powielonych Host oraz nieprawidłowych celów żądania.
