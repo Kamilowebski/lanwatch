@@ -363,5 +363,31 @@ test("validates devices, expires old online status, and restricts SSH tunnel lau
   } finally {
     database.close();
   }
+  const unchangedCount = (await request("/api/devices")).result.length;
+  const badBulk = await request("/api/devices/bulk", "PUT", {deviceIds:[first.result.id,999999],changes:{monitorEnabled:false}});
+  assert.equal(badBulk.status,404);
+  assert.equal((await request("/api/devices")).result.find(item=>item.id===first.result.id).monitorEnabled,true);
+  assert.equal((await request("/api/devices/bulk", "PUT", {deviceIds:[first.result.id],changes:{monitorEnabled:"yes"}})).status,400);
+  const csvResponse = await fetch(`${baseUrl}/api/devices/export.csv`);
+  assert.equal(csvResponse.status,200);
+  assert.match(csvResponse.headers.get("content-type"),/text\/csv/);
+  assert.equal(require("./device-csv").parseDeviceCsv(await csvResponse.text()).length,unchangedCount);
+  const csv = require("./device-csv").exportDeviceCsv([
+    {hostName:"CSV-A",ip:"",location:"CSV Hala",category:"CSV Typ",dependencies:["CSV-B"]},
+    {hostName:"CSV-B",ip:"192.168.99.20",location:"CSV Hala",category:"CSV Typ",dependencies:[]},
+  ]);
+  const preview=await request("/api/devices/import/preview","POST",{csv});
+  assert.equal(preview.status,200);
+  assert.equal(preview.result.imported,2);
+  assert.equal((await request("/api/devices")).result.length,unchangedCount);
+  const imported=await request("/api/devices/import","POST",{csv});assert.equal(imported.status,200);
+  const afterCsv=(await request("/api/devices")).result;
+  assert.equal(afterCsv.length,unchangedCount+2);
+  assert.deepEqual(afterCsv.find(item=>item.hostName==='CSV-A').dependencies,['CSV-B']);
+  assert.equal((await request("/api/devices/import","POST",{csv})).status,409);
+  const vendor=await fetch(`${baseUrl}/vendor/bootstrap-5.3.8.min.css`);
+  assert.equal(vendor.status,200);assert.match(await vendor.text(),/Bootstrap  v5\.3\.8/);
+  assert.equal(markup.includes('cdn.jsdelivr.net'),false);
+
 });
 

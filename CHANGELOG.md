@@ -1,5 +1,18 @@
 # Historia zmian Lanwatch
 
+## 1.3.0 — 2026-11-25
+
+- Lokalny Bootstrap 5.3.8 z licencją: interfejs nie wymaga internetu ani CDN.
+- Kopiowanie hosta i IPv4 w szczegółach maszyny, również wewnątrz okna dialogowego.
+- Eksport ewidencji CSV dla Excela (UTF-8 BOM, separator średnik) i import z podglądem.
+- Import do 500 maszyn / 900 KB, automatyczne tworzenie kategorii i lokalizacji,
+  przenoszenie zależności po nazwach hostów i transakcyjne odrzucanie błędnych plików.
+- Zaznaczanie maszyn oraz całych grup, utrzymanie zaznaczeń między stronami
+  i zbiorcza zmiana lokalizacji, kategorii lub stanu monitorowania.
+- Import snippetów pomija duplikaty treści w tym samym systemie i powłoce,
+  również w obrębie importowanego pliku, i pokazuje liczbę pominiętych wpisów.
+- Usunięty zduplikowany pasek szybkich filtrów w tabeli maszyn.
+
 ## 1.2.1 — 2026-11-25
 
 - Uporządkowane README: instalacja na Windows, wszystkie zakładki, IPv4, tunel VNC,

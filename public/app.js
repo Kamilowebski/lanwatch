@@ -804,6 +804,7 @@ function openDeviceDetails(device) {
   elements.deviceDetailsList.replaceChildren();
   const devicesById = new Map(devices.map((item) => [item.id, item]));
   const detailValues = [
+    ["Nazwa hosta", device.hostName],
     ["Adres IP", device.ip],
     ["Grupa", device.groupName],
     ["Lokalizacja", device.location],
@@ -821,6 +822,11 @@ function openDeviceDetails(device) {
     term.textContent = label;
     const description = document.createElement("dd");
     description.textContent = value || "—";
+    if (["Nazwa hosta","Adres IP"].includes(label)) {
+      description.classList.add("device-copy-value");
+      const text=document.createElement("span");text.textContent=value || "—";
+      description.replaceChildren(text,makeCopyButton(value,`Kopiuj ${label === "Nazwa hosta" ? "host" : "IP"}: ${device.hostName}`));
+    }
     elements.deviceDetailsList.append(term, description);
   }
   elements.editDeviceFromDetails.onclick = () => {
@@ -860,6 +866,7 @@ function renderDeviceRow(device, isGroupMember = false) {
   row.dataset.deviceIds = String(device.id);
   row.dataset.subjectLabel = device.hostName;
   if (isGroupMember) row.className = "group-member-row";
+  row.append(window.createInventorySelectionCell([device.id],device.hostName));
   const hostCell = document.createElement("td");
   hostCell.className = "host-cell";
   const hostName = document.createElement("button");
@@ -971,6 +978,7 @@ function renderGroupSummaryRow(group) {
   const row = document.createElement("tr");
   row.dataset.deviceIds = group.devices.map((device) => device.id).join(",");
   row.dataset.subjectLabel = group.relatedName || group.groupName;
+  row.append(window.createInventorySelectionCell(group.devices.map(device=>device.id),`grupa ${group.relatedName || group.groupName}`));
   const hostCell = document.createElement("td");
   hostCell.className = "host-cell group-summary-cell";
   const name = document.createElement("span");
@@ -1056,6 +1064,7 @@ function renderDevices() {
     }
   }
 
+  window.syncInventorySelection();
   const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all");
   renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
   document.getElementById("result-count").textContent =
@@ -1127,6 +1136,7 @@ function updateVisibleDeviceStatuses() {
 
   const query = elements.search.value.trim().toLocaleLowerCase("pl");
   const filteredGroups = searchRelatedGroups(query).filter(matchesDeviceFilters);
+  window.syncInventorySelection();
   const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all");
   renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
 }

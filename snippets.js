@@ -12,6 +12,9 @@ function validateSnippet(input) {
   result.favorite = input.favorite ?? false;
   return result;
 }
+function snippetIdentity(value) {
+  return JSON.stringify([value.platform.toLowerCase(),value.shell.toLowerCase(),value.command.replace(/\r\n?/g,'\n')]);
+}
 function createSnippetStore(database) {
   const existed = database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='snippets'").get();
   database.exec(`CREATE TABLE IF NOT EXISTS snippets (
@@ -62,10 +65,18 @@ function createSnippetStore(database) {
     import(input) {
       if(!input || input.version!==1 || !Array.isArray(input.snippets) || input.snippets.length>200)throw Object.assign(new Error('Wymagany plik JSON wersji 1, maksymalnie 200 wpisów.'),{status:400});
       const values=input.snippets.map(validateSnippet);
+      const known = new Set(database.prepare('SELECT platform,shell,command FROM snippets').all().map(snippetIdentity));
+      let imported=0,skipped=0;
       database.exec('BEGIN');
-      try { for(const value of values)create(value); database.exec('COMMIT'); }
-      catch(error){database.exec('ROLLBACK');throw error;}
-      return {imported:values.length};
+      try {
+        for(const value of values) {
+          const key=snippetIdentity(value);
+          if(known.has(key)){skipped++;continue;}
+          create(value);known.add(key);imported++;
+        }
+        database.exec('COMMIT');
+      } catch(error){database.exec('ROLLBACK');throw error;}
+      return {imported,skipped};
     },
   };
 }

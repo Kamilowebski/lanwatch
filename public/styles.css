@@ -563,3 +563,18 @@ button, input, select, textarea { font: inherit; }
 @media(max-width:800px) { .snippet-grid { grid-template-columns: 1fr; } }
 
 .app-footer .app-version { padding: 3px 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); background: var(--surface); font-size: 10px; font-variant-numeric: tabular-nums; }
+.inventory-file-actions { display: flex; gap: 8px; align-items: center; }
+.inventory-file-actions a { text-decoration: none; }
+.inventory-bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 22px; border-top: 1px solid var(--border); background: var(--accent-soft); }
+.inventory-bulk-bar > span { margin-right: auto; color: var(--accent); font-size: 11px; font-weight: 600; }
+.inventory-bulk-bar[hidden] { display: none; }
+.inventory-table .inventory-select-cell { width: 42px; min-width: 42px; padding: 12px; text-align: center; }
+.inventory-select-cell input { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+#inventory-view .inventory-table th:nth-child(2), #inventory-view .inventory-table td:nth-child(2) { padding-left: 6px; }
+.device-copy-value { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.copy-value-button { flex-shrink: 0; border: 1px solid var(--border); border-radius: 5px; padding: 4px 7px; background: var(--accent-soft); color: var(--accent); font-size: 10px; cursor: pointer; }
+.copy-value-button:disabled { opacity: .5; cursor: default; }
+.clipboard-buffer { position: fixed; left: -9999px; top: 0; }
+.device-import-body { padding: 20px 24px; color: var(--text); font-size: 12px; line-height: 1.7; }
+.device-import-body .settings-help { margin: 14px 0 0; }
+#bulk-edit-form .dialog-actions { flex-wrap: wrap; }

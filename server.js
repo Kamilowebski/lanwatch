@@ -10,6 +10,7 @@ const databaseFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : p
 const diagnostics = require("./diagnostics").createLogger(path.join(path.dirname(databaseFile),"logs"));
 const {
   backupDatabase,
+  importDeviceRows, bulkUpdateDevices,
   snippetStore,
   updateMonitorNote, getDeviceReport,
   createCategory,
@@ -34,6 +35,7 @@ const {
   updateSshUser,
 } = require("./database");
 const { pingLocalTarget } = require("./ping");
+const { parseDeviceCsv, exportDeviceCsv } = require("./device-csv");
 const { startVncTunnel } = require("./terminal");
 
 const port = Number(process.env.PORT) || 3000;
@@ -42,6 +44,9 @@ const MONITOR_POLL_INTERVAL_MS = 15 * 1000;
 const publicDirectory = path.join(__dirname, "public");
 const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
+  "/vendor/bootstrap-5.3.8.min.css": {file:"vendor/bootstrap-5.3.8.min.css",type:"text/css; charset=utf-8"},
+  "/clipboard.js": {file:"clipboard.js",type:"text/javascript; charset=utf-8"},
+  "/inventory-tools.js": {file:"inventory-tools.js",type:"text/javascript; charset=utf-8"},
   "/ipv4.js": {file:"ipv4.js",type:"text/javascript; charset=utf-8"},
   "/snippets.js": {file:"snippets.js",type:"text/javascript; charset=utf-8"},
   "/report.js": {file:"report.js",type:"text/javascript; charset=utf-8"},
@@ -140,7 +145,7 @@ function readJson(request) {
     request.setEncoding("utf8");
     request.on("data", (chunk) => {
       body += chunk;
-      if (body.length > 1024 * 1024) {
+      if (body.length > (request.url?.startsWith("/api/devices/import") ? 2 : 1) * 1024 * 1024) {
         reject(new HttpError(413, "Przesłane dane są zbyt duże."));
         request.destroy();
       }
@@ -448,6 +453,32 @@ async function handleApi(request, response, pathname) {
   if (pathname === "/api/locations" && request.method === "GET") {
     sendJson(response, 200, getLocations());
     return;
+  }
+  if (pathname === "/api/devices/export.csv" && request.method === "GET") {
+    response.writeHead(200,{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":"attachment; filename=lanwatch-maszyny.csv","Cache-Control":"no-store"});
+    response.end(exportDeviceCsv(getDevices()));return;
+  }
+  if (["/api/devices/import/preview","/api/devices/import"].includes(pathname) && request.method === "POST") {
+    const body = await readJson(request);
+    const rows = parseDeviceCsv(body?.csv).map(row => {
+      try {
+        const data = validateDevice({...row,categoryId:1});
+        const category = validateNamedItem({name:row.category},"kategorii");
+        data.location = validateNamedItem({name:row.location},"lokalizacji");
+        return {...data,category,dependencyHosts:row.dependencyHosts,csvRow:row.csvRow};
+      } catch(error){error.message=`Wiersz ${row.csvRow}: ${error.message}`;throw error;}
+    });
+    sendJson(response,200,importDeviceRows(rows,pathname.endsWith("/preview")));return;
+  }
+  if (pathname === "/api/devices/bulk" && request.method === "PUT") {
+    const body = await readJson(request);
+    if (!body || !Array.isArray(body.deviceIds) || !body.deviceIds.length || body.deviceIds.length>500 || body.deviceIds.some(id=>!Number.isSafeInteger(id)||id<1)) throw new HttpError(400,"Zaznacz od 1 do 500 maszyn.");
+    const changes = body.changes;
+    if (!changes || typeof changes!=="object" || Array.isArray(changes) || !Object.keys(changes).length || Object.keys(changes).some(key=>!["location","categoryId","monitorEnabled"].includes(key))) throw new HttpError(400,"Wybierz prawidłową operację zbiorczą.");
+    if (changes.location!==undefined) changes.location=validateNamedItem({name:changes.location},"lokalizacji");
+    if (changes.categoryId!==undefined && (!Number.isSafeInteger(changes.categoryId)||changes.categoryId<1)) throw new HttpError(400,"Wybierz prawidłową kategorię.");
+    if (changes.monitorEnabled!==undefined && typeof changes.monitorEnabled!=="boolean") throw new HttpError(400,"Nieprawidłowy stan monitorowania.");
+    sendJson(response,200,bulkUpdateDevices([...new Set(body.deviceIds)],changes));return;
   }
   if (pathname === "/api/devices" && request.method === "GET") {
     sendJson(response, 200, getDevices());

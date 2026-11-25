@@ -183,14 +183,17 @@ function saveDependencies(deviceId, dependencyIds) {
   for (const dependencyId of dependencyIds) insertDependency.run(deviceId, dependencyId);
 }
 
+let transactionSequence = 0;
 function withTransaction(callback) {
-  database.exec("BEGIN");
+  const name = `lanwatch_${++transactionSequence}`;
+  database.exec(`SAVEPOINT ${name}`);
   try {
     const result = callback();
-    database.exec("COMMIT");
+    database.exec(`RELEASE SAVEPOINT ${name}`);
     return result;
   } catch (error) {
-    database.exec("ROLLBACK");
+    database.exec(`ROLLBACK TO SAVEPOINT ${name}`);
+    database.exec(`RELEASE SAVEPOINT ${name}`);
     throw error;
   }
 }
@@ -535,6 +538,55 @@ function deleteDevice(id) {
   }
 }
 
+function importDeviceRows(rows, preview = false) {
+  const previewRollback = {};
+  let summary;
+  try {
+    return withTransaction(() => {
+      const categoryNames = [], locationNames = [], created = [];
+      for (const row of rows) {
+        try {
+          let category = database.prepare("SELECT id FROM categories WHERE name = ? COLLATE NOCASE").get(row.category);
+          if (!category) { category = createCategory(row.category); categoryNames.push(row.category); }
+          if (!getLocationByName(row.location)) { createLocation(row.location); locationNames.push(row.location); }
+          created.push(createDevice({...row, categoryId:category.id, dependencyIds:[]}));
+        } catch(error) { error.message = `Wiersz ${row.csvRow}: ${error.message}`;throw error; }
+      }
+      rows.forEach((row,index) => {
+        const ids = row.dependencyHosts.map(host => {
+          const target = database.prepare("SELECT id FROM devices WHERE host_name = ? COLLATE NOCASE").get(host);
+          if (!target) throw Object.assign(new Error(`Wiersz ${row.csvRow}: nie istnieje zależność ${host}.`),{status:400});
+          return target.id;
+        });
+        try { saveDependencies(created[index].id,[...new Set(ids)]); }
+        catch(error){error.message=`Wiersz ${row.csvRow}: ${error.message}`;throw error;}
+      });
+      summary={imported:created.length,newCategories:categoryNames,newLocations:locationNames};
+      if (preview) throw previewRollback;
+      return summary;
+    });
+  } catch(error) { if (error===previewRollback) return summary;throw error; }
+}
+
+function bulkUpdateDevices(ids, changes) {
+  return withTransaction(() => {
+    const existing = ids.map(id => {
+      const device=getDevice(id);
+      if(!device)throw Object.assign(new Error(`Maszyna ${id} już nie istnieje. Odśwież listę.`),{status:404});
+      return device;
+    });
+    const location = changes.location === undefined ? null : getLocationByName(changes.location);
+    if (changes.location !== undefined && !location) throw Object.assign(new Error("Wybrana lokalizacja już nie istnieje."),{status:400});
+    if (changes.categoryId !== undefined && !getCategory(changes.categoryId)) throw Object.assign(new Error("Wybrana kategoria już nie istnieje."),{status:400});
+    for (const device of existing) {
+      if (location) database.prepare("UPDATE devices SET location = ? WHERE id = ?").run(location.name,device.id);
+      if (changes.categoryId !== undefined) database.prepare("UPDATE devices SET category_id = ? WHERE id = ?").run(changes.categoryId,device.id);
+      if (changes.monitorEnabled !== undefined) updateDeviceMonitor(device.id,{enabled:changes.monitorEnabled,notifyOnline:device.notifyOnline,notifyOffline:device.notifyOffline});
+    }
+    return {updated:existing.length};
+  });
+}
+
 function backupDatabase() {
   return require("./backup").backupInWorker(databasePath);
 }
@@ -542,6 +594,7 @@ function backupDatabase() {
 const snippetStore = require("./snippets").createSnippetStore(database);
 
 module.exports = {
+  importDeviceRows, bulkUpdateDevices,
   snippetStore,
   updateMonitorNote, getDeviceReport,
   backupDatabase,

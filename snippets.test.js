@@ -16,8 +16,9 @@ test('snippet import validates the entire batch and never reseeds a cleared libr
   const store=createSnippetStore(db),before=store.list().length;
   assert.throws(()=>store.import({version:1,snippets:[value,{...value,platform:'invalid'}]}),{status:400});
   assert.equal(store.list().length,before);
-  assert.deepEqual(store.import({version:1,snippets:[value,{...value,title:'Second'}]}),{imported:2});
-  assert.equal(store.list().length,before+2);
+  assert.deepEqual(store.import({version:1,snippets:[value,{...value,title:'Second'}]}),{imported:1,skipped:1});
+  assert.deepEqual(store.import({version:1,snippets:[{...value,title:'Renamed',command:value.command.replace(/\r\n/g,'\n')}]}),{imported:0,skipped:1});
+  assert.equal(store.list().length,before+1);
   for(const entry of store.list())store.remove(entry.id);
   assert.equal(createSnippetStore(db).list().length,0);
  }finally{db.close();}

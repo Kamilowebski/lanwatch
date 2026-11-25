@@ -3,7 +3,7 @@
 [![Tests](https://github.com/Kamilowebski/lanwatch/actions/workflows/test.yml/badge.svg)](https://github.com/Kamilowebski/lanwatch/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Wersja 1.2.1** · [Historia zmian](CHANGELOG.md) · [Licencja MIT](LICENSE)
+**Wersja 1.3.0** · [Historia zmian](CHANGELOG.md) · [Licencja MIT](LICENSE)
 
 Lokalna aplikacja do ewidencji urządzeń, monitorowania dostępności i przechowywania
 komend administracyjnych. Działa w przeglądarce, z serwerem Node.js i bazą SQLite
@@ -34,8 +34,8 @@ migracje istniejącej bazy przy uruchomieniu.
   mogą działać także na Linuxie, jeśli dostępne jest systemowe polecenie `ping`.
 - **Microsoft Edge — zalecana przeglądarka.** W dotychczasowym użytkowaniu Firefox
   wykazywał problemy z odświeżaniem; ich przyczyna nie została potwierdzona.
-- Dostęp do CDN w przeglądarce do pobrania arkusza Bootstrap. Dane aplikacji są lokalne,
-  ale arkusz stylów jest pobierany z `cdn.jsdelivr.net`.
+- Internet nie jest wymagany do działania interfejsu. Bootstrap 5.3.8 i ikony są
+  dołączone lokalnie do projektu. Nazwy hostów mogą wymagać lokalnego DNS.
 - Do tunelu VNC: klient OpenSSH, Windows PowerShell i osobny klient VNC, np. TigerVNC.
   Serwer należy uruchomić w aktywnej sesji użytkownika Windows.
 
@@ -136,7 +136,53 @@ Przykładowe `HOST` i `UZYTKOWNIK` zmień samodzielnie przed użyciem w swojej k
 
 Eksport JSON obejmuje całą bibliotekę niezależnie od filtrów. Import wersji 1 dopisuje
 do **200 wpisów** z pliku do **900 KB**; nie nadpisuje istniejących. Ponowny import
-może utworzyć duplikaty. Niepoprawny import jest odrzucany przed zapisem całej partii.
+pomija duplikaty. Tożsamość wpisu określają system, powłoka (bez rozróżniania
+wielkości liter) oraz treść komendy. Różnice CRLF/LF są pomijane przy porównaniu,
+ale treść zapisanego wpisu nie jest zmieniana. Tytuł, opis, tagi i ulubione nie wpływają
+na wykrywanie duplikatu; istniejący wpis nie jest nadpisywany. Import pokazuje liczby
+dodanych i pominiętych wpisów. Niepoprawny import jest odrzucany przed zapisem całej partii.
+
+## Przenoszenie ewidencji CSV
+
+„Eksport CSV” w Maszynach zapisuje **całą ewidencję**, niezależnie od filtrów.
+Plik jest w UTF-8 z BOM i separatorem średnik, odpowiednim dla polskiego Excela.
+Zawiera kolumny:
+
+```text
+hostName;ip;groupName;location;category;description;lineNumber;numerator;dependencyHosts;_format
+```
+
+Przy własnym CSV wymagane są `hostName`, `location`, `category`. Pozostałe pola są
+opcjonalne. Akceptowany jest separator średnik lub przecinek, pola w cudzysłowie,
+podwojone cudzysłowy i opisy wielowierszowe. `dependencyHosts` jest tablicą JSON nazw
+hostów, np. `["T01","D01"]`; zależność może wskazywać inną maszynę z tego samego pliku
+albo maszynę istniejącą w bazie. `_format` to opcjonalny znacznik eksportu Lanwatch,
+pozwalający odwrócić ochronę komórek przed interpretacją jako formuły arkusza.
+
+„Import CSV” najpierw pokazuje podgląd: liczbę nowych maszyn i nazwy nowych
+kategorii/lokalizacji. Podgląd **niczego nie zapisuje**. Potwierdzenie ponownie
+waliduje i importuje wszystko w jednej transakcji. Niepoprawny IPv4, konflikt hosta
+lub IP, błędna zależność albo inny błąd odrzuca cały plik bez częściowego zapisu.
+Import tylko dodaje — nie nadpisuje istniejących maszyn. Limit: 500 maszyn, 900 KB.
+
+CSV nie zawiera historii pingowania, notatek monitora ani jego ustawień. Do pełnego
+odtworzenia aplikacji służy kopia SQLite. Kategorie i lokalizacje brakujące w bazie
+zostaną utworzone po potwierdzeniu importu.
+
+## Operacje na wielu maszynach
+
+Checkbox w wierszu zaznacza maszynę; checkbox grupy zaznacza wszystkie jej elementy.
+Nagłówek zaznacza maszyny z bieżącej strony (także elementy zwiniętych grup).
+Zaznaczenia pozostają przy filtrowaniu i zmianie strony, lecz nie po przeładowaniu
+przeglądarki. Pasek podaje łączną liczbę zaznaczonych maszyn ze wszystkich stron.
+
+Można zbiorczo zmienić lokalizację i/lub kategorię albo włączyć/wyłączyć monitoring.
+Każda operacja obejmuje całe zaznaczenie, do 500 maszyn, i jest atomowa.
+Wyłączenie monitora usuwa jego tymczasowe notatki. Checkboxy i pasek operacji są
+blokowane na czas zapisu, aby uniknąć podwójnych żądań.
+
+W szczegółach maszyny przy nazwie hosta i IPv4 znajduje się „Kopiuj”. Przycisk dla
+pustego IP jest nieaktywny. Kopiowanie nie zmienia tekstu i nie uruchamia komendy.
 
 ## Ustawienia uruchomienia i dane
 
@@ -257,3 +303,5 @@ wymagające dodatkowych kroków aktualizacji — pierwszą (`2.0.0`).
 
 Kod Lanwatch jest udostępniony na licencji **MIT** — zobacz [LICENSE](LICENSE).
 Copyright © 2026 Kamilowebski. Zewnętrzne narzędzia i Bootstrap zachowują własne licencje.
+Dołączony Bootstrap ma licencję MIT w `public/vendor/bootstrap-LICENSE`; źródło
+i informacje o kopii znajdują się w [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

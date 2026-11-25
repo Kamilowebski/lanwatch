@@ -14,15 +14,7 @@
   }
   async function copy(text,control) {
     try {
-      try {
-        if(!navigator.clipboard?.writeText)throw Error('Clipboard API unavailable');
-        await navigator.clipboard.writeText(text);
-      } catch {
-        const area=document.createElement('textarea');area.value=text;area.className='snippet-copy-buffer';
-        document.body.append(area);area.select();
-        try {if(!document.execCommand('copy'))throw Error('Przeglądarka odmówiła kopiowania. Zaznacz treść komendy i użyj Ctrl+C.');}
-        finally {area.remove();control.focus({preventScroll:true});}
-      }
+      await copyPlainText(text,control);
       control.textContent='Skopiowano';
       window.setTimeout(()=>{if(control.isConnected)control.textContent='Kopiuj';},1800);
     }catch(error){notify(error.message,'danger');}
@@ -107,9 +99,9 @@
       if(file.size>900000)throw Error('Plik jest zbyt duży (limit 900 KB).');
       const body=JSON.parse(await file.text());
       if(body.version!==1 || !Array.isArray(body.snippets) || body.snippets.length>200)throw Error('Wymagany JSON wersji 1, do 200 wpisów.');
-      if(!window.confirm(`Dodać ${body.snippets.length} wpisów? Istniejące wpisy pozostaną bez zmian.`))return;
+      if(!window.confirm(`Dodać ${body.snippets.length} wpisów? Duplikaty treści w tym samym systemie i powłoce zostaną pominięte.`))return;
       const result=await api('/api/snippets/import',{method:'POST',body:JSON.stringify(body)});
-      notify(`Dodano wpisy: ${result.imported}.`);await load();
+      notify(`Dodano: ${result.imported}. Pominięto duplikaty: ${result.skipped}.`);await load();
     }catch(error){notify(error.message,'danger');}
     finally{control.disabled=false;}
   });
