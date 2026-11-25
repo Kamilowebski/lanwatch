@@ -409,3 +409,12 @@ Kolory wierszy rozróżniają również maszyny bez żadnego wyniku (szary), trw
 sprawdzanie rozwiniętej grupy (niebieski) i grupy z różnymi wynikami (bursztynowy).
 Wynik nieustalony po wykonanym sprawdzeniu pozostaje fioletowy. Legenda znajduje
 się nad tabelami monitora i ewidencji.
+
+Przycisk **Zwiń wszystkie grupy** zamyka rozwinięcia na wszystkich stronach;
+nie wysyła pingów i nie przerywa już uruchomionych sprawdzeń. Po sprawdzeniu grupy
+pod jej nazwą pojawia się czas zakończenia i podsumowanie wyników całej serii,
+łącznie z zależnościami. Podsumowanie jest przechowywane w bieżącej karcie,
+nie stanowi nowego wpisu historii; same pomiary zapisują się jak dotychczas.
+Filtr **Grupy z problemami** obejmuje grupy z maszyną lub zależnością pośrednią
+bez odpowiedzi. Nie traktuje niesprawdzonych i nieustalonych wyników jako awarii.
+Współpracuje z pozostałymi filtrami i zapamiętuje wybór w przeglądarce.

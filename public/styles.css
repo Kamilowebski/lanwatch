@@ -712,3 +712,5 @@ button, input, select, textarea { font: inherit; }
 .status-color-legend { display:flex; flex-wrap:wrap; gap:8px 16px; margin:0; padding:10px 23px; border-top:1px solid var(--border); color:var(--muted); font-size:10px; }
 .status-color-legend span::before { content:''; display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; background:var(--tone); }
 .status-color-legend [data-tone=unchecked] { --tone:#99a1b1; }.status-color-legend [data-tone=checking] { --tone:#3484ee; }.status-color-legend [data-tone=online] { --tone:#37a875; }.status-color-legend [data-tone=offline] { --tone:#d65b57; }.status-color-legend [data-tone=unknown] { --tone:#9985cd; }.status-color-legend [data-tone=mixed] { --tone:#ce941c; }
+
+.group-check-summary { display:block; margin-top:5px; color:var(--muted); font-size:10px; line-height:1.5; white-space:normal; max-width:340px; }

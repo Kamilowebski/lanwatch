@@ -115,6 +115,7 @@ let dependencyEditorDeviceId = null;
 let stagedDependencyIds = new Set();
 let statusExpiryTimer = null;
 const pendingGroupChecks = new Set();
+const groupCheckSummaries = new Map();
 const expandedGroups = new Set(Array.isArray(savedInventoryView.expanded) ? savedInventoryView.expanded.filter(value => typeof value === "string").slice(0,500) : []);
 const knownMonitorStatuses = new Map();
 const pendingMonitorUpdates = new Set();
@@ -649,7 +650,8 @@ function quickFilterMatches(device,key) {
 }
 
 function matchesDeviceFilters(group) {
-  return (quickFilter !== "favorites" || group.devices.some(device=>device.favorite))
+  return (!document.getElementById("inventory-problem-groups").checked || ((group.groupName || group.related) && inventoryGroupTargets(group).some(device=>device.status==="offline")))
+    && (quickFilter !== "favorites" || group.devices.some(device=>device.favorite))
     && (quickFilter !== "offline" || group.devices.some(device => device.status === "offline"))
     && (quickFilter !== "monitored" || group.devices.some(device => device.monitorEnabled))
     && (!categoryFilter || group.devices.some((device) => String(device.categoryId) === categoryFilter))
@@ -1054,19 +1056,28 @@ function updateGroupHealth(container, members) {
   }
 }
 
-async function checkExpandedGroup(group) {
-  if (pendingGroupChecks.has(group.key)) return;
+function inventoryGroupTargets(group) {
   const byId = new Map(devices.map(device => [device.id, device]));
   const targets = new Set(group.devices.map(device => device.id));
   const queue = [...targets];
-  for (let i=0;i<queue.length;i++) for (const id of byId.get(queue[i])?.dependencyIds || []) {
-    if (byId.has(id) && !targets.has(id)) { targets.add(id); queue.push(id); }
+  for(let i=0;i<queue.length;i++)for(const id of byId.get(queue[i])?.dependencyIds || []) {
+    if(byId.has(id)&&!targets.has(id)){targets.add(id);queue.push(id);}
   }
+  return [...targets].map(id=>byId.get(id)).filter(Boolean);
+}
+
+async function checkExpandedGroup(group) {
+  if (pendingGroupChecks.has(group.key)) return;
+  const targets = new Set(inventoryGroupTargets(group).map(device=>device.id));
   if(window.confirmPingSeries && !window.confirmPingSeries([...targets])) return;
   pendingGroupChecks.add(group.key);
   renderDevices();
   try {
-    await api("/api/ping", {method:"POST",body:JSON.stringify({deviceIds:[...targets]}),timeoutMs:pingRequestTimeout()});
+    const result=await api("/api/ping", {method:"POST",body:JSON.stringify({deviceIds:[...targets]}),timeoutMs:pingRequestTimeout()});
+    const summary=result.summary;
+    const message=`${summary.online} online · ${summary.offline} bez odpowiedzi · ${summary.unknown} nieustalonych`;
+    groupCheckSummaries.set(group.key,{message,finishedAt:result.finishedAt});
+    notify(`${group.relatedName || group.groupName}: ${message}.`,summary.offline || summary.unknown ? 'warning' : 'success');
     await refresh({preserveInventory:true});
   } catch(error) { notify(`Sprawdzanie grupy: ${error.message}`, "danger"); }
   finally { pendingGroupChecks.delete(group.key); renderDevices(); }
@@ -1093,6 +1104,13 @@ function renderGroupSummaryRow(group) {
   counts.className = "group-health-counts";
   updateGroupHealth(counts, group.devices);
   hostCell.append(name, count, counts);
+  const lastCheck=groupCheckSummaries.get(group.key);
+  if(lastCheck){
+    const summary=document.createElement("small");summary.className="group-check-summary";
+    summary.textContent=`${new Date(lastCheck.finishedAt).toLocaleTimeString("pl-PL")} · ${lastCheck.message}`;
+    summary.title="Ostatnia zakończona ręczna seria dla grupy i wszystkich jej zależności w tej karcie.";
+    hostCell.append(summary);
+  }
   row.append(hostCell);
   row.append(makeCell(summaryValues(group.devices, "location")));
 
@@ -1240,7 +1258,7 @@ function renderDevices() {
   }
 
   window.syncInventorySelection();
-  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all");
+  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all" || document.getElementById("inventory-problem-groups").checked);
   renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
   document.getElementById("result-count").textContent =
     hasFilters ? `${filteredGroups.length} wyników` : "";
@@ -1317,7 +1335,7 @@ function updateVisibleDeviceStatuses() {
   const query = elements.search.value.trim().toLocaleLowerCase("pl");
   const filteredGroups = searchRelatedGroups(query).filter(matchesDeviceFilters);
   window.syncInventorySelection();
-  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all");
+  const hasFilters = Boolean(query || categoryFilter || locationFilter || statusFilter || quickFilter !== "all" || document.getElementById("inventory-problem-groups").checked);
   renderSummary(filteredGroups.flatMap((group) => group.devices), hasFilters);
 }
 
@@ -1688,7 +1706,7 @@ async function refresh({ preserveInventory = false } = {}) {
     } else if (!canPreserveInventory) {
       renderNamedItems("category",categories); renderNamedItems("location",locations);
     }
-    if (canPreserveInventory) updateVisibleDeviceStatuses();
+    if (canPreserveInventory && !(typeof document !== "undefined" && document.getElementById("inventory-problem-groups")?.checked)) updateVisibleDeviceStatuses();
     else renderDevices();
     renderMonitor();
     scheduleStatusExpiry(onlineTtlMs);
@@ -1973,6 +1991,15 @@ async function pingVisibleDevices(button) {
     if (button.isConnected) button.disabled = false;
   }
 }
+
+const problemGroupsInput=document.getElementById("inventory-problem-groups");
+problemGroupsInput.checked=readPreference("lanwatch-problem-groups")==="true";
+problemGroupsInput.addEventListener("change",()=>{
+  savePreference("lanwatch-problem-groups",String(problemGroupsInput.checked));currentPage=1;renderDevices();
+});
+document.getElementById("collapse-all-groups").addEventListener("click",()=>{
+  expandedGroups.clear();renderDevices();
+});
 
 document.getElementById("theme-toggle").addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");

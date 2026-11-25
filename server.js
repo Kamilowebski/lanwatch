@@ -349,8 +349,10 @@ async function pingSelectedDevices(deviceIds) {
     throw new HttpError(404, "Nie znaleziono jednej z wybranych maszyn.");
   }
 
-  await Promise.all(deviceIds.map((id) => checkDevice(devicesById.get(id), true)));
-  return { checked: deviceIds.length };
+  const results=await Promise.all(deviceIds.map((id) => checkDevice(devicesById.get(id), true)));
+  const summary={online:0,offline:0,unknown:0};
+  for(const result of results)summary[result.status in summary?result.status:'unknown']++;
+  return {checked:deviceIds.length,summary,finishedAt:new Date().toISOString()};
 }
 
 async function pollMonitoredDevices() {

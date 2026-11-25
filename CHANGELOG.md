@@ -1,5 +1,11 @@
 # Historia zmian Lanwatch
 
+## 1.5.3 — 2026-11-25
+
+- Przycisk „Zwiń wszystkie grupy” zamyka rozwinięcia na wszystkich stronach bez wysyłania pingów i bez przerywania trwających sprawdzeń.
+- Podsumowanie ręcznego sprawdzenia grupy: wyniki online, bez odpowiedzi i nieustalone oraz czas zakończenia. Widoczne przy grupie do zamknięcia karty.
+- Filtr „Grupy z problemami” uwzględnia brak odpowiedzi maszyny lub dowolnej zależności pośredniej spoza grupy, obsługuje cykle i aktualizuje listę podczas odświeżania.
+
 ## 1.5.2 — 2026-11-25
 
 - Osobne kolory dla niesprawdzonych maszyn, sprawdzanej grupy i grupy z różnymi wynikami; legenda kolorów w monitorze i ewidencji.
