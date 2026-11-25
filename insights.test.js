@@ -33,3 +33,23 @@ test('audit records actual field changes atomically and isolates a reused device
  d.updateDeviceFavorite(a.id,true);assert.equal(d.getDevice(a.id).favorite,true);assert.equal(d.getDevices().find(v=>v.id===a.id).favorite,true);assert.equal(d.getDeviceChanges().items.length,before);
  `);
 });
+test('automatic monitor origin survives reads, preserves manual machines and resets on disable',()=>{
+ run(setup+`
+ const a=make('T-ROOT'),b=make('D-DEPENDENCY'),c=make('P-SHARED');
+ d.updateDeviceDependencies(a.id,[b.id]);d.updateDeviceDependencies(b.id,[c.id]);d.updateDeviceDependencies(c.id,[a.id]);
+ d.updateDeviceMonitor(c.id,{enabled:true,notifyOnline:true,notifyOffline:false});
+ assert.equal(d.getDevice(c.id).monitorAutomatic,false);
+ assert.equal(d.getDevice(a.id).monitorAutomatic,true);assert.equal(d.getDevice(b.id).monitorAutomatic,true);
+ d.updateDeviceMonitor(b.id,{enabled:true,notifyOnline:true,notifyOffline:true});
+ assert.equal(d.getDevice(b.id).monitorAutomatic,true);
+ d.bulkUpdateDevices([a.id],{monitorEnabled:true});
+ assert.equal(d.getDevice(a.id).monitorAutomatic,false);assert.equal(d.getDevice(b.id).monitorAutomatic,true);
+ assert.equal(d.getDevices().find(v=>v.id===c.id).monitorAutomatic,false);
+ const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(process.env.DB_PATH);
+ assert.equal(db.prepare('SELECT automatic FROM device_monitor WHERE device_id=?').get(b.id).automatic,1);db.close();
+ d.updateDeviceMonitor(a.id,{enabled:false,notifyOnline:false,notifyOffline:false});
+ assert.equal(d.getDevice(a.id).monitorAutomatic,false);assert.equal(d.getDevice(b.id).monitorEnabled,true);
+ d.updateDeviceMonitor(b.id,{enabled:false,notifyOnline:true,notifyOffline:true});
+ assert.equal(d.getDevice(b.id).monitorAutomatic,false);
+ `);
+});

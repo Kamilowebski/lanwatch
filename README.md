@@ -100,6 +100,18 @@ Każde urządzenie pojawia się raz wewnątrz rozwinięcia grupy. Włączenie mo
 pojedynczej maszyny również automatycznie obejmuje jej zależności. Wyłączanie obejmuje jedynie zaznaczone
 maszyny, aby nie zatrzymywać monitorowania zależności używanych przez inne urządzenia.
 
+Nazwy zależności podświetlają widoczne wiersze wskazanej maszyny przy najechaniu
+myszą i przy fokusie klawiatury. Nagłówek grupy pokazuje osobno brak odpowiedzi
+i nieustalone wyniki dla jej maszyn oraz zależności spoza grupy; współdzielone
+zależności są liczone raz w obrębie grupy.
+
+Monitor oznacza nowo dołączone automatycznie maszyny i pokazuje aktywne maszyny
+nadrzędne wynikające z obecnych zależności, również pośrednich. Oznaczenie przetrwa
+restart. Zmiana powiadomień go nie usuwa; wyłączenie monitora je resetuje.
+Jawne zaznaczenie maszyny i zbiorcze włączenie monitora oznacza dodanie ręczne.
+Wcześniejsze wpisy monitora nie otrzymują odtworzonego oznaczenia. Po wyłączeniu
+ostatniej maszyny nadrzędnej zależność pozostaje w monitorze z odpowiednim opisem.
+
 ### Monitoring i raporty
 
 Monitoring uruchamia cykle co **15 sekund**, a widok odświeża się co **5 sekund**.

@@ -739,6 +739,17 @@ function makeDependencyLink(device) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "dependency-link";
+  button.dataset.dependencyId = String(device.id);
+  const highlight = () => {
+    const active = button.matches(":hover") || document.activeElement === button;
+    document.querySelectorAll("#device-list tr[data-device-ids]").forEach(row => {
+      row.classList.toggle("dependency-highlight", active && row.dataset.deviceIds.split(",").includes(String(device.id)));
+    });
+  };
+  button.addEventListener("mouseenter", highlight);
+  button.addEventListener("mouseleave", highlight);
+  button.addEventListener("focus", highlight);
+  button.addEventListener("blur", highlight);
   button.textContent = device.hostName;
   button.setAttribute("aria-label", `Szczegóły zależności: ${device.hostName}`);
   button.addEventListener("click", () => openDeviceDetails(device));
@@ -1008,6 +1019,19 @@ function renderDeviceRow(device, isGroupMember = false) {
   return row;
 }
 
+function groupHealthText(members) {
+  const ownIds = new Set(members.map(device => device.id));
+  const reachable = new Set(ownIds);
+  const byId = new Map(devices.map(device => [device.id, device]));
+  const queue = [...members];
+  for (let i = 0; i < queue.length; i++) for (const id of queue[i].dependencyIds) {
+    if (!reachable.has(id) && byId.has(id)) { reachable.add(id); queue.push(byId.get(id)); }
+  }
+  const external = queue.filter(device => !ownIds.has(device.id));
+  const describe = list => `${list.filter(device => device.status === "offline").length} bez odp. / ${list.length} · ${list.filter(device => device.status === "unknown").length} nieustal.`;
+  return `Maszyny: ${describe(members)} | Zależności spoza grupy: ${describe(external)}`;
+}
+
 function renderGroupSummaryRow(group) {
   const row = document.createElement("tr");
   row.dataset.deviceIds = group.devices.map((device) => device.id).join(",");
@@ -1025,7 +1049,10 @@ function renderGroupSummaryRow(group) {
   count.textContent = group.related
     ? `Połączone zależności: ${group.devices.length} maszyn`
     : `Liczba urządzeń: ${group.devices.length}`;
-  hostCell.append(name, count);
+  const counts = document.createElement("small");
+  counts.className = "group-health-counts";
+  counts.textContent = groupHealthText(group.devices);
+  hostCell.append(name, count, counts);
   row.append(hostCell);
   row.append(makeCell(summaryValues(group.devices, "location")));
 
@@ -1183,6 +1210,7 @@ function updateVisibleDeviceStatuses() {
   }
   const devicesById = new Map(devices.map((device) => [device.id, device]));
   for (const row of elements.deviceList.rows) {
+    if (!row.dataset.deviceIds) continue;
     const relatedDevices = row.dataset.deviceIds
       .split(",")
       .map(Number)
@@ -1190,6 +1218,8 @@ function updateVisibleDeviceStatuses() {
       .filter(Boolean);
     if (!relatedDevices.length) continue;
 
+    const health = row.querySelector(".group-health-counts");
+    if (health) health.textContent = groupHealthText(relatedDevices);
     const representative = relatedDevices[0];
     const subjectLabel = row.dataset.subjectLabel;
     const summary = statusSummary(relatedDevices);
@@ -1345,7 +1375,26 @@ function updateMonitorStatus(row, device) {
   if (latency.className !== latencyClass) latency.className = latencyClass;
 }
 
+function monitorDependencyReasons() {
+  const byId = new Map(devices.map(device => [device.id, device]));
+  const reasons = new Map();
+  for (const root of devices.filter(device => device.monitorEnabled && !device.monitorAutomatic)) {
+    const visited = new Set([root.id]), queue = [root];
+    for (let index = 0; index < queue.length; index++) for (const id of queue[index].dependencyIds) {
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const target = byId.get(id);
+      if (!target?.monitorEnabled) continue;
+      if (!reasons.has(id)) reasons.set(id, []);
+      reasons.get(id).push(root.hostName);
+      queue.push(target);
+    }
+  }
+  return reasons;
+}
+
 function renderMonitor() {
+  const dependencyReasons = monitorDependencyReasons();
   const monitoredDevices = devices.filter((device) => device.monitorEnabled);
   if (offlineFirst) monitoredDevices.sort((a, b) => Number(b.status === "offline") - Number(a.status === "offline"));
   const onlineCount = monitoredDevices.filter((device) => device.status === "online").length;
@@ -1379,7 +1428,7 @@ function renderMonitor() {
   };
   for (const device of monitoredDevices) {
     const metadata = JSON.stringify([device.id, device.hostName, device.ip, device.category,
-      device.groupName, device.location, device.notifyOnline, device.notifyOffline,
+      device.groupName, device.location, device.notifyOnline, device.notifyOffline, device.monitorAutomatic, dependencyReasons.get(device.id),
       pendingMonitorUpdates.has(device.id)]);
     const existing = previousRows.get(String(device.id));
     if (existing && existing.dataset.metadata === metadata) {
@@ -1410,6 +1459,14 @@ function renderMonitor() {
     reportLink.setAttribute("aria-label", `Raport: ${device.hostName}`);
     reportLink.addEventListener("click", () => window.openMonitorReport(device));
     host.append(hostName, details, reportLink);
+    if (device.monitorAutomatic) {
+      const origin = document.createElement("small");
+      origin.className = "monitor-automatic-origin";
+      const sources = dependencyReasons.get(device.id) || [];
+      origin.textContent = sources.length ? `Automatycznie · zależność dla: ${sources.join(", ")}` : "Automatycznie · brak aktywnej maszyny nadrzędnej";
+      origin.title = "Dodano razem z zależnościami. Wyłączenie maszyny nadrzędnej nie wyłącza tej maszyny.";
+      host.append(origin);
+    }
     row.append(host);
 
     const statusCell = document.createElement("td");

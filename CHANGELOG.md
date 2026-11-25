@@ -1,5 +1,13 @@
 # Historia zmian Lanwatch
 
+## 1.4.3 — 2026-11-25
+
+- Podświetlanie widocznych wierszy powiązanej maszyny po najechaniu lub ustawieniu fokusu na nazwie zależności.
+- Oddzielne liczniki braku odpowiedzi i nieustalonych wyników dla maszyn grupy i zależności spoza grupy.
+- Trwałe oznaczenie maszyn automatycznie dołączonych do monitora i lista aktywnych maszyn nadrzędnych, również przez zależności pośrednie.
+- Naprawione odświeżanie tabeli z nagłówkami sekcji rozwiniętej grupy; liczniki aktualizują się bez przebudowania wierszy.
+- Istniejące wpisy monitora zachowują dotychczasowe działanie; sposób ich wcześniejszego dodania nie jest odtwarzany.
+
 ## 1.4.2 — 2026-11-25
 
 - Rozwinięta grupa rozdziela własne maszyny i zależności spoza grupy, bez powielania urządzeń wewnątrz rozwinięcia.
