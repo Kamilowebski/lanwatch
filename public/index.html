@@ -19,6 +19,7 @@
           <button class="main-nav-button active" type="button" data-view="inventory-view">Maszyny</button>
           <button class="main-nav-button" type="button" data-view="monitor-view">Monitor</button>
           <button class="main-nav-button" type="button" data-view="snippets-view">Komendy</button>
+          <button class="main-nav-button" type="button" data-view="changes-view">Zmiany</button>
           <button class="main-nav-button" type="button" data-view="settings-view">Konfiguracja</button>
         </nav>
         <div class="topbar-actions">
@@ -70,13 +71,14 @@
             <div>
               <h2>Inwentarz urządzeń</h2>
               <p>Lista maszyn zapisanych w systemie</p>
-            </div><div class="inventory-file-actions"><button type="button" class="monitor-action" id="device-csv-import">Import CSV</button><input type="file" id="device-csv-file" accept=".csv,text/csv" hidden><a class="monitor-action" href="/api/devices/export.csv" download>Eksport CSV</a></div>
+            </div><div class="inventory-file-actions"><button type="button" class="monitor-action" id="inventory-graph">Mapa zależności</button><button type="button" class="monitor-action" id="device-csv-import">Import CSV</button><input type="file" id="device-csv-file" accept=".csv,text/csv" hidden><a class="monitor-action" href="/api/devices/export.csv" download>Eksport CSV</a></div>
           </div>
 
           <div class="inventory-quick-filters" role="group" aria-label="Szybkie filtry maszyn">
             <button type="button" data-quick-filter="all">Wszystkie <span></span></button>
             <button type="button" data-quick-filter="offline">Bez odpowiedzi <span></span></button>
             <button type="button" data-quick-filter="monitored">Monitorowane <span></span></button>
+            <button type="button" data-quick-filter="favorites">Ulubione <span></span></button>
           </div>
           <div class="table-toolbar">
             <div class="table-filters">
@@ -185,6 +187,8 @@
           </section>
         </section>
 
+        <section class="view-panel d-none" id="changes-view"><div class="welcome-row"><div><p class="eyebrow">HISTORIA EWIDENCJI</p><h1>Dziennik zmian</h1><p class="page-subtitle">Poprzednie i nowe wartości, również po usunięciu maszyny. Rejestrowanie od wersji 1.4.0.</p></div><button type="button" class="monitor-action" id="changes-refresh">Odśwież</button></div><section class="inventory-panel"><div class="changes-toolbar"><input type="search" class="form-control" id="changes-query" maxlength="100" placeholder="Szukaj po nazwie hosta" aria-label="Szukaj zmian po hoście"><button type="button" class="monitor-action" id="changes-search">Szukaj</button><button type="button" class="monitor-text-action" id="changes-clear">Wszystkie maszyny</button><span id="changes-scope"></span></div><p id="changes-message" role="status"></p><div class="table-responsive"><table class="table changes-table"><thead><tr><th>Czas</th><th>Maszyna</th><th>Operacja</th><th>Zmiany</th></tr></thead><tbody id="changes-list"></tbody></table></div><div class="changes-footer"><button type="button" class="monitor-action" id="changes-more" hidden>Pokaż starsze</button></div></section></section>
+
         <section class="view-panel d-none" id="settings-view">
           <section class="settings-heading">
             <div>
@@ -193,7 +197,7 @@
               <p class="page-subtitle">Zarządzaj kategoriami maszyn i lokalizacjami.</p>
             </div>
           </section>
-          <nav class="settings-section-nav" aria-label="Sekcje konfiguracji"><a href="#settings-categories">Kategorie</a><a href="#settings-locations">Lokalizacje</a><a href="#settings-ssh">SSH</a><a href="#settings-appearance">Wygląd</a><a href="#settings-backups">Kopie zapasowe</a></nav>
+          <nav class="settings-section-nav" aria-label="Sekcje konfiguracji"><a href="#settings-categories">Kategorie</a><a href="#settings-locations">Lokalizacje</a><a href="#settings-ssh">SSH</a><a href="#settings-appearance">Wygląd</a><a href="#settings-backups">Kopie zapasowe</a><a href="#settings-history">Historia</a></nav>
           <div class="settings-grid">
             <section class="settings-card" id="settings-categories">
               <div class="settings-card-heading">
@@ -264,6 +268,7 @@
                 <small>Połączenie używa formatu użytkownik@nazwa-hosta. Ustawienie można zmienić tylko na komputerze z serwerem.</small>
               </form>
             </section>
+            <section class="settings-card settings-preference-card" id="settings-history"><div class="settings-card-heading"><div><h2>Przechowywanie historii</h2><p>Czas przechowywania wyników pingowania</p></div></div><form class="settings-form" id="history-settings-form"><label for="history-retention-days">Okres</label><select class="form-select" id="history-retention-days"><option value="1">1 dzień</option><option value="7">7 dni</option><option value="30">30 dni</option></select><button class="monitor-action" type="submit" id="history-settings-save">Zapisz okres</button><p id="history-settings-status" class="settings-save-state" role="status">Wczytywanie…</p><small>Skrócenie okresu usuwa starsze wyniki w tle. Nie przywraca to wyników skasowanych wcześniej. Dłuższa historia zwiększa rozmiar bazy i kopii.</small></form></section>
             <section class="settings-card settings-backup-card" id="settings-backups">
               <div class="settings-card-heading"><div><h2>Kopie zapasowe</h2><p>Cała baza, lokalnie · do 7 dziennych kopii</p></div><button type="button" class="monitor-action" id="backup-status-refresh">Odśwież status</button></div>
               <p id="backup-state" class="settings-save-state" role="status">Wczytywanie statusu…</p>
@@ -391,12 +396,13 @@
         </div>
         <p class="history-message" id="history-message" role="status"></p>
         <footer class="history-footer">
-          <span>Zachowujemy ostatnie 1000 sprawdzeń</span>
+          <span>Historia według okresu wybranego w Konfiguracji</span>
           <button class="btn btn-sm btn-outline-secondary" id="history-more" type="button" hidden>Pokaż starsze wpisy</button>
         </footer>
       </section>
       <div class="dialog-actions">
         <button class="btn btn-outline-secondary" type="button" data-close="device-details-dialog">Zamknij</button>
+        <button type="button" class="monitor-action" id="graph-from-details">Mapa zależności</button><button type="button" class="monitor-action" id="changes-from-details">Zmiany maszyny</button>
         <button class="btn btn-outline-secondary" id="manage-dependencies-from-details" type="button">Zależności</button>
         <button class="btn btn-primary" id="edit-device-from-details" type="button">Edytuj maszynę</button>
       </div>
@@ -405,8 +411,8 @@
     <dialog class="app-dialog monitor-report-dialog" id="monitor-report-dialog">
       <div class="dialog-header"><div><p class="eyebrow">RAPORT DOSTĘPNOŚCI</p><h2 id="monitor-report-title"></h2></div><button type="button" class="icon-button" data-close="monitor-report-dialog" aria-label="Zamknij raport">×</button></div>
       <div class="monitor-report-body">
-        <div class="report-toolbar"><label>Zakres <select class="form-select" id="report-range"><option value="1">Ostatnia godzina</option><option value="24" selected>Ostatnie 24 godziny</option><option value="168">Ostatnie 7 dni</option><option value="all">Cała zachowana historia</option></select></label><button type="button" class="monitor-action" id="report-refresh">Odśwież raport</button></div>
-        <p id="report-message" role="status"></p>
+        <div class="report-toolbar"><label>Zakres <select class="form-select" id="report-range"><option value="1">Ostatnia godzina</option><option value="24" selected>Ostatnie 24 godziny</option><option value="168">Ostatnie 7 dni</option><option value="720">Ostatnie 30 dni</option><option value="all">Cała zachowana historia</option></select></label><div><button type="button" class="monitor-action" id="report-refresh">Odśwież raport</button> <button type="button" class="monitor-action monitor-action-primary" id="report-pdf" disabled>Zapisz PDF / drukuj</button></div></div>
+        <p id="report-print-meta" class="report-print-meta"></p><p id="report-message" role="status"></p>
         <div id="report-content" hidden><div id="report-stats" class="report-stats"></div>
         <section class="report-chart-panel"><h3>Dostępność w czasie</h3><p>Każdy punkt to jedno sprawdzenie. Przerwy między punktami nie potwierdzają stanu urządzenia.</p><div id="report-chart"></div></section>
         <p id="report-coverage" class="report-footnote"></p></div>
@@ -430,12 +436,15 @@
     <dialog class="app-dialog" id="bulk-edit-dialog"><form id="bulk-edit-form"><div class="dialog-header"><div><p class="eyebrow">OPERACJA ZBIORCZA</p><h2 id="bulk-edit-title">Zmień zaznaczone maszyny</h2></div><button class="icon-button" type="button" data-close="bulk-edit-dialog" aria-label="Zamknij">×</button></div><div class="form-grid"><div class="form-field"><label for="bulk-location">Lokalizacja</label><select class="form-select" id="bulk-location"><option value="">Bez zmian</option></select></div><div class="form-field"><label for="bulk-category">Kategoria</label><select class="form-select" id="bulk-category"><option value="">Bez zmian</option></select></div><p class="form-field-wide settings-help">Zmienione zostaną wszystkie zaznaczone maszyny, również z innych stron wyników.</p></div><div class="dialog-actions"><p class="device-save-error" role="alert" id="bulk-edit-error" hidden></p><button type="button" class="monitor-action" data-close="bulk-edit-dialog">Anuluj</button><button type="submit" class="monitor-action monitor-action-primary" id="bulk-save">Zapisz zmiany</button></div></form></dialog>
     <dialog class="app-dialog" id="device-import-dialog"><div class="dialog-header"><div><p class="eyebrow">IMPORT EWIDENCJI</p><h2>Podgląd importu CSV</h2></div><button class="icon-button" type="button" data-close="device-import-dialog" aria-label="Zamknij">×</button></div><div class="device-import-body"><p id="device-import-file-name"></p><p id="device-import-summary" role="status"></p><p id="device-import-error" class="device-save-error" role="alert" hidden></p><p class="settings-help">Import dopisuje nowe maszyny, kategorie i lokalizacje. Nie nadpisuje istniejących. Błąd lub duplikat hosta/IP odrzuca cały plik. Maksymalnie 500 maszyn, 900 KB. Eksport CSV zawiera wzór kolumn.</p></div><div class="dialog-actions"><button type="button" class="monitor-action" data-close="device-import-dialog">Anuluj</button><button type="button" class="monitor-action monitor-action-primary" id="device-import-confirm" disabled>Importuj</button></div></dialog>
 
+    <dialog class="app-dialog dependency-map-dialog" id="dependency-map-dialog"><div class="dialog-header"><div><p class="eyebrow">POWIĄZANIA MASZYN</p><h2>Mapa zależności</h2></div><button type="button" class="icon-button" data-close="dependency-map-dialog" aria-label="Zamknij mapę">×</button></div><div class="map-body"><div class="map-toolbar"><label for="map-focus">Zakres</label><select class="form-select" id="map-focus"><option value="">Wszystkie powiązane maszyny</option></select><label for="map-zoom">Powiększenie</label><input type="range" id="map-zoom" min="50" max="200" value="100" aria-label="Powiększenie mapy"><button type="button" class="monitor-action" id="map-refresh">Odśwież</button></div><p id="map-message" role="status"></p><p class="map-legend">Strzałka: maszyna → jej zależność. Zielony — Online, czerwony — brak odpowiedzi, fioletowy — nieustalony. Kliknij węzeł, aby otworzyć szczegóły.</p><div id="dependency-map" class="dependency-map"></div></div><div class="dialog-actions"><button type="button" class="monitor-action" data-close="dependency-map-dialog">Zamknij</button></div></dialog>
+
     <script src="/diagnostics.js" defer></script>
     <script src="/ipv4.js" defer></script>
     <script src="/clipboard.js" defer></script>
     <script src="/inventory-tools.js" defer></script>
     <script src="/app.js" defer></script>
     <script src="/report.js" defer></script>
+    <script src="/insights.js" defer></script>
     <script src="/snippets.js" defer></script>
   </body>
 </html>

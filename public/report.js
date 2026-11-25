@@ -12,6 +12,7 @@ if (typeof window !== 'undefined') (() => {
   const range=document.getElementById('report-range');
   const message=document.getElementById('report-message');
   const content=document.getElementById('report-content');
+  const pdf=document.getElementById('report-pdf');
   const labels={online:'Online',offline:'Brak odpowiedzi',unknown:'Nieustalony'};
   const colors={online:'#37a875',offline:'#d65b57',unknown:'#9a91d7'};
   const number=value=>new Intl.NumberFormat('pl-PL',{maximumFractionDigits:1}).format(value);
@@ -46,12 +47,13 @@ if (typeof window !== 'undefined') (() => {
   async function load() {
     if(!currentDevice)return;
     const token=++version;
-    message.textContent='Wczytywanie raportu…';message.hidden=false;content.hidden=true;
+    message.textContent='Wczytywanie raportu…';message.hidden=false;content.hidden=true;pdf.disabled=true;
     try {
-      const {items}=await api(`/api/devices/${currentDevice.id}/report?hours=${range.value}`);
+      const result=await api(`/api/devices/${currentDevice.id}/report?hours=${range.value}`);
+      const {items}=result;
       if(token!==version)return;
       if(!items.length){message.textContent='Brak sprawdzeń w wybranym zakresie. Wybierz dłuższy okres lub uruchom monitoring.';return;}
-      const summary=summarizeReport(items),stats=document.getElementById('report-stats');stats.replaceChildren();
+      const summary=result.summary || summarizeReport(items),stats=document.getElementById('report-stats');stats.replaceChildren();
       for(const key of Object.keys(labels)) {
         const card=document.createElement('article');card.className=`report-stat report-stat-${key}`;
         const title=document.createElement('span');title.textContent=labels[key];
@@ -64,13 +66,17 @@ if (typeof window !== 'undefined') (() => {
       const value=document.createElement('strong');value.textContent=summary.averageMs===null?'—':`${number(summary.averageMs)} ms`;
       const detail=document.createElement('small');detail.textContent='Z poprawnych pomiarów Online';card.append(title,value,detail);stats.append(card);
       draw(items);
-      document.getElementById('report-coverage').textContent=`Procenty dotyczą liczby zapisanych sprawdzeń, nie procentu czasu działania. Status nieustalony wlicza się do wszystkich prób. Historia zachowuje do 1000 ostatnich wyników na maszynę; luki i starsze usunięte wyniki nie są odtwarzane.`;
-      message.hidden=true;content.hidden=false;
+      document.getElementById('report-coverage').textContent=`Procenty dotyczą wszystkich ${summary.total} sprawdzeń w wybranym zakresie, nie procentu czasu działania. Retencja: ${result.retentionDays} dni. ${result.sampled ? `Na wykresie pokazano ${items.length} reprezentatywnych pomiarów (osobno dla każdego statusu w przedziałach czasu); statystyki obejmują wszystkie próby.` : 'Każdy punkt to zapisany pomiar.'} Luki i wyniki usunięte wcześniej nie są odtwarzane.`;
+      document.getElementById('report-print-meta').textContent=`${currentDevice.hostName} · ${range.selectedOptions[0].textContent} · raport wygenerowano ${new Date().toLocaleString('pl-PL')} · ${summary.total} sprawdzeń`;
+      message.hidden=true;content.hidden=false;pdf.disabled=false;
     }catch(error){if(token===version)message.textContent=error.message;}
   }
   range.addEventListener('change',load);
   document.getElementById('report-refresh').addEventListener('click',load);
-  dialog.addEventListener('close',()=>version++);
+  dialog.addEventListener('close',()=>{if(!dialog.open)version++;});
+  pdf.addEventListener('click',()=>{if(!pdf.disabled)window.print();});
+  window.addEventListener('beforeprint',()=>{if(dialog.open && !content.hidden)document.body.dataset.printReport='true';});
+  window.addEventListener('afterprint',()=>{delete document.body.dataset.printReport;});
   window.openMonitorReport=device=>{
     currentDevice=device;document.getElementById('monitor-report-title').textContent=device.hostName;
     if(!dialog.open)dialog.showModal();load();

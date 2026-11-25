@@ -69,7 +69,7 @@ test('ping queue limits concurrency, shares requests and ignores results after a
   assert.equal(saved.length, 19);
 });
 
-test('history persists, paginates, retains 1000 entries and cascades on deletion', () => {
+test('history persists beyond 1000 entries, paginates and cascades on deletion', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lanwatch-history-'));
   const env = {...process.env, DB_PATH:path.join(dir,'test.sqlite')};
   const run = script => execFileSync(process.execPath,['-e',script],{cwd:__dirname,env,encoding:'utf8'}).trim();
@@ -77,7 +77,7 @@ test('history persists, paginates, retains 1000 entries and cascades on deletion
     run(`const d=require('./database'); d.createLocation('Test'); const device=d.createDevice({hostName:'test',ip:'192.168.1.1',groupName:'',location:'Test',categoryId:d.getCategories()[0].id,description:'',lineNumber:'',numerator:''});
       for(let i=0;i<1002;i++) d.saveDeviceStatus(device.id,{status:i%2?'online':'offline',checkedAt:new Date().toISOString(),replies:i%2,target:'192.168.1.1',message:'',latencyMs:i%2?12:null});`);
     const data=JSON.parse(run(`const d=require('./database'); const id=d.getDevices()[0].id; const first=d.getDeviceHistory(id); const second=d.getDeviceHistory(id,first.nextBefore); const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync(process.env.DB_PATH); console.log(JSON.stringify({first,second,count:db.prepare('SELECT COUNT(*) AS n FROM device_history').get().n})); db.close();`));
-    assert.equal(data.count,1000);
+    assert.equal(data.count,1002);
     assert.equal(data.first.items.length,50);
     assert.equal(data.second.items.length,50);
     assert.ok(data.second.items[0].id < data.first.items[49].id);

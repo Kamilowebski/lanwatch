@@ -578,3 +578,36 @@ button, input, select, textarea { font: inherit; }
 .device-import-body { padding: 20px 24px; color: var(--text); font-size: 12px; line-height: 1.7; }
 .device-import-body .settings-help { margin: 14px 0 0; }
 #bulk-edit-form .dialog-actions { flex-wrap: wrap; }
+.device-title-line { display: flex; align-items: center; gap: 7px; }
+.device-favorite { border: 0; padding: 0; background: none; color: var(--muted); font-size: 19px; cursor: pointer; }
+.device-favorite[aria-pressed=true] { color: var(--accent); }.device-favorite:disabled { opacity: .5; cursor: wait; }
+#settings-history { order: 5; }#settings-backups { order: 6; }
+#history-settings-form .monitor-action { align-self: start; }
+#history-settings-status { margin: 0; }
+.changes-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px 22px; }
+.changes-toolbar input { max-width: 350px; }.changes-toolbar span { color: var(--muted); font-size: 11px; }
+#changes-message { padding: 0 22px; font-size: 12px; color: var(--muted); }
+.changes-table { width: 100%; color: var(--text); --bs-table-bg: var(--surface); --bs-table-color: var(--text); --bs-table-border-color: var(--border); }
+.changes-table th { padding: 12px 18px; background: var(--surface-muted); color: var(--muted); font-size: 10px; }.changes-table td { padding: 12px 18px; font-size: 11px; vertical-align: top; }
+.changes-table details { margin: 0 0 8px; }.changes-table summary { color: var(--accent); cursor: pointer; }.changes-table p { max-width: 600px; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; color: var(--muted); }
+.changes-footer { padding: 16px 22px; }.changes-footer [hidden] { display: none; }
+.dependency-map-dialog { width: min(1250px,calc(100vw - 32px)); }.map-body { padding: 18px 24px; }
+.map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }.map-toolbar select { width: auto; max-width: 320px; }.map-toolbar input { width: 120px; accent-color: var(--accent); }
+.map-legend, #map-message { color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 12px; }
+.dependency-map { overflow: auto; max-height: 58vh; padding: 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-muted); }.dependency-map svg { display: block; }
+.map-edge { stroke: #8993a8; stroke-width: 1.5; fill: none; opacity: .7; }
+.map-node { cursor: pointer; }.map-node rect { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }.map-node:focus rect,.map-node:hover rect { stroke: var(--accent); stroke-width: 2; }
+.map-node circle { fill: #9a91d7; }.map-node-online circle { fill: #37a875; }.map-node-offline circle { fill: #d65b57; }.map-node-offline rect { stroke: #d65b57; }
+.map-host { fill: var(--text); font-size: 12px; font-weight: 600; }.map-meta { fill: var(--muted); font-size: 10px; }
+.report-print-meta { color: var(--muted); font-size: 11px; line-height: 1.6; }
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  body[data-print-report=true] { min-width: 0; background: white; --surface: white; --surface-muted: #f7f7fa; --text: #20283a; --muted: #566074; --border: #ddd; color: #20283a; }
+  body[data-print-report=true] > *:not(#monitor-report-dialog) { display: none !important; }
+  body[data-print-report=true] #monitor-report-dialog { position: static; inset: auto; display: block; width: 100%; max-width: none; max-height: none; margin: 0; overflow: visible; box-shadow: none; border: 0; color: #20283a; }
+  #monitor-report-dialog::backdrop { display: none; }
+  body[data-print-report=true] #monitor-report-dialog .dialog-actions,body[data-print-report=true] #monitor-report-dialog .dialog-header button,body[data-print-report=true] #monitor-report-dialog .report-toolbar { display: none !important; }
+  body[data-print-report=true] .report-stats { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  body[data-print-report=true] #report-chart { overflow: visible; }body[data-print-report=true] #report-chart svg { min-width: 0; width: 100%; }
+  body[data-print-report=true] .report-chart-panel { break-inside: avoid; }
+}

@@ -106,14 +106,43 @@ portów ani nie wykonuje sond TCP/UDP w ramach monitorowania.
 Status Online po pięciu minutach bez świeżego wyniku zmienia się na „Nieustalony”.
 Samo wygaśnięcie statusu nie wykonuje pingu i nie dopisuje wyniku do historii.
 
-Dla maszyny zachowywanych jest do **1000 ostatnich sprawdzeń**. Historia w szczegółach
-jest stronicowana po 50 wpisów. Raport obejmuje zarówno próby ręczne, jak i monitoring.
+Historia jest zachowywana przez **1, 7 (domyślnie) lub 30 dni**, zgodnie z ustawieniem
+w Konfiguracji. Starsze dane są usuwane partiami. Skrócenie okresu usuwa starsze
+pomiary; jego wydłużenie nie odzyskuje wcześniej usuniętych danych. Dłuższa historia
+zwiększa rozmiar bazy i kopii. Historia w szczegółach jest stronicowana po 50 wpisów.
+Raport obejmuje zarówno próby ręczne, jak i monitoring.
 **Procenty to udział zapisanych sprawdzeń, nie procent czasu działania.** Luki między
 pomiarami i usunięte starsze wyniki nie są odtwarzane.
 
 Notatka monitora ma do 1000 znaków. Przetrwa odświeżenie i restart aplikacji,
 ale **wyłączenie monitorowania usuwa notatkę**. Nie zmienia to opisu maszyny w ewidencji.
 Powiadomienia wymagają otwartej karty; systemowe wymagają dodatkowo zgody przeglądarki.
+
+Raport pozwala wybrać godzinę, dobę, tydzień, 30 dni lub zachowaną historię.
+Przy dużej liczbie pomiarów wykres pokazuje do około 1800 reprezentatywnych punktów;
+liczniki, procenty i średnia są liczone ze wszystkich wyników wybranego okresu.
+Przycisk **Zapisz PDF / drukuj** otwiera okno drukowania przeglądarki. W Edge wybierz
+**Zapisz jako PDF**. Wydruk zawiera nazwę maszyny, okres, datę wygenerowania i wykres.
+
+### Ulubione, mapa i dziennik zmian
+
+Gwiazdka obok nazwy maszyny zapisuje ją jako ulubioną. Filtr **Ulubione** pokazuje
+również grupy zawierające ulubioną maszynę. Oznaczenia pozostają po restarcie.
+
+**Mapa zależności** pokazuje strzałki od maszyny do jej zależności oraz zapisane
+statusy. Można wybrać maszynę i jej powiązania, zmienić powiększenie oraz otworzyć
+szczegóły kliknięciem lub klawiszem Enter. Mapa obsługuje cykle i pokazuje maksymalnie
+120 urządzeń. Dane aktualizuje się przy otwarciu lub przyciskiem odświeżania.
+
+Zakładka **Zmiany** przechowuje dodanie, usunięcie oraz rzeczywiste zmiany pól
+ewidencji, wraz z poprzednią i nową wartością. Uwzględnia klasyfikację, zależności,
+import CSV i operacje zbiorcze. Można szukać po nazwie hosta lub otworzyć historię
+konkretnej maszyny ze szczegółów. Wpisy pozostają po usunięciu maszyny.
+Dziennik powstaje od wersji 1.4.0; wcześniejsze edycje nie są odtwarzane.
+Nie rejestruje wyników monitorowania ani przełączania gwiazdki.
+
+Ulubione i dziennik są częścią bazy SQLite i jej pełnych kopii; eksport ewidencji
+CSV ich nie zawiera. Aktualizacja zachowuje istniejące dane.
 
 ### SSH i tunel VNC
 

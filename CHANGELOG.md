@@ -1,5 +1,14 @@
 # Historia zmian Lanwatch
 
+## 1.4.0 — 2026-11-25
+
+- Retencja historii pingowania: 1, 7 (domyślnie) lub 30 dni zamiast limitu 1000 wyników; usuwanie starszych danych partiami.
+- Raport z zakresem 30 dni i wydrukiem do PDF przez przeglądarkę. Statystyki obejmują wszystkie pomiary, a duży wykres ma ograniczoną liczbę punktów.
+- Trwałe oznaczanie ulubionych maszyn i szybki filtr w ewidencji.
+- Graficzna mapa zależności ze statusami, powiększaniem i przechodzeniem do szczegółów maszyny.
+- Zakładka Zmiany: historia edycji ewidencji, poprzednie i nowe wartości, filtrowanie po maszynie oraz zachowanie wpisów po usunięciu urządzenia.
+- Testy retencji, dużych raportów, transakcyjności dziennika i ponownego użycia identyfikatorów usuniętych maszyn.
+
 ## 1.3.0 — 2026-11-25
 
 - Lokalny Bootstrap 5.3.8 z licencją: interfejs nie wymaga internetu ani CDN.

@@ -10,6 +10,7 @@ const databaseFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : p
 const diagnostics = require("./diagnostics").createLogger(path.join(path.dirname(databaseFile),"logs"));
 const {
   backupDatabase,
+  getHistorySettings,setHistorySettings,pruneDeviceHistory,getDeviceReportData,getDeviceChanges,updateDeviceFavorite,
   importDeviceRows, bulkUpdateDevices,
   snippetStore,
   updateMonitorNote, getDeviceReport,
@@ -46,6 +47,7 @@ const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/vendor/bootstrap-5.3.8.min.css": {file:"vendor/bootstrap-5.3.8.min.css",type:"text/css; charset=utf-8"},
   "/clipboard.js": {file:"clipboard.js",type:"text/javascript; charset=utf-8"},
+  "/insights.js": {file:"insights.js",type:"text/javascript; charset=utf-8"},
   "/inventory-tools.js": {file:"inventory-tools.js",type:"text/javascript; charset=utf-8"},
   "/ipv4.js": {file:"ipv4.js",type:"text/javascript; charset=utf-8"},
   "/snippets.js": {file:"snippets.js",type:"text/javascript; charset=utf-8"},
@@ -61,6 +63,10 @@ const pingWaiters = [];
 let monitorPollActive = false;
 let monitorTimer;
 let backupTimer;
+let historyTimer;
+function cleanHistory() {
+  pruneDeviceHistory().catch(error=>diagnostics.log("error","history.cleanup_error",{message:error.message}));
+}
 
 let backupActive = false;
 let lastBackupError = null;
@@ -400,8 +406,8 @@ async function handleApi(request, response, pathname) {
   const reportMatch = pathname.match(/^\/api\/devices\/(\d+)\/report$/);
   if (reportMatch && request.method === "GET") {
     const range = new URL(request.url,"http://localhost").searchParams.get("hours") || "all";
-    if (!["1","24","168","all"].includes(range)) throw new HttpError(400,"Nieprawidłowy zakres raportu.");
-    sendJson(response,200,{items:getDeviceReport(Number(reportMatch[1]),range === "all" ? null : Number(range))});
+    if (!["1","24","168","720","all"].includes(range)) throw new HttpError(400,"Nieprawidłowy zakres raportu.");
+    sendJson(response,200,getDeviceReportData(Number(reportMatch[1]),range === "all" ? null : Number(range)));
     return;
   }
   const noteMatch = pathname.match(/^\/api\/devices\/(\d+)\/monitor\/note$/);
@@ -420,6 +426,22 @@ async function handleApi(request, response, pathname) {
     sendJson(response,200,snippetMatch[2] ? snippetStore.favorite(Number(snippetMatch[1]),body?.favorite) : snippetStore.update(Number(snippetMatch[1]),body));return;
   }
   if (snippetMatch && !snippetMatch[2] && request.method === "DELETE") {snippetStore.remove(Number(snippetMatch[1]));sendJson(response,200,{ok:true});return;}
+  if (pathname === "/api/history/settings" && request.method === "GET") { sendJson(response,200,getHistorySettings());return; }
+  if (pathname === "/api/history/settings" && request.method === "PUT") {
+    const body=await readJson(request);const result=setHistorySettings(body?.retentionDays);cleanHistory();sendJson(response,200,result);return;
+  }
+  const favoriteMatch=pathname.match(/^\/api\/devices\/(\d+)\/favorite$/);
+  if(favoriteMatch && request.method === "PUT") {
+    const body=await readJson(request);sendJson(response,200,updateDeviceFavorite(Number(favoriteMatch[1]),body?.favorite));return;
+  }
+  if(pathname === "/api/device-changes" && request.method === "GET") {
+    const params=new URL(request.url,"http://localhost").searchParams;
+    const before=params.has("before")?Number(params.get("before")):Number.MAX_SAFE_INTEGER;
+    const deviceId=params.has("deviceId")?Number(params.get("deviceId")):undefined;
+    const query=params.get("q") || "";
+    if(!Number.isSafeInteger(before)||before<1||(deviceId!==undefined&&(!Number.isSafeInteger(deviceId)||deviceId<1))||query.length>100)throw new HttpError(400,"Nieprawidłowy filtr dziennika zmian.");
+    sendJson(response,200,getDeviceChanges({before,deviceId,query}));return;
+  }
   if (pathname === "/api/backups/status" && request.method === "GET") {
     const directory = path.join(path.dirname(databaseFile),"backups");
     let names;
@@ -661,6 +683,8 @@ server.listen(port, host, () => {
   runBackup();
   backupTimer = setInterval(runBackup, 60 * 60 * 1000);
   monitorTimer = setInterval(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);
+  cleanHistory();
+  historyTimer = setInterval(cleanHistory,60*60*1000);
 });
 
 const loopDelay = monitorEventLoopDelay({resolution:100});
@@ -684,6 +708,7 @@ function shutdown() {
   loopDelay.disable();
   clearInterval(monitorTimer);
   clearInterval(backupTimer);
+  clearInterval(historyTimer);
   server.close(async () => { await diagnostics.flush(); process.exit(0); });
 }
 

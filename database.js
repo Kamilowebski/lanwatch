@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 
 const databasePath = process.env.DB_PATH
@@ -98,6 +99,12 @@ const deviceColumns = database.prepare("PRAGMA table_info(devices)").all();
 if (!deviceColumns.some((column) => column.name === "group_name")) {
   database.exec("ALTER TABLE devices ADD COLUMN group_name TEXT NOT NULL DEFAULT ''");
 }
+if (!deviceColumns.some(column => column.name === "favorite")) database.exec("ALTER TABLE devices ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0");
+if (!deviceColumns.some(column => column.name === "audit_uid")) database.exec("ALTER TABLE devices ADD COLUMN audit_uid TEXT NOT NULL DEFAULT ''");
+for (const row of database.prepare("SELECT id FROM devices WHERE audit_uid = ''").all()) database.prepare("UPDATE devices SET audit_uid = ? WHERE id = ?").run(randomUUID(),row.id);
+database.exec("CREATE UNIQUE INDEX IF NOT EXISTS devices_audit_uid ON devices(audit_uid) WHERE audit_uid <> ''; CREATE INDEX IF NOT EXISTS history_device_time ON device_history(device_id,checked_at,id); CREATE INDEX IF NOT EXISTS history_time ON device_history(checked_at); INSERT OR IGNORE INTO app_settings(key,value) VALUES('history_retention_days','7');");
+const auditStore = require("./device-audit").createAuditStore(database);
+
 const deviceStatusColumns = database.prepare("PRAGMA table_info(device_status)").all();
 if (!deviceStatusColumns.some((column) => column.name === "latency_ms")) {
   database.exec("ALTER TABLE device_status ADD COLUMN latency_ms REAL");
@@ -142,7 +149,7 @@ function getDevice(id) {
   const device = database.prepare(`
     SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
       d.category_id AS categoryId, c.name AS category,
-      d.description, d.line_number AS lineNumber, d.numerator,
+      d.description, d.line_number AS lineNumber, d.numerator, d.favorite,
       ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
       COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
       ${statusMessageExpression} AS statusMessage, s.latency_ms AS pingLatencyMs,
@@ -157,6 +164,7 @@ function getDevice(id) {
     WHERE d.id = ?
   `).get(id);
   if (!device) return undefined;
+  device.favorite = Boolean(device.favorite);
   device.monitorEnabled = Boolean(device.monitorEnabled);
   device.notifyOnline = Boolean(device.notifyOnline);
   device.notifyOffline = Boolean(device.notifyOffline);
@@ -210,7 +218,7 @@ function getDevices() {
   const devices = database.prepare(`
     SELECT d.id, d.host_name AS hostName, d.ip, d.group_name AS groupName, l.name AS location,
       d.category_id AS categoryId, c.name AS category,
-      d.description, d.line_number AS lineNumber, d.numerator,
+      d.description, d.line_number AS lineNumber, d.numerator, d.favorite,
       ${onlineStatusExpression} AS status, s.checked_at AS statusCheckedAt,
       COALESCE(s.replies, 0) AS pingReplies, COALESCE(s.target, '') AS pingTarget,
       ${statusMessageExpression} AS statusMessage, s.latency_ms AS pingLatencyMs,
@@ -235,6 +243,7 @@ function getDevices() {
     const dependencies = dependencyQuery.all(device.id);
     return {
       ...device,
+      favorite: Boolean(device.favorite),
       monitorEnabled: Boolean(device.monitorEnabled),
       notifyOnline: Boolean(device.notifyOnline),
       notifyOffline: Boolean(device.notifyOffline),
@@ -295,11 +304,7 @@ function saveDeviceStatus(deviceId, result) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(deviceId, result.status, result.checkedAt, result.replies, result.target,
     result.message, result.latencyMs ?? null);
-  database.prepare(`
-    DELETE FROM device_history WHERE device_id = ? AND id NOT IN (
-      SELECT id FROM device_history WHERE device_id = ? ORDER BY id DESC LIMIT 1000
-    )
-  `).run(deviceId, deviceId);
+
   });
 }
 
@@ -309,8 +314,8 @@ function getDeviceHistory(deviceId, before = Number.MAX_SAFE_INTEGER) {
   }
   const rows = database.prepare(`
     SELECT id, status, checked_at AS checkedAt, replies, target, message, latency_ms AS latencyMs
-    FROM device_history WHERE device_id = ? AND id < ? ORDER BY id DESC LIMIT 51
-  `).all(deviceId, before);
+    FROM device_history WHERE device_id = ? AND id < ? AND checked_at >= ? ORDER BY id DESC LIMIT 51
+  `).all(deviceId, before, historyCutoff());
   const items = rows.slice(0, 50);
   return { items, nextBefore: rows.length > 50 ? items[items.length - 1].id : null };
 }
@@ -347,11 +352,82 @@ function updateMonitorNote(id, note) {
   return {note};
 }
 
+function getHistorySettings() {
+  const value=Number(database.prepare("SELECT value FROM app_settings WHERE key='history_retention_days'").get()?.value);
+  return {retentionDays:[1,7,30].includes(value)?value:7};
+}
+function historyCutoff(hours=null) {
+  const maxHours=getHistorySettings().retentionDays*24;
+  return new Date(Date.now()-Math.min(hours || maxHours,maxHours)*3600000).toISOString();
+}
+let historyCleanupPromise = null;
+function pruneDeviceHistory() {
+  if(historyCleanupPromise)return historyCleanupPromise;
+  historyCleanupPromise=(async()=>{
+    let removed=0;
+    do {
+      const result=database.prepare("DELETE FROM device_history WHERE id IN (SELECT id FROM device_history WHERE checked_at < ? LIMIT 5000)").run(historyCutoff());
+      removed+=result.changes;
+      if(result.changes<5000)break;
+      await new Promise(resolve=>setImmediate(resolve));
+    } while(true);
+    return {removed};
+  })().finally(()=>{historyCleanupPromise=null;});
+  return historyCleanupPromise;
+}
+function setHistorySettings(days) {
+  if(![1,7,30].includes(days))throw Object.assign(new Error("Wybierz 1, 7 albo 30 dni."),{status:400});
+  database.prepare("UPDATE app_settings SET value=? WHERE key='history_retention_days'").run(String(days));
+  return getHistorySettings();
+}
 function getDeviceReport(id, hours) {
   if (!getDevice(id)) throw Object.assign(new Error("Nie znaleziono maszyny."), {status:404});
-  const since = hours ? new Date(Date.now() - hours * 3600000).toISOString() : "";
-  return database.prepare(`SELECT id, status, checked_at AS checkedAt, latency_ms AS latencyMs, target
-    FROM device_history WHERE device_id = ? AND checked_at >= ? ORDER BY id ASC`).all(id, since);
+  return database.prepare(`SELECT id,status,checked_at AS checkedAt,latency_ms AS latencyMs,target
+    FROM device_history WHERE device_id=? AND checked_at>=? ORDER BY checked_at,id`).all(id,historyCutoff(hours));
+}
+function getDeviceReportData(id, hours) {
+  if(!getDevice(id))throw Object.assign(new Error("Nie znaleziono maszyny."),{status:404});
+  const since=historyCutoff(hours);
+  const totals=database.prepare(`SELECT COUNT(*) AS total,
+    COALESCE(SUM(status='online'),0) AS online,COALESCE(SUM(status='offline'),0) AS offline,
+    COALESCE(SUM(status='unknown'),0) AS unknown,
+    AVG(CASE WHEN status='online' THEN latency_ms END) AS averageMs,
+    MIN(checked_at) AS firstAt,MAX(checked_at) AS lastAt FROM device_history WHERE device_id=? AND checked_at>=?`).get(id,since);
+  const counts={online:totals.online,offline:totals.offline,unknown:totals.unknown};
+  let items=[];
+  if(totals.total<=1800) items=getDeviceReport(id,hours);
+  else {
+    const width=Math.max(1,(Date.parse(totals.lastAt)-Date.parse(totals.firstAt))/600);
+    items=database.prepare(`SELECT id,status,checked_at AS checkedAt,latency_ms AS latencyMs,target FROM device_history WHERE id IN (
+      SELECT MIN(id) FROM device_history WHERE device_id=? AND checked_at>=?
+      GROUP BY CAST((julianday(checked_at)-julianday(?))*86400000/? AS INTEGER),status
+    ) ORDER BY checked_at,id`).all(id,since,totals.firstAt,width);
+  }
+  return {items,summary:{counts,total:totals.total,averageMs:totals.averageMs,
+    percentages:Object.fromEntries(Object.entries(counts).map(([key,value])=>[key,totals.total?value/totals.total*100:0]))},
+    retentionDays:getHistorySettings().retentionDays,sampled:items.length<totals.total,firstAt:totals.firstAt,lastAt:totals.lastAt};
+}
+function inventorySnapshot(device) {
+  if(!device)return null;
+  const uid=database.prepare("SELECT audit_uid FROM devices WHERE id=?").get(device.id)?.audit_uid;
+  const dependencies=device.dependencyIds.map(id=>database.prepare("SELECT host_name FROM devices WHERE id=?").get(id)?.host_name).filter(Boolean).sort();
+  return {...device,uid,dependencies};
+}
+function recordDeviceChange(before,after,action='update') {
+  auditStore.record(before,inventorySnapshot(after),action);
+}
+function getDeviceChanges(options={}) {
+  let uid=null;
+  if(options.deviceId!==undefined) {
+    const row=database.prepare("SELECT audit_uid FROM devices WHERE id=?").get(options.deviceId);
+    if(!row)throw Object.assign(new Error("Nie znaleziono maszyny."),{status:404});uid=row.audit_uid;
+  }
+  return auditStore.list({...options,uid});
+}
+function updateDeviceFavorite(id,favorite) {
+  if(typeof favorite!=='boolean')throw Object.assign(new Error("Nieprawidłowe oznaczenie ulubionej maszyny."),{status:400});
+  if(!database.prepare("UPDATE devices SET favorite=? WHERE id=?").run(Number(favorite),id).changes)throw Object.assign(new Error("Nie znaleziono maszyny."),{status:404});
+  return getDevice(id);
 }
 
 function assertDeviceIdentifiersUnique(device, excludedId = null) {
@@ -393,14 +469,12 @@ function updateNamedItem(table, label, genitive, id, name) {
   ) {
     throw Object.assign(new Error(`${label} o tej nazwie już istnieje.`), { status: 409 });
   }
-  if (table === "locations") {
-    withTransaction(() => {
-      database.prepare("UPDATE devices SET location = ? WHERE location = ? COLLATE NOCASE").run(name, existing.name);
-      database.prepare("UPDATE locations SET name = ? WHERE id = ?").run(name, id);
-    });
-  } else {
-    database.prepare(`UPDATE ${table} SET name = ? WHERE id = ?`).run(name, id);
-  }
+  withTransaction(()=>{
+    const affected = getDevices().filter(device=>table === "locations" ? device.location.toLowerCase()===existing.name.toLowerCase() : device.categoryId===id).map(inventorySnapshot);
+    if(table === "locations")database.prepare("UPDATE devices SET location=? WHERE location=? COLLATE NOCASE").run(name,existing.name);
+    database.prepare(`UPDATE ${table} SET name=? WHERE id=?`).run(name,id);
+    for(const before of affected)recordDeviceChange(before,getDevice(before.id),'classification');
+  });
   return database.prepare(`SELECT id, name FROM ${table} WHERE id = ?`).get(id);
 }
 
@@ -466,8 +540,8 @@ function createDevice(device) {
   const id = withTransaction(() => {
     assertDeviceIdentifiersUnique(device);
     const result = database.prepare(`
-      INSERT INTO devices (host_name, ip, group_name, location, category_id, description, line_number, numerator)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (host_name, ip, group_name, location, category_id, description, line_number, numerator, audit_uid)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       device.hostName,
       device.ip,
@@ -477,9 +551,11 @@ function createDevice(device) {
       device.description,
       device.lineNumber,
       device.numerator,
+      randomUUID(),
     );
     const newId = Number(result.lastInsertRowid);
     saveDependencies(newId, device.dependencyIds || []);
+    recordDeviceChange(null,getDevice(newId),'create');
     return newId;
   });
   return getDevice(id);
@@ -498,6 +574,7 @@ function updateDevice(id, device) {
     throw Object.assign(new Error("Wybrana lokalizacja już nie istnieje."), { status: 400 });
   }
   withTransaction(() => {
+    const before=inventorySnapshot(existing);
     assertDeviceIdentifiersUnique(device, id);
     database.prepare(`
       UPDATE devices
@@ -519,6 +596,7 @@ function updateDevice(id, device) {
     if (existing.hostName !== device.hostName || existing.ip !== device.ip) {
       database.prepare("DELETE FROM device_status WHERE device_id = ?").run(id);
     }
+    recordDeviceChange(before,getDevice(id));
   });
   return getDevice(id);
 }
@@ -527,15 +605,24 @@ function updateDeviceDependencies(id, dependencyIds) {
   if (!getDevice(id)) {
     throw Object.assign(new Error("Nie znaleziono maszyny."), { status: 404 });
   }
-  withTransaction(() => saveDependencies(id, dependencyIds));
+  withTransaction(() => {
+    const before=inventorySnapshot(getDevice(id));
+    saveDependencies(id,dependencyIds);
+    recordDeviceChange(before,getDevice(id),'dependencies');
+  });
   return getDevice(id);
 }
 
 function deleteDevice(id) {
-  const result = database.prepare("DELETE FROM devices WHERE id = ?").run(id);
-  if (!result.changes) {
-    throw Object.assign(new Error("Nie znaleziono maszyny."), { status: 404 });
-  }
+  withTransaction(()=>{
+    const device=getDevice(id);
+    if(!device)throw Object.assign(new Error("Nie znaleziono maszyny."),{status:404});
+    const before=inventorySnapshot(device);
+    const affected=database.prepare("SELECT device_id AS id FROM device_dependencies WHERE dependency_id=?").all(id).map(row=>inventorySnapshot(getDevice(row.id)));
+    database.prepare("DELETE FROM devices WHERE id=?").run(id);
+    auditStore.record(before,null,'delete');
+    for(const snapshot of affected)recordDeviceChange(snapshot,getDevice(snapshot.id),'dependencies');
+  });
 }
 
 function importDeviceRows(rows, preview = false) {
@@ -558,7 +645,11 @@ function importDeviceRows(rows, preview = false) {
           if (!target) throw Object.assign(new Error(`Wiersz ${row.csvRow}: nie istnieje zależność ${host}.`),{status:400});
           return target.id;
         });
-        try { saveDependencies(created[index].id,[...new Set(ids)]); }
+        try {
+          const before=inventorySnapshot(getDevice(created[index].id));
+          saveDependencies(created[index].id,[...new Set(ids)]);
+          recordDeviceChange(before,getDevice(created[index].id),'dependencies');
+        }
         catch(error){error.message=`Wiersz ${row.csvRow}: ${error.message}`;throw error;}
       });
       summary={imported:created.length,newCategories:categoryNames,newLocations:locationNames};
@@ -579,9 +670,11 @@ function bulkUpdateDevices(ids, changes) {
     if (changes.location !== undefined && !location) throw Object.assign(new Error("Wybrana lokalizacja już nie istnieje."),{status:400});
     if (changes.categoryId !== undefined && !getCategory(changes.categoryId)) throw Object.assign(new Error("Wybrana kategoria już nie istnieje."),{status:400});
     for (const device of existing) {
+      const before=inventorySnapshot(device);
       if (location) database.prepare("UPDATE devices SET location = ? WHERE id = ?").run(location.name,device.id);
       if (changes.categoryId !== undefined) database.prepare("UPDATE devices SET category_id = ? WHERE id = ?").run(changes.categoryId,device.id);
       if (changes.monitorEnabled !== undefined) updateDeviceMonitor(device.id,{enabled:changes.monitorEnabled,notifyOnline:device.notifyOnline,notifyOffline:device.notifyOffline});
+      recordDeviceChange(before,getDevice(device.id),'bulk');
     }
     return {updated:existing.length};
   });
@@ -594,6 +687,7 @@ function backupDatabase() {
 const snippetStore = require("./snippets").createSnippetStore(database);
 
 module.exports = {
+  getHistorySettings,setHistorySettings,pruneDeviceHistory,getDeviceReportData,getDeviceChanges,updateDeviceFavorite,
   importDeviceRows, bulkUpdateDevices,
   snippetStore,
   updateMonitorNote, getDeviceReport,

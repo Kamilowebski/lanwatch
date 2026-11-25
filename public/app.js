@@ -106,7 +106,7 @@ let currentPage = Number.isSafeInteger(savedInventoryView.page) && savedInventor
 let categoryFilter = typeof savedInventoryView.category === "string" ? savedInventoryView.category : "";
 let locationFilter = typeof savedInventoryView.location === "string" ? savedInventoryView.location : "";
 let statusFilter = ["online","offline","unknown"].includes(savedInventoryView.status) ? savedInventoryView.status : "";
-let quickFilter = ["offline","monitored"].includes(savedInventoryView.quick) ? savedInventoryView.quick : "all";
+let quickFilter = ["offline","monitored","favorites"].includes(savedInventoryView.quick) ? savedInventoryView.quick : "all";
 elements.search.value = typeof savedInventoryView.query === "string" ? savedInventoryView.query : "";
 elements.filterStatus.value = statusFilter;
 let dependencyCurrentDeviceId = null;
@@ -643,8 +643,13 @@ function searchRelatedGroups(query) {
   return results;
 }
 
+function quickFilterMatches(device,key) {
+  return key === "all" || (key === "offline" ? device.status === "offline" : key === "favorites" ? device.favorite : device.monitorEnabled);
+}
+
 function matchesDeviceFilters(group) {
-  return (quickFilter !== "offline" || group.devices.some(device => device.status === "offline"))
+  return (quickFilter !== "favorites" || group.devices.some(device=>device.favorite))
+    && (quickFilter !== "offline" || group.devices.some(device => device.status === "offline"))
     && (quickFilter !== "monitored" || group.devices.some(device => device.monitorEnabled))
     && (!categoryFilter || group.devices.some((device) => String(device.categoryId) === categoryFilter))
     && (!locationFilter || group.devices.some((device) => device.location === locationFilter))
@@ -834,6 +839,8 @@ function openDeviceDetails(device) {
     openDeviceForm(device);
   };
   elements.manageDependenciesFromDetails.onclick = () => openDependencyManager(device);
+  document.getElementById("graph-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.openDependencyGraph(device.id);};
+  document.getElementById("changes-from-details").onclick=()=>{elements.deviceDetailsDialog.close();window.showDeviceChanges(device.id,device.hostName);};
   elements.deviceDetailsDialog.showModal();
 }
 
@@ -875,7 +882,12 @@ function renderDeviceRow(device, isGroupMember = false) {
   hostName.textContent = device.hostName;
   hostName.prepend(categoryIcon(device.category));
   hostName.addEventListener("click", () => openDeviceDetails(device));
-  hostCell.append(hostName);
+  const titleLine=document.createElement("div");titleLine.className="device-title-line";
+  const favorite=document.createElement("button");favorite.type="button";favorite.className="device-favorite";
+  favorite.textContent=device.favorite?"★":"☆";favorite.setAttribute("aria-label",`Ulubiona maszyna: ${device.hostName}`);favorite.setAttribute("aria-pressed",String(device.favorite));
+  favorite.disabled=window.isDeviceFavoritePending?.(device.id) || false;
+  favorite.addEventListener("click",()=>window.toggleDeviceFavorite(device.id,!device.favorite,favorite));
+  titleLine.append(favorite,hostName);hostCell.append(titleLine);
   if (device.lineNumber) {
     const lineNumber = document.createElement("small");
     lineNumber.className = "line-number-cell";
@@ -1030,7 +1042,7 @@ function renderDevices() {
   for (const button of document.querySelectorAll("[data-quick-filter]")) {
     const key = button.dataset.quickFilter;
     button.setAttribute("aria-pressed", String(key === quickFilter));
-    button.querySelector("span").textContent = devices.filter(device => key === "all" || (key === "offline" ? device.status === "offline" : device.monitorEnabled)).length;
+    button.querySelector("span").textContent = devices.filter(device => quickFilterMatches(device,key)).length;
   }
   const query = elements.search.value.trim().toLocaleLowerCase("pl");
   const filteredGroups = searchRelatedGroups(query).filter(matchesDeviceFilters);
@@ -1090,7 +1102,7 @@ function renderDevices() {
 function updateVisibleDeviceStatuses() {
   for (const button of document.querySelectorAll("[data-quick-filter]")) {
     const key=button.dataset.quickFilter;
-    button.querySelector("span").textContent=devices.filter(device=>key === "all" || (key === "offline" ? device.status === "offline" : device.monitorEnabled)).length;
+    button.querySelector("span").textContent=devices.filter(device=>quickFilterMatches(device,key)).length;
   }
   const devicesById = new Map(devices.map((device) => [device.id, device]));
   for (const row of elements.deviceList.rows) {
@@ -1428,6 +1440,7 @@ function inventoryMetadataChanged(nextDevices) {
   const currentDevices = new Map(devices.map((device) => [device.id, device]));
   const metadata = (item) => JSON.stringify([
     item.hostName,
+    item.favorite,
     item.ip,
     item.groupName,
     item.location,
