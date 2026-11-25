@@ -702,6 +702,7 @@ function appendStatusCell(row, relatedDevices, representative, subjectLabel) {
     .filter(Boolean)
     .sort()
     .pop();
+  row.dataset.status = statusSummary(relatedDevices).status;
   cell.classList.add("device-status-cell");
   const checkedAt = document.createElement("small");
   checkedAt.className = "status-time";
@@ -1236,6 +1237,7 @@ function updateVisibleDeviceStatuses() {
     const representative = relatedDevices[0];
     const subjectLabel = row.dataset.subjectLabel;
     const summary = statusSummary(relatedDevices);
+    row.dataset.status = summary.status;
     const status = row.querySelector(".status-trigger");
     status.classList.remove("status-online", "status-offline", "status-unknown");
     status.classList.add(`status-${summary.status}`);
@@ -1372,6 +1374,7 @@ function createMonitorNoteCell(device) {
 }
 
 function updateMonitorStatus(row, device) {
+  row.dataset.status = device.status;
   const status = row.querySelector(".monitor-status");
   const label = {online: "Online", offline: "Brak odpowiedzi", unknown: "Nieustalony"}[device.status] || "Nieustalony";
   const className = `status-badge monitor-status status-${device.status}`;
@@ -1408,12 +1411,12 @@ function monitorDependencyReasons() {
 
 function renderMonitor() {
   const dependencyReasons = monitorDependencyReasons();
-  const monitoredDevices = devices.filter((device) => device.monitorEnabled);
+  const monitoredDevices = devices.filter((device) => device.monitorEnabled && (!window.matchesMonitorFilter || window.matchesMonitorFilter(device)));
   if (offlineFirst) monitoredDevices.sort((a, b) => Number(b.status === "offline") - Number(a.status === "offline"));
   const onlineCount = monitoredDevices.filter((device) => device.status === "online").length;
   const offlineCount = monitoredDevices.filter((device) => device.status === "offline").length;
   elements.monitorCount.textContent =
-    `${monitoredDevices.length} aktywnych · ${onlineCount} online · ${offlineCount} bez odpowiedzi`;
+    `Wyświetlono ${monitoredDevices.length} z ${devices.filter(device=>device.monitorEnabled).length} · ${onlineCount} online · ${offlineCount} bez odpowiedzi`;
   for (const set of [monitorNoteDrafts, monitorNoteEditing]) {
     for (const id of set.keys()) if (!monitoredDevices.some(device => device.id === id)) set.delete(id);
   }
@@ -1425,7 +1428,7 @@ function renderMonitor() {
     elements.monitorList.replaceChildren();
     const row = document.createElement("tr");
     const empty = makeCell(
-      "Brak aktywnych maszyn. Włącz monitorowanie przy wybranych maszynach w zakładce Maszyny.",
+      "Brak maszyn w tym widoku. Zmień filtry lub włącz monitorowanie w zakładce Maszyny.",
       "monitor-empty-cell",
     );
     empty.colSpan = 6;
@@ -1452,6 +1455,7 @@ function renderMonitor() {
     }
     const row = document.createElement("tr");
     row.dataset.deviceId = String(device.id);
+    row.dataset.status = device.status;
     row.dataset.metadata = metadata;
     const host = document.createElement("td");
     host.className = "host-cell";
@@ -1540,6 +1544,7 @@ function renderMonitor() {
   desiredRows.forEach((row, index) => {
     if (elements.monitorList.rows[index] !== row) elements.monitorList.insertBefore(row, elements.monitorList.rows[index] || null);
   });
+  window.refreshMonitorExtras?.();
   if (focused?.isConnected && document.activeElement !== focused) {
     focused.focus({preventScroll:true});
     if (selection) focused.setSelectionRange(...selection);
@@ -1561,18 +1566,19 @@ function notifyMonitorTransition(device, status) {
 
 function trackMonitorStatusChanges(nextDevices) {
   for (const device of nextDevices) {
+    const status = device.notificationStatus || device.status;
     const previousStatus = knownMonitorStatuses.get(device.id);
     if (
       hasLoadedMonitorStatuses &&
       device.monitorEnabled &&
-      previousStatus !== device.status &&
-      (device.status === "online" || device.status === "offline") &&
-      (device.status === "online" ? device.notifyOnline : device.notifyOffline)
+      previousStatus !== status &&
+      (status === "online" || status === "offline") &&
+      (status === "online" ? device.notifyOnline : device.notifyOffline)
     ) {
-      notifyMonitorTransition(device, device.status);
+      notifyMonitorTransition(device, status);
     }
-    if (device.status === "online" || device.status === "offline" || previousStatus === undefined) {
-      knownMonitorStatuses.set(device.id, device.status);
+    if (status === "online" || status === "offline" || previousStatus === undefined) {
+      knownMonitorStatuses.set(device.id, status);
     }
   }
   const deviceIds = new Set(nextDevices.map((device) => device.id));
@@ -1888,10 +1894,11 @@ async function openTunnelInPowerShell(device, button) {
 
 function pingRequestTimeout() {
   // Include queued monitoring and all potential group members/dependencies.
-  return 30000 + Math.ceil(devices.length / 8) * 12000;
+  return 30000 + Math.ceil(devices.length / (window.monitorRuntime?.settings.concurrency || 1)) * 17000;
 }
 
 async function pingDevice(device, button) {
+  if(window.confirmPingSeries && !window.confirmPingSeries(device)) return;
   button.disabled = true;
   try {
     await api(`/api/devices/${device.id}/ping`, { method: "POST", timeoutMs: pingRequestTimeout() });
@@ -1906,6 +1913,7 @@ async function pingDevice(device, button) {
 async function pingVisibleDevices(button) {
   const deviceIds = [...visiblePageDeviceIds];
   if (!deviceIds.length) return;
+  if(window.confirmPingSeries && !window.confirmPingSeries(deviceIds)) return;
   button.disabled = true;
   try {
     await api("/api/ping", {

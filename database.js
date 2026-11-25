@@ -91,6 +91,10 @@ database.exec(`
   );
 `);
 
+database.exec(`CREATE TABLE IF NOT EXISTS monitor_failures (
+ device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+ streak INTEGER NOT NULL DEFAULT 0
+)`);
 const monitorColumns = database.prepare("PRAGMA table_info(device_monitor)").all();
 if (!monitorColumns.some(column => column.name === "note")) {
   database.exec("ALTER TABLE device_monitor ADD COLUMN note TEXT NOT NULL DEFAULT ''");
@@ -175,7 +179,7 @@ function getDevice(id) {
   device.dependencyIds = database.prepare(
     "SELECT dependency_id AS id FROM device_dependencies WHERE device_id = ? ORDER BY dependency_id",
   ).all(id).map((row) => row.id);
-  return device;
+  return failureState(device);
 }
 
 function saveDependencies(deviceId, dependencyIds) {
@@ -246,7 +250,7 @@ function getDevices() {
   return devices.map((device) => {
     const dependencies = dependencyQuery.all(device.id);
     return {
-      ...device,
+      ...failureState(device),
       favorite: Boolean(device.favorite),
       monitorEnabled: Boolean(device.monitorEnabled),
       monitorAutomatic: Boolean(device.monitorAutomatic),
@@ -270,6 +274,15 @@ function getSummary() {
   return { ...summary, onlineTtlMs: ONLINE_STATUS_TTL_MS };
 }
 
+const monitorSettingsStore = require("./monitoring").createMonitorStore(database);
+function getMonitorSettings() { return monitorSettingsStore.get(); }
+function setMonitorSettings(value) { return monitorSettingsStore.set(value); }
+function failureState(device) {
+  device.failureStreak = database.prepare("SELECT streak FROM monitor_failures WHERE device_id=?").get(device.id)?.streak || 0;
+  device.notificationStatus = device.status === "offline" && device.failureStreak < getMonitorSettings().failureThreshold ? "unknown" : device.status;
+  return device;
+}
+
 function getAppSettings() {
   const setting = database.prepare("SELECT value FROM app_settings WHERE key = 'ssh_user'").get();
   return { sshUser: setting?.value || "" };
@@ -285,6 +298,8 @@ function updateSshUser(sshUser) {
 
 function saveDeviceStatus(deviceId, result) {
   withTransaction(() => {
+  database.prepare(`INSERT INTO monitor_failures(device_id,streak) VALUES(?,?)
+    ON CONFLICT(device_id) DO UPDATE SET streak=CASE WHEN excluded.streak=1 THEN MIN(streak+1,1000000) ELSE 0 END`).run(deviceId,result.status==='offline'?1:0);
   database.prepare(`
     INSERT INTO device_status (device_id, status, checked_at, replies, target, message, latency_ms)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -360,6 +375,7 @@ function updateSingleDeviceMonitor(deviceId, settings, automatic = null) {
       notify_offline = excluded.notify_offline,
       note = CASE WHEN excluded.enabled = 0 THEN '' ELSE device_monitor.note END
   `).run(deviceId, Number(settings.enabled), Number(settings.notifyOnline), Number(settings.notifyOffline));
+  if (!settings.enabled) database.prepare("DELETE FROM monitor_failures WHERE device_id=?").run(deviceId);
   if (automatic !== null || !settings.enabled) {
     database.prepare("UPDATE device_monitor SET automatic = ? WHERE device_id = ?").run(settings.enabled ? Number(automatic) : 0, deviceId);
   }
@@ -625,6 +641,7 @@ function updateDevice(id, device) {
     if (device.dependencyIds !== undefined) saveDependencies(id, device.dependencyIds);
     if (existing.hostName !== device.hostName || existing.ip !== device.ip) {
       database.prepare("DELETE FROM device_status WHERE device_id = ?").run(id);
+      database.prepare("DELETE FROM monitor_failures WHERE device_id = ?").run(id);
     }
     recordDeviceChange(before,getDevice(id));
   });
@@ -733,6 +750,7 @@ function backupDatabase() {
 const snippetStore = require("./snippets").createSnippetStore(database);
 
 module.exports = {
+  getMonitorSettings,setMonitorSettings,
   getHistorySettings,setHistorySettings,pruneDeviceHistory,getDeviceReportData,getDeviceChanges,updateDeviceFavorite,
   importDeviceRows, bulkUpdateDevices,
   snippetStore,

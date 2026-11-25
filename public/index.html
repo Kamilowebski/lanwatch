@@ -57,7 +57,7 @@
           <article class="dashboard-card">
             <div class="dashboard-icon icon-red" aria-hidden="true">●</div>
             <div><p>Brak odpowiedzi</p><strong id="summary-offline">0</strong></div>
-            <span class="card-caption">0/3 odpowiedzi ICMP</span>
+            <span class="card-caption">Brak odpowiedzi ICMP</span>
           </article>
           <article class="dashboard-card">
             <div class="dashboard-icon icon-violet" aria-hidden="true">◷</div>
@@ -149,7 +149,7 @@
             <div>
               <p class="eyebrow">STATUS NA ŻYWO</p>
               <h1>Monitor</h1>
-              <p class="page-subtitle">Monitorowanie wykonuje ping ICMP co 15 sekund; widok odświeża się co 5 sekund. Alerty są widoczne, gdy karta Lanwatch jest otwarta.</p>
+              <p class="page-subtitle">Interwał i liczbę prób ustawisz w Konfiguracji. Widok odświeża się co 5 sekund. Alerty wymagają otwartej karty.</p>
             </div>
           </section>
           <section class="inventory-panel monitor-panel">
@@ -159,6 +159,12 @@
                 <p id="monitor-count" class="monitor-count">0 aktywnych</p>
               </div>
               <label class="monitor-sort-option"><input type="checkbox" id="monitor-offline-first"> Bez odpowiedzi na początku</label>
+            </div>
+            <div class="monitor-control-panel">
+              <div class="monitor-filter-row"><label for="monitor-search">Szukaj w monitorze<input type="search" id="monitor-search" class="form-control" placeholder="Nazwa, IP, grupa lub notatka"></label><label class="monitor-sort-option"><input type="checkbox" id="monitor-problems"> Tylko problemy</label></div>
+              <div class="monitor-pause-row"><button type="button" class="monitor-action" id="monitor-pause-all">Wstrzymaj monitor</button><label for="monitor-pause-group">Grupa<select class="form-select" id="monitor-pause-group"><option value="">Bez grupy</option></select></label><button type="button" class="monitor-action" id="monitor-pause-selected">Wstrzymaj grupę</button></div>
+              <p id="monitor-runtime-status" role="status">Wczytywanie stanu monitora…</p>
+              <small>Pauza zachowuje maszyny i notatki. Trwające próby kończą się; ręczny ping nadal działa.</small>
             </div>
             <div class="table-responsive">
               <table class="table inventory-table monitor-table align-middle">
@@ -197,7 +203,7 @@
               <p class="page-subtitle">Zarządzaj kategoriami maszyn i lokalizacjami.</p>
             </div>
           </section>
-          <nav class="settings-section-nav" aria-label="Sekcje konfiguracji"><a href="#settings-categories">Kategorie</a><a href="#settings-locations">Lokalizacje</a><a href="#settings-ssh">SSH</a><a href="#settings-appearance">Wygląd</a><a href="#settings-backups">Kopie zapasowe</a><a href="#settings-history">Historia</a></nav>
+          <nav class="settings-section-nav" aria-label="Sekcje konfiguracji"><a href="#settings-categories">Kategorie</a><a href="#settings-locations">Lokalizacje</a><a href="#settings-ssh">SSH</a><a href="#settings-appearance">Wygląd</a><a href="#settings-backups">Kopie zapasowe</a><a href="#settings-history">Historia</a><a href="#settings-monitor">Monitorowanie</a></nav>
           <div class="settings-grid">
             <section class="settings-card" id="settings-categories">
               <div class="settings-card-heading">
@@ -268,6 +274,13 @@
                 <small>Połączenie używa formatu użytkownik@nazwa-hosta. Ustawienie można zmienić tylko na komputerze z serwerem.</small>
               </form>
             </section>
+            <section class="settings-card settings-preference-card" id="settings-monitor"><div class="settings-card-heading"><div><h2>Monitorowanie</h2><p>Częstotliwość, obciążenie i potwierdzanie awarii</p></div></div><form id="monitor-settings-form" class="settings-form">
+              <label for="monitor-interval">Interwał cyklu (sekundy, 15–3600)</label><input id="monitor-interval" class="form-control" type="number" min="15" max="3600" required>
+              <label for="monitor-attempts">Próby ICMP na maszynę (1–5)</label><input id="monitor-attempts" class="form-control" type="number" min="1" max="5" required>
+              <label for="monitor-concurrency">Równolegle sprawdzane maszyny (1–16)</label><input id="monitor-concurrency" class="form-control" type="number" min="1" max="16" required>
+              <label for="monitor-threshold">Kolejne nieudane sprawdzenia przed alertem (1–10)</label><input id="monitor-threshold" class="form-control" type="number" min="1" max="10" required>
+              <button class="monitor-action" type="submit">Zapisz ustawienia</button><p id="monitor-settings-status" role="status"></p><small>Pierwszy brak odpowiedzi jest widoczny od razu. Próg opóźnia tylko alert. Wynik online lub nieustalony przerywa serię niepowodzeń. Długi cykl nie nakłada się na kolejny.</small>
+            </form></section>
             <section class="settings-card settings-preference-card" id="settings-history"><div class="settings-card-heading"><div><h2>Przechowywanie historii</h2><p>Czas przechowywania wyników pingowania</p></div></div><form class="settings-form" id="history-settings-form"><label for="history-retention-days">Okres</label><select class="form-select" id="history-retention-days"><option value="1">1 dzień</option><option value="7">7 dni</option><option value="30">30 dni</option></select><button class="monitor-action" type="submit" id="history-settings-save">Zapisz okres</button><p id="history-settings-status" class="settings-save-state" role="status">Wczytywanie…</p><small>Skrócenie okresu usuwa starsze wyniki w tle. Nie przywraca to wyników skasowanych wcześniej. Dłuższa historia zwiększa rozmiar bazy i kopii.</small></form></section>
             <section class="settings-card settings-backup-card" id="settings-backups">
               <div class="settings-card-heading"><div><h2>Kopie zapasowe</h2><p>Cała baza, lokalnie · do 7 dziennych kopii</p></div><button type="button" class="monitor-action" id="backup-status-refresh">Odśwież status</button></div>
@@ -445,6 +458,7 @@
     <script src="/app.js" defer></script>
     <script src="/report.js" defer></script>
     <script src="/insights.js" defer></script>
+    <script src="/monitoring-controls.js" defer></script>
     <script src="/snippets.js" defer></script>
   </body>
 </html>

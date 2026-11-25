@@ -22,7 +22,7 @@ function isPrivateAddress(address) {
   return isValidIPv4(address) && isPrivateIPv4(address);
 }
 
-function classifyPingResult(output, exitCode) {
+function classifyPingResult(output, exitCode, attempts = ATTEMPTS) {
   const replies = output.split(/\r?\n/).filter((line) =>
     /\b(?:ttl|hlim)\s*=\s*\d+/i.test(line) ||
     /\b(?:time|czas|temps|zeit|tiempo)[=<]\s*\d+(?:[.,]\d+)?\s*ms\b/i.test(line),
@@ -35,7 +35,7 @@ function classifyPingResult(output, exitCode) {
     return { status: "online", replies: Math.max(replies, 1), latencyMs, message: "" };
   }
   if (exitCode === 0 || exitCode === 1) {
-    return { status: "offline", replies: 0, latencyMs: null, message: "Brak odpowiedzi po trzech próbach ICMP." };
+    return { status: "offline", replies: 0, latencyMs: null, message: `Brak odpowiedzi po ${attempts} próbach ICMP.` };
   }
   return { status: "unknown", replies: 0, latencyMs: null, message: "Nie udało się ustalić statusu poleceniem ping." };
 }
@@ -79,14 +79,14 @@ async function resolvePrivateAddress(target) {
   return localAddress.address;
 }
 
-function runSystemPing(address) {
+function runSystemPing(address, attempts = ATTEMPTS) {
   const isWindows = process.platform === "win32";
   const command = isWindows ? "ping.exe" : "ping";
   const args = isWindows
-    ? ["-n", String(ATTEMPTS), "-w", String(REPLY_TIMEOUT_MS), address]
+    ? ["-n", String(attempts), "-w", String(REPLY_TIMEOUT_MS), address]
     : process.platform === "darwin"
-      ? ["-c", String(ATTEMPTS), "-W", String(REPLY_TIMEOUT_MS), address]
-      : ["-c", String(ATTEMPTS), "-W", String(Math.ceil(REPLY_TIMEOUT_MS / 1000)), address];
+      ? ["-c", String(attempts), "-W", String(REPLY_TIMEOUT_MS), address]
+      : ["-c", String(attempts), "-W", String(Math.ceil(REPLY_TIMEOUT_MS / 1000)), address];
 
   return new Promise((resolve) => {
     let output = "";
@@ -96,7 +96,7 @@ function runSystemPing(address) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      resolve({ ...result, target: address, attempts: result.attempts ?? ATTEMPTS });
+      resolve({ ...result, target: address, attempts: result.attempts ?? attempts });
     };
 
     let child;
@@ -117,17 +117,18 @@ function runSystemPing(address) {
       finish({ status: "unknown", replies: 0, attempts: 0, message: "Nie udało się uruchomić polecenia ping." });
     });
     child.on("close", (code) => {
-      finish(classifyPingResult(output, code));
+      finish(classifyPingResult(output, code, attempts));
     });
 
     timeout = setTimeout(() => {
       child.kill();
       finish({ status: "unknown", replies: 0, message: "Przekroczono czas oczekiwania na polecenie ping." });
-    }, PROCESS_TIMEOUT_MS);
+    }, Math.max(PROCESS_TIMEOUT_MS, attempts * 2000 + 1000));
   });
 }
 
-async function pingLocalTarget(target) {
+async function pingLocalTarget(target, attempts = ATTEMPTS) {
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 5) throw new Error("Nieprawidłowa liczba prób pingowania.");
   let address;
   try {
     address = await resolvePrivateAddress(target);
@@ -140,7 +141,7 @@ async function pingLocalTarget(target) {
       message: error.message,
     };
   }
-  return runSystemPing(address);
+  return runSystemPing(address, attempts);
 }
 
 module.exports = {

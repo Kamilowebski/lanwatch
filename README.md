@@ -114,12 +114,17 @@ ostatniej maszyny nadrzędnej zależność pozostaje w monitorze z odpowiednim o
 
 ### Monitoring i raporty
 
-Monitoring uruchamia cykle co **15 sekund**, a widok odświeża się co **5 sekund**.
-Jednocześnie wykonuje się najwyżej **8 prób pingowania**. Ręczne żądania mają
+Monitoring domyślnie uruchamia cykle co **60 sekund**, a widok odświeża się co **5 sekund**.
+W Konfiguracji → Monitorowanie ustawisz interwał **15–3600 sekund**, **1–5 prób ICMP**
+na maszynę oraz **1–16 równoległych sprawdzeń** (domyślnie 3 próby i 8 maszyn).
+Ustawienia obejmują automatyczne oraz ręczne sprawdzenia. Zmiana limitu nie przerywa
+trwających prób; kolejne zadania respektują nowy limit. Ręczne żądania mają
 pierwszeństwo przed oczekującymi automatycznymi, bez przerywania trwających prób.
 Dłuższy cykl nie nakłada się na kolejny, więc przy dużej liczbie maszyn odstęp rośnie.
 
-Każde sprawdzenie wysyła trzy próby ICMP. Pingowanie jest ograniczone do prywatnych
+Przed ręcznym sprawdzeniem co najmniej 20 maszyn pojawia się potwierdzenie z liczbą
+urządzeń i maksymalną liczbą prób ICMP. Systemowy ping nadal generuje widoczny ruch
+sieciowy; monitoring należy uzgodnić z administratorem. Pingowanie jest ograniczone do prywatnych
 oraz link-local adresów IPv4 i hostów rozpoznanych na taki adres. Aplikacja nie skanuje
 portów ani nie wykonuje sond TCP/UDP w ramach monitorowania.
 
@@ -164,6 +169,32 @@ Nie rejestruje wyników monitorowania ani przełączania gwiazdki.
 
 Ulubione i dziennik są częścią bazy SQLite i jej pełnych kopii; eksport ewidencji
 CSV ich nie zawiera. Aktualizacja zachowuje istniejące dane.
+
+### Pauza, alerty i diagnostyka monitora
+
+Przycisk **Wstrzymaj monitor** zatrzymuje nowe automatyczne próby. Można również
+wstrzymać konkretną grupę (albo urządzenia bez grupy). Pauzy zapisują się w bazie
+i pozostają po restarcie. Trwające próby kończą się normalnie; oczekujące automatyczne
+zadania sprawdzają pauzę przed uruchomieniem. Ręczny ping nadal działa. Pauza grupy
+dotyczy jej maszyn; współdzielone zależności poza tą grupą mogą nadal być sprawdzane.
+Wznowienie całego monitora zachowuje indywidualne pauzy grup. Wyłączenie monitora
+nadal usuwa notatkę — do tymczasowego zatrzymania używaj pauzy.
+
+Pierwszy brak odpowiedzi jest widoczny od razu. Alert pojawia się po **3 kolejnych
+nieudanych sprawdzeniach** (ustawiany próg 1–10). Liczą się zapisane wyniki zarówno
+ręcznych, jak i automatycznych sprawdzeń, a nie odświeżenia przeglądarki. Online lub
+wynik nieustalony zeruje serię; wyłączenie monitora i zmiana hosta/IP również ją zerują.
+Licznik jest trwały, ale wcześniejsze wyniki sprzed 1.5.0 nie są odtwarzane.
+Alerty wymagają otwartej karty; po otwarciu aplikacja przyjmuje bieżący stan jako punkt
+początkowy, bez ponownego wysyłania starych alertów.
+
+Pole wyszukiwania obejmuje nazwę, IPv4, grupę i notatkę. **Tylko problemy** pokazuje
+brak odpowiedzi oraz nieustalone wyniki. Gdy maszyna i jej zależność nie odpowiadają,
+monitor podpowiada, co sprawdzić najpierw; nie jest to automatyczna diagnoza przyczyny.
+Pasek stanu pokazuje postęp cyklu, aktywne sprawdzenia, kolejkę (łącznie z ręcznymi),
+czas ostatniego zakończenia oraz pauzy. Dane cyklu zerują się po restarcie serwera.
+Delikatny kolor wiersza oznacza online, brak odpowiedzi lub wynik nieustalony;
+status pozostaje również opisany tekstem.
 
 ### SSH i tunel VNC
 

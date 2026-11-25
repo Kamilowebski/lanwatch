@@ -1,5 +1,16 @@
 # Historia zmian Lanwatch
 
+## 1.5.0 — 2026-11-25
+
+- Konfigurowalny interwał 15–3600 s (domyślnie 60 s), 1–5 prób ICMP (domyślnie 3), limit 1–16 maszyn równolegle (domyślnie 8).
+- Potwierdzenie ręcznych serii od 20 maszyn z liczbą maszyn i maksymalną liczbą prób ICMP.
+- Trwała pauza całego monitora lub wybranej grupy, bez utraty maszyn, notatek i powiadomień. Oczekujące automatyczne zadania respektują pauzę; trwające kończą się normalnie, ręczny ping nadal działa.
+- Powiadomienie o braku odpowiedzi dopiero po 1–10 kolejnych nieudanych sprawdzeniach (domyślnie 3). Pierwszy brak odpowiedzi jest widoczny od razu; online lub błąd polecenia przerywa serię.
+- Wskazówka „Sprawdź najpierw” dla nieodpowiadającej zależności, z zaznaczeniem, że nie dowodzi przyczyny awarii.
+- Wyszukiwanie monitora po hoście, IP, grupie i notatce oraz filtr problemów.
+- Stan cyklu, postęp, kolejka, aktywne próby i czas zakończenia poprzedniego cyklu.
+- Delikatne kolory wierszy według statusu w monitorze i ewidencji, również w ciemnym motywie.
+
 ## 1.4.4 — 2026-11-25
 
 - Krótkie oznaczenia liczników grup i zależności zamiast wielowierszowych opisów; pełne znaczenie w podpowiedzi i etykiecie dostępności.

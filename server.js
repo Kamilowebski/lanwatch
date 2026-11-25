@@ -9,7 +9,7 @@ const { monitorEventLoopDelay } = require("node:perf_hooks");
 const databaseFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname,"data","lanwatch.sqlite");
 const diagnostics = require("./diagnostics").createLogger(path.join(path.dirname(databaseFile),"logs"));
 const {
-  backupDatabase,
+  backupDatabase, getMonitorSettings,setMonitorSettings,
   getHistorySettings,setHistorySettings,pruneDeviceHistory,getDeviceReportData,getDeviceChanges,updateDeviceFavorite,
   importDeviceRows, bulkUpdateDevices,
   snippetStore,
@@ -41,12 +41,13 @@ const { startVncTunnel } = require("./terminal");
 
 const port = Number(process.env.PORT) || 3000;
 const host = "127.0.0.1";
-const MONITOR_POLL_INTERVAL_MS = 15 * 1000;
+const {isPaused: isMonitorPaused} = require("./monitoring");
 const publicDirectory = path.join(__dirname, "public");
 const staticFiles = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/vendor/bootstrap-5.3.8.min.css": {file:"vendor/bootstrap-5.3.8.min.css",type:"text/css; charset=utf-8"},
   "/clipboard.js": {file:"clipboard.js",type:"text/javascript; charset=utf-8"},
+  "/monitoring-controls.js": {file:"monitoring-controls.js",type:"text/javascript; charset=utf-8"},
   "/insights.js": {file:"insights.js",type:"text/javascript; charset=utf-8"},
   "/inventory-tools.js": {file:"inventory-tools.js",type:"text/javascript; charset=utf-8"},
   "/ipv4.js": {file:"ipv4.js",type:"text/javascript; charset=utf-8"},
@@ -57,10 +58,15 @@ const staticFiles = {
   "/styles.css": { file: "styles.css", type: "text/css; charset=utf-8" },
 };
 const activePings = new Map();
-const MAX_CONCURRENT_PINGS = 8;
 let runningPings = 0;
 const pingWaiters = [];
 let monitorPollActive = false;
+let lastCycleStarted = null, lastCycleFinished = null, lastCycleDurationMs = null;
+let cycleTotal = 0, cycleCompleted = 0, lastCycleScheduled = Date.now();
+function pingSettings() { return typeof getMonitorSettings === "function" ? getMonitorSettings() : {concurrency:8,attempts:3}; }
+function drainPingQueue() {
+  while (pingWaiters.length && runningPings < pingSettings().concurrency) { runningPings++; pingWaiters.shift().resolve(); }
+}
 let monitorTimer;
 let backupTimer;
 let historyTimer;
@@ -99,9 +105,10 @@ async function checkDevice(device, priority = false) {
     return activePings.get(key);
   }
   const job = (async () => {
-    if (runningPings >= MAX_CONCURRENT_PINGS) {
+    let queued;
+    if (runningPings >= pingSettings().concurrency) {
       await new Promise((resolve) => {
-        const item = {key, resolve, priority};
+        const item = queued = {key, resolve, priority};
         const firstAutomatic = priority ? pingWaiters.findIndex(entry => !entry.priority) : -1;
         pingWaiters.splice(firstAutomatic < 0 ? pingWaiters.length : firstAutomatic, 0, item);
       });
@@ -109,7 +116,11 @@ async function checkDevice(device, priority = false) {
       runningPings += 1;
     }
     try {
-      const result = await pingLocalTarget(device.ip || device.hostName);
+      if (!priority && !queued?.priority && typeof isMonitorPaused === "function") {
+        const current = getDevice(device.id);
+        if (!current?.monitorEnabled || isMonitorPaused(current,getMonitorSettings())) return {deviceId:device.id,skipped:true};
+      }
+      const result = await pingLocalTarget(device.ip || device.hostName, pingSettings().attempts);
       const checkedResult = {
         ...result, deviceId: device.id, hostName: device.hostName,
         checkedAt: new Date().toISOString(),
@@ -120,9 +131,8 @@ async function checkDevice(device, priority = false) {
       }
       return checkedResult;
     } finally {
-      const next = pingWaiters.shift();
-      if (next) next.resolve();
-      else runningPings -= 1;
+      runningPings -= 1;
+      drainPingQueue();
     }
   })();
   activePings.set(key, job);
@@ -346,10 +356,14 @@ async function pollMonitoredDevices() {
   if (monitorPollActive) return;
   monitorPollActive = true;
   const started = Date.now();
+  lastCycleStarted = new Date(started).toISOString();
+  cycleCompleted = 0;
   try {
-    const monitored = getDevices().filter((device) => device.monitorEnabled);
+    const settings=getMonitorSettings();
+    const monitored = getDevices().filter((device) => device.monitorEnabled && !isMonitorPaused(device,settings));
+    cycleTotal=monitored.length;
     if(monitored.length) diagnostics.log("info","monitor.started",{devices:monitored.length});
-    const results = await Promise.allSettled(monitored.map(device => checkDevice(device)));
+    const results = await Promise.allSettled(monitored.map(async device => {const result=await checkDevice(device);if(!result.skipped)cycleCompleted++;return result;}));
     const failures = results.filter(result=>result.status === "rejected");
     for(const failure of failures) diagnostics.log("error","monitor.device_error",{
       message:failure.reason?.message,stack:failure.reason?.stack});
@@ -359,7 +373,16 @@ async function pollMonitoredDevices() {
     diagnostics.log("error","monitor.error",{message:error.message,stack:error.stack});
   } finally {
     monitorPollActive = false;
+    lastCycleFinished = new Date().toISOString();
+    lastCycleDurationMs = Date.now()-started;
   }
+}
+
+function monitoringRuntime() {
+  const settings=getMonitorSettings();
+  return {settings, running:monitorPollActive, active:runningPings, queued:pingWaiters.length,
+    cycleTotal,cycleCompleted,lastCycleStarted,lastCycleFinished,lastCycleDurationMs,
+    nextCycleAt:settings.paused?null:new Date(Math.max(Date.now(),lastCycleScheduled+settings.intervalSeconds*1000)).toISOString()};
 }
 
 async function handleApi(request, response, pathname) {
@@ -387,6 +410,28 @@ async function handleApi(request, response, pathname) {
         request.headers["content-type"]?.split(";")[0].trim().toLowerCase() !== "application/json") {
       throw new HttpError(415, "Wymagany format application/json.");
     }
+  }
+
+  if (pathname === "/api/monitor/runtime" && request.method === "GET") {
+    sendJson(response,200,monitoringRuntime());return;
+  }
+  if (pathname === "/api/monitor/settings" && request.method === "PUT") {
+    const body=await readJson(request);
+    if (!body || typeof body!=="object" || Array.isArray(body)) throw new HttpError(400,"Nieprawidłowe ustawienia monitora.");
+    const saved=setMonitorSettings({...getMonitorSettings(),...body});
+    drainPingQueue();sendJson(response,200,saved);return;
+  }
+  if (pathname === "/api/monitor/pause" && request.method === "PUT") {
+    const body=await readJson(request);
+    if(!body || typeof body.paused!=="boolean" || Object.keys(body).some(key=>!["paused","groupName"].includes(key)) || (body.groupName!==undefined && (typeof body.groupName!=="string"||body.groupName.length>100))) throw new HttpError(400,"Nieprawidłowe ustawienia pauzy.");
+    const settings=getMonitorSettings();
+    if(body.groupName===undefined) settings.paused=body.paused;
+    else {
+      const name=body.groupName.trim().toLocaleLowerCase("pl");
+      settings.pausedGroups=settings.pausedGroups.filter(group=>group!==name);
+      if(body.paused)settings.pausedGroups.push(name);
+    }
+    sendJson(response,200,setMonitorSettings(settings));return;
   }
 
   if (pathname === "/api/client-errors" && request.method === "POST") {
@@ -682,7 +727,12 @@ server.listen(port, host, () => {
   diagnostics.log("info","server.started",{version:appVersion,port,host,node:process.version,pid:process.pid});
   runBackup();
   backupTimer = setInterval(runBackup, 60 * 60 * 1000);
-  monitorTimer = setInterval(pollMonitoredDevices, MONITOR_POLL_INTERVAL_MS);
+  monitorTimer = setInterval(()=>{
+    const settings=getMonitorSettings();
+    if(!settings.paused && !monitorPollActive && Date.now()-lastCycleScheduled>=settings.intervalSeconds*1000) {
+      lastCycleScheduled=Date.now();pollMonitoredDevices();
+    }
+  },1000);
   cleanHistory();
   historyTimer = setInterval(cleanHistory,60*60*1000);
 });
