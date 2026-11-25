@@ -1,5 +1,12 @@
 # Historia zmian Lanwatch
 
+## 1.4.4 — 2026-11-25
+
+- Krótkie oznaczenia liczników grup i zależności zamiast wielowierszowych opisów; pełne znaczenie w podpowiedzi i etykiecie dostępności.
+- Uporządkowane odstępy i metadane grup w ewidencji.
+- Mapa układa połączone zestawy osobno i rozmieszcza maszyny według odległości od centralnego urządzenia.
+- Wskazanie maszyny myszą lub klawiaturą wyróżnia jej bezpośrednie relacje, przygaszając pozostałą część mapy.
+
 ## 1.4.3 — 2026-11-25
 
 - Podświetlanie widocznych wierszy powiązanej maszyny po najechaniu lub ustawieniu fokusu na nazwie zależności.

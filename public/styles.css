@@ -630,3 +630,18 @@ button, input, select, textarea { font: inherit; }
 .inventory-table tbody tr.dependency-highlight > td { background-color:var(--surface-muted); box-shadow:inset 0 2px 0 var(--primary, #4f63ee), inset 0 -2px 0 var(--primary, #4f63ee); }
 .group-health-counts { display:block; margin-top:.25rem; color:var(--muted); font-size:.7rem; white-space:normal; max-width:410px; font-weight:400; }
 .monitor-automatic-origin { display:block; margin-top:.35rem; color:var(--primary, #4f63ee); font-size:.72rem; white-space:normal; max-width:360px; font-weight:400; }
+
+.group-health-counts { display:flex; flex-wrap:wrap; gap:5px; max-width:none; margin-top:5px; }
+.group-health-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 7px; border:1px solid var(--border); border-radius:6px; font-size:10px; line-height:1.3; white-space:nowrap; font-variant-numeric:tabular-nums; background:var(--surface-muted); }
+.group-health-chip.has-failure { color:#c83945; border-color:rgba(200,57,69,.22); background:rgba(200,57,69,.06); }
+.group-health-chip.has-unknown { color:#8470cf; }
+.group-health-chip.is-healthy { color:var(--muted); }
+.inventory-table .group-summary-cell { min-width:235px; }
+.inventory-table .group-summary-cell .group-name-cell { display:inline; margin-left:8px; font-size:10px; font-weight:400; }
+.inventory-table tbody tr:hover > td { background-color:var(--surface-muted); }
+.map-section-title { fill:var(--muted); font-size:12px; font-weight:600; }
+.map-edge { opacity:.32; }
+.map-has-focus .map-edge { opacity:.07; }
+.map-has-focus .map-edge-active { opacity:1; stroke:var(--primary, #4f63ee); stroke-width:2.5; }
+.map-has-focus .map-node { opacity:.3; }
+.map-has-focus .map-node-related { opacity:1; }

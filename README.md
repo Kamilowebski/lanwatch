@@ -355,3 +355,9 @@ Kod Lanwatch jest udostępniony na licencji **MIT** — zobacz [LICENSE](LICENSE
 Copyright © 2026 Kamilowebski. Zewnętrzne narzędzia i Bootstrap zachowują własne licencje.
 Dołączony Bootstrap ma licencję MIT w `public/vendor/bootstrap-LICENSE`; źródło
 i informacje o kopii znajdują się w [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+W licznikach grup zapis „Grupa 2/6” oznacza 2 maszyny bez odpowiedzi z 6;
+„? 3” oznacza 3 nieustalone wyniki. Analogiczny licznik „Zależności” dotyczy
+wyłącznie maszyn spoza grupy. Pełny opis jest dostępny po najechaniu na licznik.
+Mapa rozdziela połączone zestawy i wyróżnia bezpośrednie relacje wskazanej maszyny
+przy najechaniu lub fokusie klawiatury. Kliknięcie nadal otwiera szczegóły.

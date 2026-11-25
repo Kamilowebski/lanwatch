@@ -96,18 +96,38 @@
     const total=visible.length;visible=visible.slice(0,120);
     $('map-message').textContent=total?`Maszyny: ${visible.length} z ${total}.${total>120?' Limit widoku to 120 węzłów; wybierz zakres pojedynczej maszyny.':''}`:'Brak maszyn do wyświetlenia.';
     const container=$('dependency-map');container.replaceChildren();if(!visible.length)return;
-    const columns=Math.min(4,Math.max(1,Math.ceil(Math.sqrt(visible.length)))),width=columns*300+40,height=Math.ceil(visible.length/columns)*120+40;
+    const ids=new Set(visible.map(device=>device.id));
+    const neighbors=new Map(visible.map(device=>[device.id,new Set()]));
+    for(const [a,b] of edges) if(ids.has(a)&&ids.has(b)){neighbors.get(a).add(b);neighbors.get(b).add(a);}
+    const points=new Map(),sections=[];let top=30,width=280;
+    for(const device of visible) {
+      if(points.has(device.id))continue;
+      const component=[],seen=new Set([device.id]),pending=[device.id];
+      for(let i=0;i<pending.length;i++){const id=pending[i];component.push(id);for(const next of neighbors.get(id))if(!seen.has(next)){seen.add(next);pending.push(next);}}
+      const root=component.includes(Number($('map-focus').value))?Number($('map-focus').value):component.reduce((a,b)=>neighbors.get(b).size>neighbors.get(a).size?b:a);
+      const levels=new Map([[root,0]]),queue=[root],rows=new Map();
+      for(let i=0;i<queue.length;i++){const id=queue[i],level=levels.get(id);for(const next of neighbors.get(id))if(!levels.has(next)){levels.set(next,level+1);queue.push(next);}}
+      for(const id of queue){const level=levels.get(id),row=rows.get(level)||0;points.set(id,{x:30+level*310,y:top+35+row*108});rows.set(level,row+1);width=Math.max(width,level*310+280);}
+      sections.push({top,count:component.length});top+=Math.max(...rows.values())*108+85;
+    }
+    const height=top;
     const svg=svgElement('svg',{viewBox:`0 0 ${width} ${height}`,role:'group','aria-label':'Mapa zależności maszyn'});
     const defs=svgElement('defs'),marker=svgElement('marker',{id:'map-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'});
     marker.append(svgElement('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'#8993a8'}));defs.append(marker);svg.append(defs);
-    const points=new Map(visible.map((device,index)=>[device.id,{x:30+(index%columns)*300,y:25+Math.floor(index/columns)*120}]));
+    sections.forEach((section,index)=>svg.append(svgElement('text',{x:30,y:section.top+10,class:'map-section-title'},`Powiązanie ${index+1} · ${section.count} maszyn`)));
+    const emphasize=id=>{
+      svg.classList.toggle('map-has-focus',id!==null);
+      svg.querySelectorAll('.map-edge').forEach(edge=>edge.classList.toggle('map-edge-active',edge.dataset.from===String(id)||edge.dataset.to===String(id)));
+      svg.querySelectorAll('.map-node').forEach(node=>node.classList.toggle('map-node-related',id!==null&&(node.dataset.id===String(id)||neighbors.get(id)?.has(Number(node.dataset.id)))));
+    };
     for(const [a,b] of edges) {
       const from=points.get(a),to=points.get(b);if(!from||!to)continue;
-      const x1=from.x+220,y1=from.y+34,x2=to.x,y2=to.y+34;
-      svg.append(svgElement('path',{d:`M ${x1} ${y1} C ${x1+55} ${y1},${x2-55} ${y2},${x2} ${y2}`,class:'map-edge','marker-end':'url(#map-arrow)'}));
+      const sameColumn=to.x===from.x,forward=to.x>from.x;
+      const x1=from.x+((forward||sameColumn)?220:0),y1=from.y+34,x2=to.x+(forward?0:220),y2=to.y+34;
+      svg.append(svgElement('path',{d:`M ${x1} ${y1} C ${x1+((forward||sameColumn)?45:-45)} ${y1},${x2+(forward?-45:45)} ${y2},${x2} ${y2}`,class:'map-edge','data-from':a,'data-to':b,'marker-end':'url(#map-arrow)'}));
     }
     for(const device of visible) {
-      const point=points.get(device.id),node=svgElement('g',{class:`map-node map-node-${device.status}`,transform:`translate(${point.x},${point.y})`,role:'button',tabindex:0,'aria-label':`Szczegóły: ${device.hostName}`});
+      const point=points.get(device.id),node=svgElement('g',{class:`map-node map-node-${device.status}`,transform:`translate(${point.x},${point.y})`,'data-id':device.id,role:'button',tabindex:0,'aria-label':`Szczegóły: ${device.hostName}`});
       node.append(svgElement('rect',{width:220,height:68,rx:9}));
       node.append(svgElement('circle',{cx:14,cy:20,r:4}));
       const title=device.hostName.length>24?device.hostName.slice(0,23)+'…':device.hostName;
@@ -115,6 +135,7 @@
       node.append(svgElement('text',{x:14,y:47,class:'map-meta'},device.ip || device.location));
       node.append(svgElement('title',{},`${device.hostName} · ${device.category} · ${device.status}`));
       const open=()=>{mapDialog.close();openDeviceDetails(device);};
+      node.addEventListener('mouseenter',()=>emphasize(device.id));node.addEventListener('mouseleave',()=>emphasize(null));node.addEventListener('focus',()=>emphasize(device.id));node.addEventListener('blur',()=>emphasize(null));
       node.addEventListener('click',open);node.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}});
       svg.append(node);
     }

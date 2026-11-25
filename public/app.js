@@ -1019,7 +1019,7 @@ function renderDeviceRow(device, isGroupMember = false) {
   return row;
 }
 
-function groupHealthText(members) {
+function groupHealthData(members) {
   const ownIds = new Set(members.map(device => device.id));
   const reachable = new Set(ownIds);
   const byId = new Map(devices.map(device => [device.id, device]));
@@ -1028,8 +1028,21 @@ function groupHealthText(members) {
     if (!reachable.has(id) && byId.has(id)) { reachable.add(id); queue.push(byId.get(id)); }
   }
   const external = queue.filter(device => !ownIds.has(device.id));
-  const describe = list => `${list.filter(device => device.status === "offline").length} bez odp. / ${list.length} · ${list.filter(device => device.status === "unknown").length} nieustal.`;
-  return `Maszyny: ${describe(members)} | Zależności spoza grupy: ${describe(external)}`;
+  return [{label:"Grupa", devices:members}, {label:"Zależności", devices:external}];
+}
+
+function updateGroupHealth(container, members) {
+  container.replaceChildren();
+  for (const item of groupHealthData(members)) {
+    const offline = item.devices.filter(device => device.status === "offline").length;
+    const unknown = item.devices.filter(device => device.status === "unknown").length;
+    const badge = document.createElement("span");
+    badge.className = `group-health-chip ${offline ? "has-failure" : unknown ? "has-unknown" : "is-healthy"}`;
+    badge.textContent = `${item.label} ${offline}/${item.devices.length}${unknown ? ` · ? ${unknown}` : ""}`;
+    badge.title = `${item.label}: ${offline} bez odpowiedzi z ${item.devices.length}; nieustalony status: ${unknown}`;
+    badge.setAttribute("aria-label", badge.title);
+    container.append(badge);
+  }
 }
 
 function renderGroupSummaryRow(group) {
@@ -1048,10 +1061,10 @@ function renderGroupSummaryRow(group) {
   count.className = "group-name-cell";
   count.textContent = group.related
     ? `Połączone zależności: ${group.devices.length} maszyn`
-    : `Liczba urządzeń: ${group.devices.length}`;
+    : `${group.devices.length} maszyn`;
   const counts = document.createElement("small");
   counts.className = "group-health-counts";
-  counts.textContent = groupHealthText(group.devices);
+  updateGroupHealth(counts, group.devices);
   hostCell.append(name, count, counts);
   row.append(hostCell);
   row.append(makeCell(summaryValues(group.devices, "location")));
@@ -1219,7 +1232,7 @@ function updateVisibleDeviceStatuses() {
     if (!relatedDevices.length) continue;
 
     const health = row.querySelector(".group-health-counts");
-    if (health) health.textContent = groupHealthText(relatedDevices);
+    if (health) updateGroupHealth(health, relatedDevices);
     const representative = relatedDevices[0];
     const subjectLabel = row.dataset.subjectLabel;
     const summary = statusSummary(relatedDevices);
